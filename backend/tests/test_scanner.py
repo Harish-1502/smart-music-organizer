@@ -2,7 +2,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.db import Base
+from app.core.database import Base
 from app.models.track import Track
 from app.services.scanner import scan_library, scan_state
 import pytest
@@ -12,12 +12,11 @@ TEST_DB_URL = "sqlite:///./test_scanner.db"
 engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-
-def setup_module():
+@pytest.fixture(autouse=True)
+def setup_test_db():
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-
-
-def teardown_module():
+    yield
     Base.metadata.drop_all(bind=engine)
 
 
@@ -34,7 +33,7 @@ def test_scan_library_inserts_supported_files(tmp_path):
 
     try:
         scan_library(str(music_dir), db)
-
+        print(scan_state)
         tracks = db.query(Track).all()
         assert len(tracks) == 2
         assert scan_state["supported_found"] == 2

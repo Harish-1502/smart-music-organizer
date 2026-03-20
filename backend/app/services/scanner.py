@@ -76,28 +76,32 @@ def scan_library(folder_path : str, db: Session):
 
             # Gets the entire path from route to cur directory
             normalized_file_path = str(path.resolve())
-            existing = db.query(Track).filter(Track.file_path == normalized_file_path)
+            existing = db.query(Track).filter(Track.file_path == normalized_file_path).first()
 
+            # print("Before:")
+            # print(scan_state)
             # Duplicate check
             if existing:
                 scan_state["duplicates"] += 1
-                continue
-            
+                continue          
 
+            # print("After:")
+            # print(scan_state)
             try:
                 track = Track(
                     file_path = normalized_file_path,
                     file_name = path.name,
                     extension = path.suffix.lower(),
-                    folder_path = (path.parent.resolve())
+                    folder_path = str(path.parent.resolve())
                 )
 
                 db.add(track)
                 db.commit()
                 scan_state["inserted"] += 1
-            except Exception:
+            except Exception as exc:
                 db.rollback()
                 scan_state["failed"] += 1
+                print(f"Insert failed for {normalized_file_path}: {exc}")
 
         # End of scanning
         scan_state["status"] = "completed"
