@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, func
-from app.db import Base
+from app.core.database import Base
 
-class Song(Base):
+class Track(Base):
     __tablename__ = "tracks"
 
     id = Column(Integer, primary_key=True, index=True)

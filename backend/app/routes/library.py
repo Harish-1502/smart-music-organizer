@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.core.database import get_db
 from app.schemas.library import LibraryScanRequest
 from app.services.scanner import scan_library, scan_state
 
