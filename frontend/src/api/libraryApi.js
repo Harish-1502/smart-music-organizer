@@ -24,3 +24,15 @@ export async function getScanStatus() {
   }
   return res.json()
 }
+
+export async function clearLibrary() {
+  const res = await fetch("http://127.0.0.1:8000/library/clear", {
+    method: "DELETE",
+  })
+
+  if (!res.ok) {
+    throw new Error("Failed to clear library")
+  }
+
+  return res.json()
+}

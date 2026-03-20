@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { scanLibrary, getScanStatus} from "../api/libraryApi"
+import { scanLibrary, getScanStatus, clearLibrary} from "../api/libraryApi"
 import ScanProgress from "../components/ScanProgress";
 
 export default function LibraryPage() {
@@ -26,6 +26,22 @@ export default function LibraryPage() {
     }
   }
 
+  async function deleteAllSong(){
+    setLoading(true)
+    setStatus("")
+    setMessage("")
+
+    try{
+      const latestDeleteStatus = await clearLibrary
+      setStatus(latestDeleteStatus)
+      setMessage("Delete complete")
+    } catch (error){
+      setMessage(error.message)
+    } finally{
+      setLoading(false)
+    }
+  }
+
   return (
     <div>
       <h1>Library Scanner</h1>
@@ -39,6 +55,10 @@ export default function LibraryPage() {
 
       <button onClick={handleScan} disabled={loading || !folderPath.trim()}>
         {loading ? "Scanning..." : "Scan Library"}
+      </button>
+
+      <button onClick={deleteAllSong}>
+        Delete
       </button>
 
       {message && <p>{message}</p>}
