@@ -68,3 +68,5 @@ def test_scan_library_invalid_folder():
             scan_library("Z:/this/path/does/not/exist", db)
     finally:
         db.close()
+
+        

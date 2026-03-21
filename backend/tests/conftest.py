@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base, get_db
+from app.core.database import Base, get_db, engine
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -36,5 +36,4 @@ def client(db_session):
     yield TestClient(app)
     app.dependency_overrides.clear()
 
-    if os.path.exists("test_app.db"):
-        os.remove("test_app.db")
+    Base.metadata.drop_all(bind=engine)
