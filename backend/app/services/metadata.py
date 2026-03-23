@@ -158,7 +158,6 @@ def infer_metadata_from_path(file_path: Path) -> dict[str, str | None]:
     - '/Artist/Album/Track.mp3'
     - '01 - Song.mp3'
     """
-
     stem = file_path.stem
     parent = file_path.parent
 
@@ -167,3 +166,67 @@ def infer_metadata_from_path(file_path: Path) -> dict[str, str | None]:
     album: str | None = None
 
     normalized_stem = stem.replace("_", " ").strip()
+
+    # Pattern: Artist - Title
+    if " - " in normalized_stem:
+        left, right = normalized_stem.split(" - ", 1)
+        possible_artist = clean_value(left)
+        possible_title = clean_value(_strip_leading_track_number(right))
+
+        # Only accept if both sides look usable
+        if possible_artist and possible_title:
+            artist = possible_artist
+            title = possible_title
+
+    # Folder guess: /Artist/Album/file
+    if parent.name:
+        album = clean_value(parent.name)
+
+    if parent.parent and parent.parent.name and not artist:
+        artist = clean_value(parent.parent.name)
+
+    # If title still missing, use filename stem cleanup
+    if not title:
+        title = _cleanup_title_from_stem(stem)
+
+    return {
+        "title": title,
+        "artist": artist,
+        "album": album,
+    }
+
+
+def extract_metadata(file_path: str | Path) -> dict[str, str | float | None]:
+    path = Path(file_path)
+
+    tag_meta = extract_tag_metadata(path)
+    path_meta = infer_metadata_from_path(path)
+
+    title = tag_meta["title"] or path_meta["title"]
+    artist = tag_meta["artist"] or path_meta["artist"]
+    album = tag_meta["album"] or path_meta["album"]
+    duration = tag_meta["duration"]
+
+    tag_used = any([tag_meta["title"], tag_meta["artist"], tag_meta["album"]])
+    path_used = any([
+        (not tag_meta["title"] and path_meta["title"]),
+        (not tag_meta["artist"] and path_meta["artist"]),
+        (not tag_meta["album"] and path_meta["album"]),
+    ])
+
+    if tag_used and path_used:
+        metadata_source = "mixed"
+    elif tag_used:
+        metadata_source = "tag"
+    elif any([path_meta["title"], path_meta["artist"], path_meta["album"]]):
+        metadata_source = "path"
+    else:
+        metadata_source = "unknown"
+
+    return {
+        "title": title,
+        "artist": artist,
+        "album": album,
+        "duration": duration,
+        "metadata_source": metadata_source,
+    }
