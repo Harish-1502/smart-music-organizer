@@ -1,6 +1,8 @@
 from pathlib import Path
 from sqlalchemy.orm import Session
 from app.models.track import Track
+from app.services.metadata import extract_metadata
+from app.services.art import detect_album_art
 
 # All support audio files
 SUPPORTED_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}
@@ -44,11 +46,11 @@ def validate_folder(folder_path: str) -> Path:
     return path
 
 
-def scan_library(folder_path : str, db: Session):
+def scan_library(folder_path: str, db: Session):
     """
     Scans all file in the folder and saves them in the database.
     Does extension check, file check, folder check and checks for
-    duplicates in the same folder.
+    duplicates by using its full path.
     """
 
     # validate path
@@ -56,7 +58,7 @@ def scan_library(folder_path : str, db: Session):
 
     reset_scan_state()
     scan_state["status"] = "scanning"
-
+    
     try:
         # All files and subfolders
         for path in root.rglob("*"):
@@ -74,8 +76,11 @@ def scan_library(folder_path : str, db: Session):
 
             scan_state["supported_found"] += 1
 
-            # Gets the entire path from route to cur directory
-            normalized_file_path = str(path.resolve())
+            # Gets the paths from route to cur directory
+            resolved_path = path.resolve()
+            normalized_file_path = str(resolved_path)
+            normalized_folder_path = str(resolved_path.parent)
+
             existing = db.query(Track).filter(Track.file_path == normalized_file_path).first()
 
             # print("Before:")
@@ -84,24 +89,46 @@ def scan_library(folder_path : str, db: Session):
             if existing:
                 scan_state["duplicates"] += 1
                 continue          
+            metadata = {
+                    "title": None,
+                    "artist": None,
+                    "album": None,
+                    "duration": None,
+                    "metadata_source": "unknown",
+                }
+            art_path = None
+
+            try:
+                metadata = extract_metadata(resolved_path)
+                art_path = detect_album_art(resolved_path)
+            except Exception as e:
+                scan_state["last_error"] = f"Metadata extraction failed for {normalized_file_path}: {e}"
 
             # print("After:")
             # print(scan_state)
             try:
                 track = Track(
-                    file_path = normalized_file_path,
-                    file_name = path.name,
-                    extension = path.suffix.lower(),
-                    folder_path = str(path.parent.resolve())
+                    file_path=normalized_file_path,
+                    file_name=resolved_path.name,
+                    extension=resolved_path.suffix.lower(),
+                    folder_path=normalized_folder_path,
+                    title=metadata["title"],
+                    artist=metadata["artist"],
+                    album=metadata["album"],
+                    duration=metadata["duration"],
+                    metadata_source=metadata["metadata_source"],
+                    art_path=art_path,
                 )
 
                 db.add(track)
                 db.commit()
+                db.refresh(track)
                 scan_state["inserted"] += 1
             except Exception as exc:
                 db.rollback()
                 scan_state["failed"] += 1
-                print(f"Insert failed for {normalized_file_path}: {exc}")
+                # print(f"Insert failed for {normalized_file_path}: {exc}")
+                scan_state["last_error"] = f"Insert failed for {normalized_file_path}: {exc}"
 
         # End of scanning
         scan_state["status"] = "completed"
@@ -109,6 +136,6 @@ def scan_library(folder_path : str, db: Session):
 
     except Exception as exc:
         scan_state["status"] = "failed"
-        scan_state["last_error"] = str(exc)
+        scan_state["last_error"] = f"Scan failed: {exc}"
         scan_state["current_file"] = None
         raise

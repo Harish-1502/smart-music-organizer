@@ -15,6 +15,8 @@ UNKNOWN_VALUES = {
     "n/a",
 }
 
+DASH_CHARS = r"[-–—]"
+
 def clean_value(value: Any) -> str | None:
     """
     Normalize metadata values from tags or path parsing.
@@ -113,7 +115,9 @@ def extract_tag_metadata(file_path: Path) -> dict[str, str | float | None]:
 
     tags = getattr(audio, "tags", None)
     info = getattr(audio, "info", None)
-    duration = _safe_float(getattr(info, "length", None))
+
+    duration_raw = _safe_float(getattr(info, "length", None))
+    duration = round(duration_raw, 2) if duration_raw is not None else None
 
     title = _extract_first_tag(tags, ["TIT2", "title", "TITLE", "\xa9nam"])
     artist = _extract_first_tag(tags, ["TPE1", "artist", "ARTIST", "\xa9ART"])
@@ -136,7 +140,7 @@ def _strip_leading_track_number(text: str) -> str:
     - 1 Song
     """
     cleaned = re.sub(r"^\s*\d{1,3}\s*[-._ ]+\s*", "", text).strip()
-    return cleaned
+    return cleaned or text.strip()
 
 def _cleanup_title_from_stem(stem: str) -> str | None:
     """
@@ -149,51 +153,42 @@ def _cleanup_title_from_stem(stem: str) -> str | None:
     text = re.sub(r"\s+", " ", text).strip()
     return clean_value(text)
 
-def infer_metadata_from_path(file_path: Path) -> dict[str, str | None]:
-    """
-    Infer metadata from the file path.
+def infer_from_filename(stem: str) -> dict[str, str | None]:
+    text = stem.replace("_", " ").strip()
 
-    Supported heuristics:
-    - 'Artist - Title.mp3'
-    - '/Artist/Album/Track.mp3'
-    - '01 - Song.mp3'
-    """
-    stem = file_path.stem
-    parent = file_path.parent
+    patterns = [
+        # Artist - Title
+        rf"^(?P<artist>.+?)\s*{DASH_CHARS}\s*(?P<title>.+)$",
 
-    title: str | None = None
-    artist: str | None = None
-    album: str | None = None
+        # 01 - Title
+        r"^\s*\d{1,3}\s*[-._ ]+\s*(?P<title>.+)$",
 
-    normalized_stem = stem.replace("_", " ").strip()
+        # 01 Title
+        r"^\s*\d{1,3}\s+(?P<title>.+)$",
+    ]
 
-    # Pattern: Artist - Title
-    if " - " in normalized_stem:
-        left, right = normalized_stem.split(" - ", 1)
-        possible_artist = clean_value(left)
-        possible_title = clean_value(_strip_leading_track_number(right))
+    for pattern in patterns:
+        match = re.match(pattern, text)
+        if not match:
+            continue
 
-        # Only accept if both sides look usable
-        if possible_artist and possible_title:
-            artist = possible_artist
-            title = possible_title
-
-    # Folder guess: /Artist/Album/file
-    if parent.name:
-        album = clean_value(parent.name)
-
-    if parent.parent and parent.parent.name and not artist:
-        artist = clean_value(parent.parent.name)
-
-    # If title still missing, use filename stem cleanup
-    if not title:
-        title = _cleanup_title_from_stem(stem)
+        data = match.groupdict()
+        return {
+            "title": clean_value(data.get("title")),
+            "artist": clean_value(data.get("artist")),
+            "album": None,
+        }
 
     return {
-        "title": title,
-        "artist": artist,
-        "album": album,
+        "title": _cleanup_title_from_stem(stem),
+        "artist": None,
+        "album": None,
     }
+
+def infer_metadata_from_path(file_path: Path) -> dict[str, str | None]:
+    # For downloaded music, filename is usually more reliable than folders.
+    # Do not infer album from folders like Downloads/Music/Desktop.
+    return infer_from_filename(file_path.stem)
 
 
 def extract_metadata(file_path: str | Path) -> dict[str, str | float | None]:
@@ -204,24 +199,24 @@ def extract_metadata(file_path: str | Path) -> dict[str, str | float | None]:
 
     title = tag_meta["title"] or path_meta["title"]
     artist = tag_meta["artist"] or path_meta["artist"]
-    album = tag_meta["album"] or path_meta["album"]
+    album = tag_meta["album"]
     duration = tag_meta["duration"]
 
-    tag_used = any([tag_meta["title"], tag_meta["artist"], tag_meta["album"]])
-    path_used = any([
+    used_tag = any([tag_meta["title"], tag_meta["artist"], tag_meta["album"]])
+    used_path = any([
         (not tag_meta["title"] and path_meta["title"]),
         (not tag_meta["artist"] and path_meta["artist"]),
-        (not tag_meta["album"] and path_meta["album"]),
     ])
 
-    if tag_used and path_used:
+    if used_tag and used_path:
         metadata_source = "mixed"
-    elif tag_used:
+    elif used_tag:
         metadata_source = "tag"
-    elif any([path_meta["title"], path_meta["artist"], path_meta["album"]]):
+    elif any([path_meta["title"], path_meta["artist"]]):
         metadata_source = "path"
     else:
         metadata_source = "unknown"
+
 
     return {
         "title": title,
