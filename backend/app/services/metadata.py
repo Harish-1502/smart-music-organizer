@@ -157,14 +157,14 @@ def infer_from_filename(stem: str) -> dict[str, str | None]:
     text = stem.replace("_", " ").strip()
 
     patterns = [
-        # Artist - Title
-        rf"^(?P<artist>.+?)\s*{DASH_CHARS}\s*(?P<title>.+)$",
-
         # 01 - Title
         r"^\s*\d{1,3}\s*[-._ ]+\s*(?P<title>.+)$",
 
         # 01 Title
         r"^\s*\d{1,3}\s+(?P<title>.+)$",
+        
+        # Artist - Title
+        rf"^(?P<artist>.+?)\s*{DASH_CHARS}\s*(?P<title>.+)$",
     ]
 
     for pattern in patterns:

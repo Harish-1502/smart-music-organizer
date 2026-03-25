@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from app.services.metadata import (
     extract_metadata,
     infer_metadata_from_path,
@@ -79,37 +77,29 @@ def test_infer_metadata_from_filename_artist_title(tmp_path):
 
     assert result["artist"] == "The Weeknd"
     assert result["title"] == "Blinding Lights"
-    assert result["album"] == tmp_path.name
+    assert result["album"] is None
 
 
-def test_infer_metadata_from_folder_structure(tmp_path):
-    artist_dir = tmp_path / "Daft Punk"
-    album_dir = artist_dir / "Discovery"
-    album_dir.mkdir(parents=True)
-
-    audio_file = album_dir / "One More Time.mp3"
+def test_infer_metadata_from_plain_filename(tmp_path):
+    audio_file = tmp_path / "One More Time.mp3"
     audio_file.write_text("fake mp3")
 
     result = infer_metadata_from_path(audio_file)
 
-    assert result["artist"] == "Daft Punk"
-    assert result["album"] == "Discovery"
     assert result["title"] == "One More Time"
+    assert result["artist"] is None
+    assert result["album"] is None
 
 
 def test_infer_metadata_strips_track_number(tmp_path):
-    artist_dir = tmp_path / "Artist"
-    album_dir = artist_dir / "Album"
-    album_dir.mkdir(parents=True)
-
-    audio_file = album_dir / "01 - My Song.mp3"
+    audio_file = tmp_path / "01 - My Song.mp3"
     audio_file.write_text("fake mp3")
 
     result = infer_metadata_from_path(audio_file)
 
     assert result["title"] == "My Song"
-    assert result["artist"] == "Artist"
-    assert result["album"] == "Album"
+    assert result["artist"] is None
+    assert result["album"] is None
 
 
 def test_extract_metadata_falls_back_to_path_when_tags_missing(monkeypatch, tmp_path):
@@ -127,7 +117,7 @@ def test_extract_metadata_falls_back_to_path_when_tags_missing(monkeypatch, tmp_
 
     assert result["title"] == "Blinding Lights"
     assert result["artist"] == "The Weeknd"
-    assert result["album"] == tmp_path.name
+    assert result["album"] is None
     assert result["duration"] == 210.0
     assert result["metadata_source"] == "path"
 

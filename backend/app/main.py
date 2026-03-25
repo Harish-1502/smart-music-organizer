@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
-from app.models.song import Song
+from app.models.track import Track
 from app.routes import library
 
 Base.metadata.create_all(bind=engine)
