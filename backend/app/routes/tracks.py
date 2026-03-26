@@ -20,9 +20,11 @@ def get_tracks(
     page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Track)
+    print("GET /tracks called")
 
-    # Search
+    query = db.query(Track)
+    print("base query created")
+
     if search:
         search_term = f"%{search.strip()}%"
         query = query.filter(
@@ -32,8 +34,8 @@ def get_tracks(
                 Track.album.ilike(search_term),
             )
         )
+        print("search applied")
 
-    # Safe sorting
     allowed_sort_fields = {
         "title": Track.title,
         "artist": Track.artist,
@@ -48,13 +50,16 @@ def get_tracks(
     else:
         query = query.order_by(sort_column.asc())
 
-    # Count before pagination
+    print("before count")
     total_items = query.count()
+    print("after count", total_items)
+
     total_pages = ceil(total_items / page_size) if total_items > 0 else 1
 
-    # Pagination
     offset = (page - 1) * page_size
+    print("before fetch")
     tracks = query.offset(offset).limit(page_size).all()
+    print("after fetch", len(tracks))
 
     return PaginatedTracks(
         items=tracks,

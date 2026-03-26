@@ -35,10 +35,6 @@ def clear_library(db: Session = Depends(get_db)):
         "deleted_tracks": deleted,
     }
 
-@router.get("/tracks")
-def get_tracks(db: Session = Depends(get_db)):
-    return db.query(Track).all()
-
 @router.get("/art")
 def get_album_art(path: str):
     file_path = Path(path)

@@ -1,45 +1,34 @@
-import axios from "axios"
+import axios from "axios";
 
-const API_BASE = "http://127.0.0.1:8000"
+const API_BASE = "http://127.0.0.1:8000";
 
 export async function scanLibrary(folderPath) {
-  const res = await fetch(`${API_BASE}/library/scan`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ folder_path: folderPath }),
-  })
-
-  if (!res.ok) {
-    const error = await res.json()
-    throw new Error(error.detail || "Failed to scan library")
-  }
-
-  return res.json()
+  console.log("API CALL: scanLibrary");
+  const res = await axios.post(`${API_BASE}/library/scan`, {
+    folder_path: folderPath,
+  });
+  return res.data;
 }
 
 export async function getScanStatus() {
-  const res = await fetch(`${API_BASE}/library/scan-status`)
-  if (!res.ok) {
-    throw new Error("Failed to fetch scan status")
-  }
-  return res.json()
+  console.log("API CALL: getScanStatus");
+  const res = await axios.get(`${API_BASE}/library/scan_status`);
+  return res.data;
 }
 
 export async function clearLibrary() {
-  const res = await fetch("http://127.0.0.1:8000/library/clear", {
-    method: "DELETE",
-  })
-
-  if (!res.ok) {
-    throw new Error("Failed to clear library")
-  }
-
-  return res.json()
+  console.log("API CALL: clearLibrary");
+  const res = await axios.delete(`${API_BASE}/library/clear`);
+  return res.data;
 }
 
-export async function getTracks() {
-  const response = await axios.get(`${API_BASE}/library/tracks`);
-  return response.data;
+export async function getTracks(page = 1, pageSize = 25) {
+  console.log("API CALL: getTracks", { page, pageSize });
+  const res = await axios.get(`${API_BASE}/tracks`, {
+    params: {
+      page,
+      page_size: pageSize,
+    },
+  });
+  return res.data;
 }
