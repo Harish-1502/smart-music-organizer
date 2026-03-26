@@ -19,11 +19,26 @@ export default function LibraryPage() {
   const [pageSize] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [search, setSearch] = useState("")
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [order, setOrder] = useState("asc")
+  const [sortBy, setSortBy] = useState("title")
 
-  async function loadTracks(currentPage = page) {
+  async function loadTracks(
+    currentPage = page, 
+    currentSearch = appliedSearch,
+    currentSortBy = sortBy,
+    currentOrder = order
+  ) {
     setTracksLoading(true);
     try {
-      const data = await getTracks(currentPage, pageSize);
+      const data = await getTracks(
+        currentPage, 
+        pageSize, 
+        currentSearch,
+        currentOrder,
+        currentSortBy
+      );
       console.log("TRACKS FROM API:", data);
 
       setTracks(data.items || []);
@@ -37,10 +52,9 @@ export default function LibraryPage() {
     }
   }
 
-  useEffect(() => {
-    
-    loadTracks(page);
-  }, [page]);
+  useEffect(() => { 
+    loadTracks(page,appliedSearch, sortBy, order);
+  }, [page, appliedSearch, order, sortBy]);
 
   async function handleScan() {
     setLoading(true);
@@ -52,8 +66,11 @@ export default function LibraryPage() {
       const latestStatus = await getScanStatus();
 
       setStatus(latestStatus);
-      setPage(1)
-      await loadTracks(1);
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        await loadTracks(1);
+      }
 
       setMessage("Scan completed successfully");
     } catch (error) {
@@ -72,8 +89,11 @@ export default function LibraryPage() {
       const latestDeleteStatus = await clearLibrary();
 
       setStatus(latestDeleteStatus);
-      setPage(1)
-      await loadTracks(1);
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        await loadTracks(1);
+      }
 
       setMessage("Delete complete");
     } catch (error) {
@@ -118,6 +138,69 @@ export default function LibraryPage() {
       <hr style={{ margin: "24px 0" }} />
 
       <h2>Tracks</h2>
+
+      <div style={{ marginBottom: "16px" }}>
+        <input
+          type="text"
+          placeholder="Search by title, artist, or album"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: "300px",
+            padding: "8px",
+            marginRight: "8px",
+          }}
+        />
+
+        <button
+          onClick={() => {
+            setPage(1);
+            setAppliedSearch(search);
+          }}
+        >
+          Search
+        </button>
+
+        <button
+          onClick={() => {
+            setSearch("");
+            setAppliedSearch("");
+            setPage(1);
+          }}
+          style={{ marginLeft: "8px" }}
+        >
+          Clear Search
+        </button>
+      </div>
+
+      <div style={{ marginBottom: "16px", display: "flex", gap: "8px", alignItems: "center" }}>
+        <label>Sort by:</label>
+
+        <select
+          value={sortBy}
+          onChange={(e) => {
+            setPage(1);
+            setSortBy(e.target.value);
+          }}
+        >
+          <option value="title">Title</option>
+          <option value="artist">Artist</option>
+          <option value="album">Album</option>
+          <option value="duration">Duration</option>
+        </select>
+
+        <select
+          value={order}
+          onChange={(e) => {
+            setPage(1);
+            setOrder(e.target.value);
+          }}
+        >
+          <option value="asc">Ascending</option>
+          <option value="desc">Descending</option>
+        </select>
+      </div>
+
       <p>Total Tracks: {totalItems}</p>
 
       {tracksLoading ? (

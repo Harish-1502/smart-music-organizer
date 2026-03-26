@@ -22,12 +22,20 @@ export async function clearLibrary() {
   return res.data;
 }
 
-export async function getTracks(page = 1, pageSize = 25) {
+export async function getTracks(
+  page = 1, 
+  pageSize = 25, 
+  search,
+  sort_By = "title",
+  order = "asc") {
   console.log("API CALL: getTracks", { page, pageSize });
   const res = await axios.get(`${API_BASE}/tracks`, {
     params: {
       page,
       page_size: pageSize,
+      search: search.trim() || undefined,
+      sort_by: sort_By,
+      order: order,
     },
   });
   return res.data;
