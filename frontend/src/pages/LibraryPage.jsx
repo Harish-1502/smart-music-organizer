@@ -4,9 +4,11 @@ import {
   getScanStatus,
   clearLibrary,
   getTracks,
+  getArtists,
 } from "../api/libraryApi";
 import ScanProgress from "../components/ScanProgress";
 import TrackTable from "../components/TrackTable";
+import ArtistList from "../components/ArtistList";
 
 export default function LibraryPage() {
   const [folderPath, setFolderPath] = useState("");
@@ -15,30 +17,46 @@ export default function LibraryPage() {
   const [loading, setLoading] = useState(false);
   const [tracksLoading, setTracksLoading] = useState(false);
   const [message, setMessage] = useState("");
+
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(25);
+  const pageSize = 25;
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [search, setSearch] = useState("")
+
+  const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [order, setOrder] = useState("asc")
-  const [sortBy, setSortBy] = useState("title")
+  const [order, setOrder] = useState("asc");
+  const [sortBy, setSortBy] = useState("title");
+  const [artistFilter, setArtistFilter] = useState("");
+  const [albumFilter, setAlbumFilter] = useState("");
+  const [extensionFilter, setExtensionFilter] = useState("");
+
+  const [viewMode, setViewMode] = useState("tracks");
+  const [artists, setArtists] = useState([]);
+  const [artistsLoading, setArtistsLoading] = useState(false);
 
   async function loadTracks(
-    currentPage = page, 
+    currentPage = page,
     currentSearch = appliedSearch,
     currentSortBy = sortBy,
-    currentOrder = order
+    currentOrder = order,
+    currentArtist = artistFilter,
+    currentAlbum = albumFilter,
+    currentExtension = extensionFilter
   ) {
     setTracksLoading(true);
     try {
       const data = await getTracks(
-        currentPage, 
-        pageSize, 
+        currentPage,
+        pageSize,
         currentSearch,
+        currentSortBy,
         currentOrder,
-        currentSortBy
+        currentArtist,
+        currentAlbum,
+        currentExtension
       );
+
       console.log("TRACKS FROM API:", data);
 
       setTracks(data.items || []);
@@ -52,9 +70,28 @@ export default function LibraryPage() {
     }
   }
 
-  useEffect(() => { 
-    loadTracks(page,appliedSearch, sortBy, order);
-  }, [page, appliedSearch, order, sortBy]);
+  async function loadArtists() {
+    setArtistsLoading(true);
+    try {
+      const data = await getArtists();
+      setArtists(data || []);
+    } catch (error) {
+      console.error("LOAD ARTISTS ERROR:", error);
+      setMessage(error.message || "Failed to load artists");
+    } finally {
+      setArtistsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadTracks();
+  }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, extensionFilter]);
+
+  useEffect(() => {
+    if (viewMode === "artists") {
+      loadArtists();
+    }
+  }, [viewMode]);
 
   async function handleScan() {
     setLoading(true);
@@ -64,17 +101,21 @@ export default function LibraryPage() {
     try {
       await scanLibrary(folderPath);
       const latestStatus = await getScanStatus();
-
       setStatus(latestStatus);
+
       if (page !== 1) {
         setPage(1);
       } else {
         await loadTracks(1);
       }
 
+      if (viewMode === "artists") {
+        await loadArtists();
+      }
+
       setMessage("Scan completed successfully");
     } catch (error) {
-      setMessage(error.message);
+      setMessage(error.message || "Scan failed");
     } finally {
       setLoading(false);
     }
@@ -87,20 +128,41 @@ export default function LibraryPage() {
 
     try {
       const latestDeleteStatus = await clearLibrary();
-
       setStatus(latestDeleteStatus);
+
       if (page !== 1) {
         setPage(1);
       } else {
         await loadTracks(1);
       }
 
+      if (viewMode === "artists") {
+        await loadArtists();
+      }
+
       setMessage("Delete complete");
     } catch (error) {
-      setMessage(error.message);
+      setMessage(error.message || "Delete failed");
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleArtistClick(artistName) {
+    setArtistFilter(artistName);
+    setPage(1);
+    setViewMode("tracks");
+  }
+
+  function clearAllFilters() {
+    setSearch("");
+    setAppliedSearch("");
+    setArtistFilter("");
+    setAlbumFilter("");
+    setExtensionFilter("");
+    setSortBy("title");
+    setOrder("asc");
+    setPage(1);
   }
 
   return (
@@ -137,106 +199,173 @@ export default function LibraryPage() {
 
       <hr style={{ margin: "24px 0" }} />
 
-      <h2>Tracks</h2>
-
-      <div style={{ marginBottom: "16px" }}>
-        <input
-          type="text"
-          placeholder="Search by title, artist, or album"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: "300px",
-            padding: "8px",
-            marginRight: "8px",
-          }}
-        />
-
-        <button
-          onClick={() => {
-            setPage(1);
-            setAppliedSearch(search);
-          }}
-        >
-          Search
-        </button>
-
-        <button
-          onClick={() => {
-            setSearch("");
-            setAppliedSearch("");
-            setPage(1);
-          }}
-          style={{ marginLeft: "8px" }}
-        >
-          Clear Search
-        </button>
+      <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
+        <button onClick={() => setViewMode("tracks")}>Tracks</button>
+        <button onClick={() => setViewMode("artists")}>Artists</button>
       </div>
 
-      <div style={{ marginBottom: "16px", display: "flex", gap: "8px", alignItems: "center" }}>
-        <label>Sort by:</label>
-
-        <select
-          value={sortBy}
-          onChange={(e) => {
-            setPage(1);
-            setSortBy(e.target.value);
-          }}
-        >
-          <option value="title">Title</option>
-          <option value="artist">Artist</option>
-          <option value="album">Album</option>
-          <option value="duration">Duration</option>
-        </select>
-
-        <select
-          value={order}
-          onChange={(e) => {
-            setPage(1);
-            setOrder(e.target.value);
-          }}
-        >
-          <option value="asc">Ascending</option>
-          <option value="desc">Descending</option>
-        </select>
-      </div>
-
-      <p>Total Tracks: {totalItems}</p>
-
-      {tracksLoading ? (
-        <p>Loading tracks...</p>
-      ) : tracks.length === 0 ? (
-        <p>No tracks found.</p>
-      ) : (
+      {viewMode === "tracks" && (
         <>
-          <TrackTable tracks={tracks} />
+          <h2>Tracks</h2>
+
+          <div style={{ marginBottom: "16px" }}>
+            <input
+              type="text"
+              placeholder="Search by title, artist, or album"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "300px",
+                padding: "8px",
+                marginRight: "8px",
+              }}
+            />
+
+            <button
+              onClick={() => {
+                setPage(1);
+                setAppliedSearch(search);
+              }}
+            >
+              Search
+            </button>
+
+            <button
+              onClick={() => {
+                setSearch("");
+                setAppliedSearch("");
+                setPage(1);
+              }}
+              style={{ marginLeft: "8px" }}
+            >
+              Clear Search
+            </button>
+          </div>
 
           <div
             style={{
-              marginTop: "16px",
+              marginBottom: "16px",
               display: "flex",
               gap: "8px",
               alignItems: "center",
             }}
           >
-            <button
-              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </button>
+            <label>Sort by:</label>
 
-            <span>
-              Page {page} of {totalPages}
-            </span>
-
-            <button
-              onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
-              disabled={page === totalPages}
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setPage(1);
+                setSortBy(e.target.value);
+              }}
             >
-              Next
-            </button>
+              <option value="title">Title</option>
+              <option value="artist">Artist</option>
+              <option value="album">Album</option>
+              <option value="duration">Duration</option>
+            </select>
+
+            <select
+              value={order}
+              onChange={(e) => {
+                setPage(1);
+                setOrder(e.target.value);
+              }}
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
           </div>
+
+          <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
+            <input
+              placeholder="Filter by artist"
+              value={artistFilter}
+              onChange={(e) => {
+                setPage(1);
+                setArtistFilter(e.target.value);
+              }}
+            />
+
+            <input
+              placeholder="Filter by album"
+              value={albumFilter}
+              onChange={(e) => {
+                setPage(1);
+                setAlbumFilter(e.target.value);
+              }}
+            />
+
+            <select
+              value={extensionFilter}
+              onChange={(e) => {
+                setPage(1);
+                setExtensionFilter(e.target.value);
+              }}
+            >
+              <option value="">All</option>
+              <option value=".mp3">MP3</option>
+              <option value=".flac">FLAC</option>
+              <option value=".wav">WAV</option>
+            </select>
+
+            <button onClick={clearAllFilters}>Clear All</button>
+          </div>
+
+          <p>Total Tracks: {totalItems}</p>
+
+          {tracksLoading ? (
+            <p>Loading tracks...</p>
+          ) : tracks.length === 0 ? (
+            <p>No tracks found.</p>
+          ) : (
+            <>
+              <TrackTable tracks={tracks} />
+
+              <div
+                style={{
+                  marginTop: "16px",
+                  display: "flex",
+                  gap: "8px",
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={page === 1}
+                >
+                  Previous
+                </button>
+
+                <span>
+                  Page {page} of {totalPages}
+                </span>
+
+                <button
+                  onClick={() =>
+                    setPage((prev) => Math.min(prev + 1, totalPages))
+                  }
+                  disabled={page === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {viewMode === "artists" && (
+        <>
+          <h2>Artists</h2>
+
+          {artistsLoading ? (
+            <p>Loading artists...</p>
+          ) : artists.length === 0 ? (
+            <p>No artists found.</p>
+          ) : (
+            <ArtistList artists={artists} onArtistClick={handleArtistClick} />
+          )}
         </>
       )}
     </div>

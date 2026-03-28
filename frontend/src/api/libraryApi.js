@@ -27,16 +27,27 @@ export async function getTracks(
   pageSize = 25, 
   search,
   sort_By = "title",
-  order = "asc") {
+  order = "asc",
+  artist = "",
+  album = "",
+  extension = "") {
   console.log("API CALL: getTracks", { page, pageSize });
   const res = await axios.get(`${API_BASE}/tracks`, {
     params: {
-      page,
-      page_size: pageSize,
       search: search.trim() || undefined,
       sort_by: sort_By,
       order: order,
+      artist: artist || undefined,
+      album: album || undefined,
+      extension: extension || undefined,
+      page,
+      page_size: pageSize,
     },
   });
+  return res.data;
+}
+
+export async function getArtists() {
+  const res = await axios.get(`${API_BASE}/artists`);
   return res.data;
 }

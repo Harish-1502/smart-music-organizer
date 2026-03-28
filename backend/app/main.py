@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
 from app.models.track import Track
-from app.routes import library, tracks
+from app.routes import library, tracks, artist
 
 Base.metadata.create_all(bind=engine)
 
@@ -31,3 +31,4 @@ def health():
 
 app.include_router(library.router)
 app.include_router(tracks.router)
+app.include_router(artist.router)

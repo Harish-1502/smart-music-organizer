@@ -10,12 +10,14 @@ from app.schemas.track import PaginatedTracks
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
-
 @router.get("", response_model=PaginatedTracks)
 def get_tracks(
     search: str | None = Query(default=None),
     sort_by: str = Query(default="title"),
     order: str = Query(default="asc"),
+    artist: str | None = Query(default=None),
+    album: str | None = Query(default=None),
+    extension: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -33,8 +35,17 @@ def get_tracks(
                 Track.artist.ilike(search_term),
                 Track.album.ilike(search_term),
             )
-        )
+        )   
         print("search applied")
+
+    if artist:
+        query = query.filter(Track.artist.ilike(f"%{artist.strip()}%"))
+
+    if album:
+        query = query.filter(Track.album.ilike(f"%{album.strip()}%"))
+
+    if extension:
+        query = query.filter(Track.extension == extension)
 
     allowed_sort_fields = {
         "title": Track.title,
