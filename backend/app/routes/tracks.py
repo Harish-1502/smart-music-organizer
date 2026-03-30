@@ -39,10 +39,10 @@ def get_tracks(
         print("search applied")
 
     if artist:
-        query = query.filter(Track.artist.ilike(f"%{artist.strip()}%"))
+        query = query.filter(Track.artist == artist.strip())
 
     if album:
-        query = query.filter(Track.album.ilike(f"%{album.strip()}%"))
+        query = query.filter(Track.album == album.strip())
 
     if extension:
         query = query.filter(Track.extension == extension)

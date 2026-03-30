@@ -51,3 +51,8 @@ export async function getArtists() {
   const res = await axios.get(`${API_BASE}/artists`);
   return res.data;
 }
+
+export async function getAlbums() {
+  const res = await axios.get(`${API_BASE}/albums`);
+  return res.data;
+}

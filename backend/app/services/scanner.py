@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.track import Track
 from app.services.metadata import extract_metadata
 from app.services.art import detect_album_art
+from app.utils.normalize import apply_normalized_fields
 
 # All support audio files
 SUPPORTED_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}

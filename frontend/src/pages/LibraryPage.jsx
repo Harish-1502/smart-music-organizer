@@ -5,10 +5,12 @@ import {
   clearLibrary,
   getTracks,
   getArtists,
+  getAlbums,
 } from "../api/libraryApi";
 import ScanProgress from "../components/ScanProgress";
 import TrackTable from "../components/TrackTable";
 import ArtistList from "../components/ArtistList";
+import AlbumList from "../components/AlbumList";
 
 export default function LibraryPage() {
   const [folderPath, setFolderPath] = useState("");
@@ -34,6 +36,8 @@ export default function LibraryPage() {
   const [viewMode, setViewMode] = useState("tracks");
   const [artists, setArtists] = useState([]);
   const [artistsLoading, setArtistsLoading] = useState(false);
+  const [albums, setAlbums] = useState([]);
+  const [albumsLoading, setAlbumsLoading] = useState(false);
 
   async function loadTracks(
     currentPage = page,
@@ -83,6 +87,19 @@ export default function LibraryPage() {
     }
   }
 
+  async function loadAlbums() {
+    setAlbumsLoading(true);
+    try {
+      const data = await getAlbums();
+      setAlbums(data || []);
+    } catch (error) {
+      console.error("LOAD ALBUMS ERROR:", error);
+      setMessage(error.message || "Failed to load albums");
+    } finally {
+      setAlbumsLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadTracks();
   }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, extensionFilter]);
@@ -90,6 +107,8 @@ export default function LibraryPage() {
   useEffect(() => {
     if (viewMode === "artists") {
       loadArtists();
+    } else if (viewMode === "albums") {
+      loadAlbums();
     }
   }, [viewMode]);
 
@@ -154,6 +173,12 @@ export default function LibraryPage() {
     setViewMode("tracks");
   }
 
+  function handleAlbumClick(albumName) {
+    setAlbumFilter(albumName);
+    setPage(1);
+    setViewMode("tracks");
+  }
+
   function clearAllFilters() {
     setSearch("");
     setAppliedSearch("");
@@ -202,6 +227,7 @@ export default function LibraryPage() {
       <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
         <button onClick={() => setViewMode("tracks")}>Tracks</button>
         <button onClick={() => setViewMode("artists")}>Artists</button>
+        <button onClick={() => setViewMode("albums")}>Albums</button>
       </div>
 
       {viewMode === "tracks" && (
@@ -365,6 +391,20 @@ export default function LibraryPage() {
             <p>No artists found.</p>
           ) : (
             <ArtistList artists={artists} onArtistClick={handleArtistClick} />
+          )}
+        </>
+      )}
+
+      {viewMode === "albums" && (
+        <>
+          <h2>Albums</h2>
+
+          {albumsLoading ? (
+            <p>Loading albums...</p>
+          ) : albums.length === 0 ? (
+            <p>No albums found.</p>
+          ) : (
+            <AlbumList albums={albums} onAlbumClick={handleAlbumClick} />
           )}
         </>
       )}
