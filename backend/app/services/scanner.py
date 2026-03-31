@@ -1,9 +1,11 @@
 from pathlib import Path
+from backend.app.core.database import SessionLocal
 from sqlalchemy.orm import Session
 from app.models.track import Track
 from app.services.metadata import extract_metadata
 from app.services.art import detect_album_art
 from app.utils.normalize import apply_normalized_fields
+import threading
 
 # All support audio files
 SUPPORTED_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}
@@ -47,7 +49,7 @@ def validate_folder(folder_path: str) -> Path:
     return path
 
 
-def scan_library(folder_path: str, db: Session):
+def scan_library(folder_path: str):
     """
     Scans all file in the folder and saves them in the database.
     Does extension check, file check, folder check and checks for
@@ -58,8 +60,11 @@ def scan_library(folder_path: str, db: Session):
     root = validate_folder(folder_path)
 
     reset_scan_state()
-    scan_state["status"] = "scanning"
     
+
+    # Create DB session
+    db = SessionLocal()
+
     try:
         # All files and subfolders
         for path in root.rglob("*"):
@@ -107,19 +112,41 @@ def scan_library(folder_path: str, db: Session):
 
             # print("After:")
             # print(scan_state)
+
+            scanned_artist = metadata["artist"]
+            scanned_album = metadata["album"]
+            scanned_title = metadata["title"]
+
             try:
                 track = Track(
                     file_path=normalized_file_path,
                     file_name=resolved_path.name,
                     extension=resolved_path.suffix.lower(),
                     folder_path=normalized_folder_path,
-                    title=metadata["title"],
-                    artist=metadata["artist"],
-                    album=metadata["album"],
-                    duration=metadata["duration"],
-                    metadata_source=metadata["metadata_source"],
+
+                    # old fields kept temporarily for compatibility
+                    title=scanned_title,
+                    artist=scanned_artist,
+                    album=scanned_album,
+
+                    # new scanner-owned fields
+                    scanned_title=scanned_title,
+                    scanned_artist=scanned_artist,
+                    scanned_album=scanned_album,
+
+                    # display fields start equal to scanned fields
+                    display_title=scanned_title,
+                    display_artist=scanned_artist,
+                    display_album=scanned_album,
+
+                    duration=metadata.get("duration"),
+                    metadata_source=metadata.get("metadata_source", "unknown"),
                     art_path=art_path,
+
+                    user_edited=False,
                 )
+
+                apply_normalized_fields(track)
 
                 db.add(track)
                 db.commit()
@@ -128,15 +155,38 @@ def scan_library(folder_path: str, db: Session):
             except Exception as exc:
                 db.rollback()
                 scan_state["failed"] += 1
-                # print(f"Insert failed for {normalized_file_path}: {exc}")
                 scan_state["last_error"] = f"Insert failed for {normalized_file_path}: {exc}"
 
         # End of scanning
         scan_state["status"] = "completed"
         scan_state["current_file"] = None
-
+        
     except Exception as exc:
         scan_state["status"] = "failed"
         scan_state["last_error"] = f"Scan failed: {exc}"
         scan_state["current_file"] = None
         raise
+
+    finally:
+        db.close()
+
+# This function would be to create a thread for the scan and run it in the background, allowing the API to remain responsive.
+def run_scan_library(folder_path: str) -> str:
+    # Check if a scan is already running
+    if scan_state["status"] == "scanning":
+        # return message saying that it's already running
+        return "Scan already in progress"
+
+    # Create a new thread
+    try:
+        scan_thread = threading.Thread(target=scan_library, args = (folder_path,),daemon=True)
+
+        scan_state["status"] = "scanning"
+        # Start it
+        scan_thread.start() 
+        return "Scan started"
+    
+    except Exception as exc:
+        raise ValueError(f"Failed to start scan: {exc}")
+    
+   

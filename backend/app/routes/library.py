@@ -5,16 +5,21 @@ from fastapi.responses import FileResponse
 
 from app.core.database import get_db
 from app.schemas.library import LibraryScanRequest
-from app.services.scanner import scan_library, scan_state, reset_scan_state
+from app.services.scanner import run_scan_library, scan_state, reset_scan_state
 from app.models.track import Track
 
 router = APIRouter(prefix="/library", tags=["library"])
 
 @router.post("/scan")
-def start_library_scan(payload: LibraryScanRequest, db: Session = Depends(get_db)):
+def start_library_scan(payload: LibraryScanRequest):
     try:
-        scan_library(payload.folder_path, db)
-        return {"message": "Scan completed"}
+        message = run_scan_library(payload.folder_path)
+        # scan_library(payload.folder_path, db) #This would be removed and replaced with the threaded version
+
+        return {"message": message}
+
+        # To be replaced 
+        # return {"message": "Scan completed"}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
