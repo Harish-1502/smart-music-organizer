@@ -1,5 +1,5 @@
 from pathlib import Path
-from backend.app.core.database import SessionLocal
+from app.core.database import SessionLocal
 from sqlalchemy.orm import Session
 from app.models.track import Track
 from app.services.metadata import extract_metadata
@@ -21,6 +21,8 @@ scan_state = {
     "failed": 0,
     "last_error": None,
 }
+
+thread_lock = threading.Lock()
 
 # Reset internal scan checks before each scan
 def reset_scan_state():
@@ -49,7 +51,7 @@ def validate_folder(folder_path: str) -> Path:
     return path
 
 
-def scan_library(folder_path: str):
+def scan_library(root: Path):
     """
     Scans all file in the folder and saves them in the database.
     Does extension check, file check, folder check and checks for
@@ -57,10 +59,10 @@ def scan_library(folder_path: str):
     """
 
     # validate path
-    root = validate_folder(folder_path)
+    # root = Path(folder_path)
 
-    reset_scan_state()
-    
+    # scan_state["status"] = "scanning"
+    # reset_scan_state()
 
     # Create DB session
     db = SessionLocal()
@@ -172,21 +174,29 @@ def scan_library(folder_path: str):
 
 # This function would be to create a thread for the scan and run it in the background, allowing the API to remain responsive.
 def run_scan_library(folder_path: str) -> str:
-    # Check if a scan is already running
-    if scan_state["status"] == "scanning":
-        # return message saying that it's already running
-        return "Scan already in progress"
 
-    # Create a new thread
-    try:
-        scan_thread = threading.Thread(target=scan_library, args = (folder_path,),daemon=True)
-
-        scan_state["status"] = "scanning"
-        # Start it
-        scan_thread.start() 
-        return "Scan started"
+    with thread_lock:
+        # Check if a scan is already running
+        if scan_state["status"] == "scanning":
+            # return message saying that it's already running
+            return "Scan already in progress"
     
-    except Exception as exc:
-        raise ValueError(f"Failed to start scan: {exc}")
+        # validate path
+        root = validate_folder(folder_path)
+
+        reset_scan_state()
+        scan_state["status"] = "scanning"
+        
+        # Create a new thread
+        try:
+            scan_thread = threading.Thread(target=scan_library, args = (root,),daemon=True)
+
+            # Start it
+            scan_thread.start() 
+            return "Scan started"
+        
+        except Exception as exc:
+            reset_scan_state()
+            raise ValueError(f"Failed to start scan: {exc}")
     
    

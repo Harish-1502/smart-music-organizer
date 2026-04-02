@@ -25,7 +25,7 @@ def start_library_scan(payload: LibraryScanRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Scan failed: {exc}")
 
-@router.get("/scan-status")
+@router.get("/scan_status")
 def get_scan_status():
     return scan_state
 

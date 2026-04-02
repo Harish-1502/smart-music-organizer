@@ -118,7 +118,7 @@ export default function LibraryPage() {
     setMessage("");
 
     try {
-      await scanLibrary(folderPath);
+      const scanResponse = await scanLibrary(folderPath);
       const latestStatus = await getScanStatus();
       setStatus(latestStatus);
 
@@ -132,7 +132,7 @@ export default function LibraryPage() {
         await loadArtists();
       }
 
-      setMessage("Scan completed successfully");
+      setMessage(scanResponse.message);
     } catch (error) {
       setMessage(error.message || "Scan failed");
     } finally {
@@ -190,6 +190,24 @@ export default function LibraryPage() {
     setPage(1);
   }
 
+  async function handleRefresh() {
+    setMessage("");
+    const latestStatus = await getScanStatus();
+    setStatus(latestStatus);
+
+    if (viewMode === "tracks") {
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        await loadTracks(1);
+      }
+    } else if (viewMode === "artists") {
+      await loadArtists();
+    } else if (viewMode === "albums") {
+      await loadAlbums();
+    }
+  }
+
   return (
     <div style={{ padding: "24px" }}>
       <h1>Library Scanner</h1>
@@ -228,6 +246,9 @@ export default function LibraryPage() {
         <button onClick={() => setViewMode("tracks")}>Tracks</button>
         <button onClick={() => setViewMode("artists")}>Artists</button>
         <button onClick={() => setViewMode("albums")}>Albums</button>
+        <button onClick={handleRefresh} disabled={loading || tracksLoading}>
+          Refresh
+        </button>
       </div>
 
       {viewMode === "tracks" && (

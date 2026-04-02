@@ -33,5 +33,4 @@ class Track(Base):
     art_path = Column(String, nullable=True)
     metadata_source = Column(String, nullable=False, default="unknown")
 
-    # CRITICAL FIX
     user_edited = Column(Boolean, nullable=False, default=False)
