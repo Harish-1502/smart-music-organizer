@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
-
 class TrackOut(BaseModel):
     id: int
     file_path: str
@@ -26,3 +25,8 @@ class PaginatedTracks(BaseModel):
     page_size: int
     total_items: int
     total_pages: int
+
+class TrackUpdate(BaseModel):
+    display_title: Optional[str] = None
+    display_artist: Optional[str] = None
+    display_album: Optional[str] = None

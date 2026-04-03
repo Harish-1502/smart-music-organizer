@@ -4,6 +4,12 @@ import {
   formatMetadataSource,
 } from "../utils/trackFormatters";
 
+function handleEditTrack(track) {
+    console.log("Edit track:", track);
+
+  
+}
+
 export default function TrackTable({ tracks }) {
   if (!tracks || tracks.length === 0) {
     return <p>No tracks found.</p>;
@@ -27,6 +33,7 @@ export default function TrackTable({ tracks }) {
             <th style={thStyle}>Duration</th>
             <th style={thStyle}>Source</th>
             <th style={thStyle}>File Name</th>
+            <th style={thStyle}>Actions</th>
           </tr>
         </thead>
 
@@ -53,6 +60,9 @@ export default function TrackTable({ tracks }) {
                 {formatMetadataSource(track.metadata_source)}
               </td>
               <td style={tdStyle}>{displayValue(track.file_name)}</td>
+              <td style={tdStyle}> 
+                <button onClick={() => handleEditTrack(track)}>Edit</button>
+              </td>
             </tr>
           ))}
         </tbody>
