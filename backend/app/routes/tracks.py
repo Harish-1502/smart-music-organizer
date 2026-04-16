@@ -1,4 +1,4 @@
-from http.client import HTTPException
+from fastapi import HTTPException
 from math import ceil
 
 from fastapi import APIRouter, Depends, Query
@@ -91,10 +91,13 @@ def update_track(track_id: int, data: TrackUpdateRequest, db: Session = Depends(
 
     if data.title is not None:
         track.title = data.title
+        track.display_title = data.title
     if data.artist is not None:
         track.artist = data.artist
+        track.display_artist = data.artist
     if data.album is not None:
         track.album = data.album
+        track.display_album = data.album
 
     try:
         db.commit()

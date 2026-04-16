@@ -53,14 +53,14 @@ def validate_folder(folder_path: str) -> Path:
     return path
 
 
-def scan_library(root: Path):
+def scan_library(root: Path, db: Session):
     """
     Scans all file in the folder and saves them in the database.
     Does extension check, file check, folder check and checks for
     duplicates by using its full path.
     """
-    # Create DB session
-    db = SessionLocal()
+    root = Path(root)
+    root = validate_folder(str(root))
 
     try:
         # All files and subfolders
@@ -89,9 +89,7 @@ def scan_library(root: Path):
             # print("Before:")
             # print(scan_state)
             # Duplicate check
-            if existing:
-                scan_state["duplicates"] += 1
-                continue    
+             
 
             metadata = {
                     "title": None,
@@ -107,14 +105,65 @@ def scan_library(root: Path):
                 art_path = detect_album_art(resolved_path)
             except Exception as e:
                 scan_state["last_error"] = f"Metadata extraction failed for {normalized_file_path}: {e}"
-
-            # print("After:")
-            # print(scan_state)
-
+            
             scanned_artist = metadata["artist"]
             scanned_album = metadata["album"]
             scanned_title = metadata["title"]
 
+            if existing:
+                scan_state["duplicates"] += 1
+                changed = False
+
+                changed |= update_if_changed(existing, "file_name", resolved_path.name)
+                changed |= update_if_changed(existing, "extension", resolved_path.suffix.lower())
+                changed |= update_if_changed(existing, "folder_path", normalized_folder_path)
+
+                changed |= update_if_changed(existing, "scanned_title", scanned_title)
+                changed |= update_if_changed(existing, "scanned_artist", scanned_artist)
+                changed |= update_if_changed(existing, "scanned_album", scanned_album)
+
+                changed |= update_if_changed(existing, "duration", metadata.get("duration"))
+                changed |= update_if_changed(existing, "metadata_source", metadata.get("metadata_source", "unknown"))
+                changed |= update_if_changed(existing, "art_path", art_path)
+
+                if not existing.user_edited:
+                    if existing.title != scanned_title:
+                        existing.title = scanned_title
+                        changed = True
+                    if existing.artist != scanned_artist:
+                        existing.artist = scanned_artist
+                        changed = True
+                    if existing.album != scanned_album:
+                        existing.album = scanned_album
+                        changed = True
+
+                    if existing.display_title != scanned_title:
+                        existing.display_title = scanned_title
+                        changed = True
+                    if existing.display_artist != scanned_artist:
+                        existing.display_artist = scanned_artist
+                        changed = True
+                    if existing.display_album != scanned_album:
+                        existing.display_album = scanned_album
+                        changed = True
+                else:
+                    scan_state["user_edited"] += 1
+
+                if changed:
+                    apply_normalized_fields(existing)
+                    try:
+                        db.commit()
+                        db.refresh(existing)
+                    except Exception as exc:
+                        db.rollback()
+                        scan_state["failed"] += 1
+                        scan_state["last_error"] = f"Update failed for {normalized_file_path}: {exc}"
+
+                continue
+            # print("After:")
+            # print(scan_state)
+
+            
             try:
                 track = Track(
                     file_path=normalized_file_path,
@@ -165,11 +214,15 @@ def scan_library(root: Path):
         scan_state["current_file"] = None
         raise
 
+def scan_library_worker(root: Path):
+    db = SessionLocal()
+    try:
+        scan_library(root, db)
     finally:
         db.close()
 
 # This function would be to create a thread for the scan and run it in the background, allowing the API to remain responsive.
-def run_scan_library(folder_path: str) -> str:
+def run_scan_library(folder_path: str, db: Session) -> str:
 
     with thread_lock:
         # Check if a scan is already running
@@ -177,15 +230,15 @@ def run_scan_library(folder_path: str) -> str:
             # return message saying that it's already running
             return "Scan already in progress"
     
-        # validate path
-        root = validate_folder(folder_path)
+        # # validate path
+        # root = validate_folder(folder_path)
 
         reset_scan_state()
         scan_state["status"] = "scanning"
         
         # Create a new thread
         try:
-            scan_thread = threading.Thread(target=scan_library, args = (root,),daemon=True)
+            scan_thread = threading.Thread(target=scan_library_worker, args = (root,),daemon=True)
 
             # Start it
             scan_thread.start() 
@@ -195,4 +248,8 @@ def run_scan_library(folder_path: str) -> str:
             reset_scan_state()
             raise ValueError(f"Failed to start scan: {exc}")
     
-   
+def update_if_changed(obj, field_name, new_value):
+    if getattr(obj, field_name) != new_value:
+        setattr(obj, field_name, new_value)
+        return True
+    return False
