@@ -26,7 +26,7 @@ class PaginatedTracks(BaseModel):
     total_items: int
     total_pages: int
 
-class TrackUpdate(BaseModel):
-    display_title: Optional[str] = None
-    display_artist: Optional[str] = None
-    display_album: Optional[str] = None
+class TrackUpdateRequest(BaseModel):
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None

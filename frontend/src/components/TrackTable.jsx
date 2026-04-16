@@ -4,13 +4,7 @@ import {
   formatMetadataSource,
 } from "../utils/trackFormatters";
 
-function handleEditTrack(track) {
-    console.log("Edit track:", track);
-
-  
-}
-
-export default function TrackTable({ tracks }) {
+export default function TrackTable({ tracks, handleEditTrack }) {
   if (!tracks || tracks.length === 0) {
     return <p>No tracks found.</p>;
   }
@@ -60,7 +54,7 @@ export default function TrackTable({ tracks }) {
                 {formatMetadataSource(track.metadata_source)}
               </td>
               <td style={tdStyle}>{displayValue(track.file_name)}</td>
-              <td style={tdStyle}> 
+              <td style={tdStyle}>
                 <button onClick={() => handleEditTrack(track)}>Edit</button>
               </td>
             </tr>

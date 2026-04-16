@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.models.track import Track
 from mutagen import File as MutagenFile
 
 UNKNOWN_VALUES = {

@@ -1,3 +1,4 @@
+from http.client import HTTPException
 from math import ceil
 
 from fastapi import APIRouter, Depends, Query
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.track import Track
-from app.schemas.track import PaginatedTracks
+from app.schemas.track import PaginatedTracks, TrackUpdateRequest
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
@@ -78,4 +79,32 @@ def get_tracks(
         page_size=page_size,
         total_items=total_items,
         total_pages=total_pages,
+    )
+
+@router.patch("/{track_id}", response_model=TrackUpdateRequest)
+def update_track(track_id: int, data: TrackUpdateRequest, db: Session = Depends(get_db)):
+    track = db.query(Track).filter(Track.id == track_id).first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    
+    track.user_edited = True
+
+    if data.title is not None:
+        track.title = data.title
+    if data.artist is not None:
+        track.artist = data.artist
+    if data.album is not None:
+        track.album = data.album
+
+    try:
+        db.commit()
+        db.refresh(track)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update track: {e}")
+    
+    return TrackUpdateRequest(
+        title=track.title,
+        artist=track.artist,
+        album=track.album,
     )

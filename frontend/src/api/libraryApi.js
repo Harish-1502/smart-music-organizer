@@ -56,3 +56,8 @@ export async function getAlbums() {
   const res = await axios.get(`${API_BASE}/albums`);
   return res.data;
 }
+
+export async function updateTrack(id, data) {
+  const res = await axios.patch(`${API_BASE}/tracks/${id}`, data);
+  return res.data;
+}

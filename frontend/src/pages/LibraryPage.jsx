@@ -6,11 +6,13 @@ import {
   getTracks,
   getArtists,
   getAlbums,
+  updateTrack,
 } from "../api/libraryApi";
 import ScanProgress from "../components/ScanProgress";
 import TrackTable from "../components/TrackTable";
 import ArtistList from "../components/ArtistList";
 import AlbumList from "../components/AlbumList";
+import EditTrackModal from "../components/EditTrackModal";
 
 export default function LibraryPage() {
   const [folderPath, setFolderPath] = useState("");
@@ -39,6 +41,15 @@ export default function LibraryPage() {
   const [albums, setAlbums] = useState([]);
   const [albumsLoading, setAlbumsLoading] = useState(false);
 
+  const [editStatus, setEditStatus] = useState("idle");
+  const [showModal, setShowModal] = useState(false);
+  const [selectedTrack, setSelectedTrack] = useState(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    artist: "",
+    album: "",
+  });
+
   async function loadTracks(
     currentPage = page,
     currentSearch = appliedSearch,
@@ -47,7 +58,8 @@ export default function LibraryPage() {
     currentArtist = artistFilter,
     currentAlbum = albumFilter,
     currentExtension = extensionFilter
-  ) {
+  ) 
+  {
     setTracksLoading(true);
     try {
       const data = await getTracks(
@@ -205,6 +217,75 @@ export default function LibraryPage() {
       await loadArtists();
     } else if (viewMode === "albums") {
       await loadAlbums();
+    }
+  }
+
+  function handleEditTrack(track) {
+    console.log("Edit track:", track);
+
+    setEditStatus("editing");
+    setSelectedTrack(track);
+
+    setEditForm({
+      title: track.title || "",
+      artist: track.artist || "",
+      album: track.album || "",
+    });
+
+    setShowModal(true);
+  }
+
+  function handleFormChange(field, value) {
+    setEditForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
+
+  function handleCancelEdit() {
+    setShowModal(false);
+    setSelectedTrack(null);
+    setEditStatus("idle");
+    setEditForm({
+      title: "",
+      artist: "",
+      album: "",
+    });
+  }
+
+  async function handleSaveEdit() {
+    // For now, just log the updated info. You would call an API to save changes here.
+    // console.log("Saving track with updated info:", {
+    //   id: selectedTrack.id,
+    //   ...editForm,
+    // });
+    // setShowModal(false);
+    // setSelectedTrack(null);
+    // setEditStatus("idle");
+    // setEditForm({
+    //   title: "",
+    //   artist: "",
+    //   album: "",
+    // });
+    try {
+      setEditStatus("saving");
+      const updated_data = await updateTrack(selectedTrack.id, editForm);
+      console.log("Updated track data:", updated_data);
+      setMessage("Track updated successfully");
+      setShowModal(false);
+      setSelectedTrack(null);
+      setEditStatus("idle");
+      setEditForm({
+        title: "",
+        artist: "",
+        album: "",
+      });
+      await loadTracks();
+    }
+    catch (error) {
+      console.error("Error updating track:", error);
+      setMessage(error.message || "Failed to update track");
+      setEditStatus("idle");
     }
   }
 
@@ -367,8 +448,14 @@ export default function LibraryPage() {
             <p>No tracks found.</p>
           ) : (
             <>
-              <TrackTable tracks={tracks} />
-
+              <TrackTable tracks={tracks} handleEditTrack={handleEditTrack} />
+              <EditTrackModal
+                isOpen={showModal}
+                formData={editForm}
+                onChange={handleFormChange}
+                onSave={handleSaveEdit}
+                onCancel={handleCancelEdit}
+              />
               <div
                 style={{
                   marginTop: "16px",

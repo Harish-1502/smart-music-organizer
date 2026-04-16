@@ -19,6 +19,7 @@ scan_state = {
     "inserted": 0,
     "duplicates": 0,
     "failed": 0,
+    "user_edited": 0,
     "last_error": None,
 }
 
@@ -34,6 +35,7 @@ def reset_scan_state():
         "inserted": 0,
         "duplicates": 0,
         "failed": 0,
+        "user_edited": 0,
         "last_error": None,
     })
 
@@ -57,13 +59,6 @@ def scan_library(root: Path):
     Does extension check, file check, folder check and checks for
     duplicates by using its full path.
     """
-
-    # validate path
-    # root = Path(folder_path)
-
-    # scan_state["status"] = "scanning"
-    # reset_scan_state()
-
     # Create DB session
     db = SessionLocal()
 
@@ -96,7 +91,8 @@ def scan_library(root: Path):
             # Duplicate check
             if existing:
                 scan_state["duplicates"] += 1
-                continue          
+                continue    
+
             metadata = {
                     "title": None,
                     "artist": None,
