@@ -59,8 +59,6 @@ def scan_library(root: Path, db: Session):
     Does extension check, file check, folder check and checks for
     duplicates by using its full path.
     """
-    root = Path(root)
-    root = validate_folder(str(root))
 
     try:
         # All files and subfolders
@@ -222,7 +220,7 @@ def scan_library_worker(root: Path):
         db.close()
 
 # This function would be to create a thread for the scan and run it in the background, allowing the API to remain responsive.
-def run_scan_library(folder_path: str, db: Session) -> str:
+def run_scan_library(folder_path: str) -> str:
 
     with thread_lock:
         # Check if a scan is already running
@@ -230,8 +228,8 @@ def run_scan_library(folder_path: str, db: Session) -> str:
             # return message saying that it's already running
             return "Scan already in progress"
     
-        # # validate path
-        # root = validate_folder(folder_path)
+        # validate path
+        root = validate_folder(folder_path)
 
         reset_scan_state()
         scan_state["status"] = "scanning"

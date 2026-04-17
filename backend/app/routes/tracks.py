@@ -24,7 +24,7 @@ def get_tracks(
     db: Session = Depends(get_db),
 ):
     print("GET /tracks called")
-
+    print(f"Query params - search: {search}, sort_by: {sort_by}, order: {order}, artist: {artist}, album: {album}, extension: {extension}, page: {page}, page_size: {page_size}")
     query = db.query(Track)
     print("base query created")
 
@@ -40,10 +40,11 @@ def get_tracks(
         print("search applied")
 
     if artist:
-        query = query.filter(Track.artist == artist.strip())
+        query = query.filter(Track.artist.ilike(f"%{artist.strip()}%"))
+        print(query)
 
     if album:
-        query = query.filter(Track.album == album.strip())
+        query = query.filter(Track.album.ilike(f"%{album.strip()}%"))
 
     if extension:
         query = query.filter(Track.extension == extension)

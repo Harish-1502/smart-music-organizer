@@ -6,13 +6,18 @@ import {
   getTracks,
   getArtists,
   getAlbums,
-  updateTrack,
 } from "../api/libraryApi";
 import ScanProgress from "../components/ScanProgress";
 import TrackTable from "../components/TrackTable";
 import ArtistList from "../components/ArtistList";
 import AlbumList from "../components/AlbumList";
 import EditTrackModal from "../components/EditTrackModal";
+import TrackSortControls from "../components/TrackSortControls";
+import LibraryViewTabs from "../components/LibraryViewTabs";
+import TrackFilterControls from "../components/TrackFilterControls";
+import useTrackEdit from "../hooks/useTrackEdit";
+import useTrackViewControls from "../hooks/useTrackViewControls";
+import useLibraryViews from "../hooks/useLibraryViews";
 
 export default function LibraryPage() {
   const [folderPath, setFolderPath] = useState("");
@@ -31,24 +36,7 @@ export default function LibraryPage() {
   const [appliedSearch, setAppliedSearch] = useState("");
   const [order, setOrder] = useState("asc");
   const [sortBy, setSortBy] = useState("title");
-  const [artistFilter, setArtistFilter] = useState("");
-  const [albumFilter, setAlbumFilter] = useState("");
   const [extensionFilter, setExtensionFilter] = useState("");
-
-  const [viewMode, setViewMode] = useState("tracks");
-  const [artists, setArtists] = useState([]);
-  const [artistsLoading, setArtistsLoading] = useState(false);
-  const [albums, setAlbums] = useState([]);
-  const [albumsLoading, setAlbumsLoading] = useState(false);
-
-  const [editStatus, setEditStatus] = useState("idle");
-  const [showModal, setShowModal] = useState(false);
-  const [selectedTrack, setSelectedTrack] = useState(null);
-  const [editForm, setEditForm] = useState({
-    title: "",
-    artist: "",
-    album: "",
-  });
 
   async function loadTracks(
     currentPage = page,
@@ -61,6 +49,7 @@ export default function LibraryPage() {
   ) 
   {
     setTracksLoading(true);
+    console.log("Current Artist Filter:", currentArtist);
     try {
       const data = await getTracks(
         currentPage,
@@ -86,43 +75,16 @@ export default function LibraryPage() {
     }
   }
 
-  async function loadArtists() {
-    setArtistsLoading(true);
-    try {
-      const data = await getArtists();
-      setArtists(data || []);
-    } catch (error) {
-      console.error("LOAD ARTISTS ERROR:", error);
-      setMessage(error.message || "Failed to load artists");
-    } finally {
-      setArtistsLoading(false);
-    }
-  }
-
-  async function loadAlbums() {
-    setAlbumsLoading(true);
-    try {
-      const data = await getAlbums();
-      setAlbums(data || []);
-    } catch (error) {
-      console.error("LOAD ALBUMS ERROR:", error);
-      setMessage(error.message || "Failed to load albums");
-    } finally {
-      setAlbumsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadTracks();
-  }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, extensionFilter]);
-
-  useEffect(() => {
-    if (viewMode === "artists") {
-      loadArtists();
-    } else if (viewMode === "albums") {
-      loadAlbums();
-    }
-  }, [viewMode]);
+  const {
+    viewMode,
+    setViewMode,
+    artists,
+    artistsLoading,
+    albums,
+    albumsLoading,
+    loadArtists,
+    loadAlbums,
+  } = useLibraryViews({ setMessage });
 
   async function handleScan() {
     setLoading(true);
@@ -179,115 +141,46 @@ export default function LibraryPage() {
     }
   }
 
-  function handleArtistClick(artistName) {
-    setArtistFilter(artistName);
-    setPage(1);
-    setViewMode("tracks");
-  }
-
-  function handleAlbumClick(albumName) {
-    setAlbumFilter(albumName);
-    setPage(1);
-    setViewMode("tracks");
-  }
-
-  function clearAllFilters() {
-    setSearch("");
-    setAppliedSearch("");
-    setArtistFilter("");
-    setAlbumFilter("");
-    setExtensionFilter("");
-    setSortBy("title");
-    setOrder("asc");
-    setPage(1);
-  }
-
-  async function handleRefresh() {
-    setMessage("");
-    const latestStatus = await getScanStatus();
-    setStatus(latestStatus);
-
-    if (viewMode === "tracks") {
-      if (page !== 1) {
-        setPage(1);
-      } else {
-        await loadTracks(1);
-      }
-    } else if (viewMode === "artists") {
-      await loadArtists();
-    } else if (viewMode === "albums") {
-      await loadAlbums();
-    }
-  }
-
-  function handleEditTrack(track) {
-    console.log("Edit track:", track);
-
-    setEditStatus("editing");
-    setSelectedTrack(track);
-
-    setEditForm({
-      title: track.title || "",
-      artist: track.artist || "",
-      album: track.album || "",
+  const {
+    artistFilter,
+    albumFilter,
+    setArtistFilter,
+    setAlbumFilter,
+    handleArtistClick,
+    handleAlbumClick,
+    clearAllFilters,
+    handleRefresh,
+  } = useTrackViewControls({
+      setSearch,
+      setAppliedSearch,
+      setExtensionFilter,
+      setSortBy,
+      setOrder,
+      setPage,
+      setMessage,
+      setStatus,
+      setViewMode,
+      loadTracks,
+      loadArtists,
+      loadAlbums,
+      viewMode,
+      page
     });
 
-    setShowModal(true);
-  }
-
-  function handleFormChange(field, value) {
-    setEditForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  }
-
-  function handleCancelEdit() {
-    setShowModal(false);
-    setSelectedTrack(null);
-    setEditStatus("idle");
-    setEditForm({
-      title: "",
-      artist: "",
-      album: "",
-    });
-  }
-
-  async function handleSaveEdit() {
-    // For now, just log the updated info. You would call an API to save changes here.
-    // console.log("Saving track with updated info:", {
-    //   id: selectedTrack.id,
-    //   ...editForm,
-    // });
-    // setShowModal(false);
-    // setSelectedTrack(null);
-    // setEditStatus("idle");
-    // setEditForm({
-    //   title: "",
-    //   artist: "",
-    //   album: "",
-    // });
-    try {
-      setEditStatus("saving");
-      const updated_data = await updateTrack(selectedTrack.id, editForm);
-      console.log("Updated track data:", updated_data);
-      setMessage("Track updated successfully");
-      setShowModal(false);
-      setSelectedTrack(null);
-      setEditStatus("idle");
-      setEditForm({
-        title: "",
-        artist: "",
-        album: "",
-      });
-      await loadTracks();
-    }
-    catch (error) {
-      console.error("Error updating track:", error);
-      setMessage(error.message || "Failed to update track");
-      setEditStatus("idle");
-    }
-  }
+  const {
+    editStatus,
+    showModal,
+    selectedTrack,
+    editForm,
+    handleEditTrack,
+    handleFormChange,
+    handleCancelEdit,
+    handleSaveEdit,
+  } = useTrackEdit({ loadTracks, setMessage }); 
+  
+  useEffect(() => {
+    loadTracks();
+  }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, extensionFilter]);
 
   return (
     <div style={{ padding: "24px" }}>
@@ -323,122 +216,38 @@ export default function LibraryPage() {
 
       <hr style={{ margin: "24px 0" }} />
 
-      <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
-        <button onClick={() => setViewMode("tracks")}>Tracks</button>
-        <button onClick={() => setViewMode("artists")}>Artists</button>
-        <button onClick={() => setViewMode("albums")}>Albums</button>
-        <button onClick={handleRefresh} disabled={loading || tracksLoading}>
-          Refresh
-        </button>
-      </div>
+      <LibraryViewTabs 
+        setViewMode = {setViewMode}
+        handleRefresh = {handleRefresh}
+        loading = {loading}
+        tracksLoading = {tracksLoading}
+      />
 
       {viewMode === "tracks" && (
         <>
           <h2>Tracks</h2>
 
-          <div style={{ marginBottom: "16px" }}>
-            <input
-              type="text"
-              placeholder="Search by title, artist, or album"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: "300px",
-                padding: "8px",
-                marginRight: "8px",
-              }}
-            />
+          <TrackSortControls
+            search={search}
+            setSearch={setSearch}
+            setAppliedSearch={setAppliedSearch}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            order={order}
+            setOrder={setOrder}
+            setPage={setPage}
+          />
 
-            <button
-              onClick={() => {
-                setPage(1);
-                setAppliedSearch(search);
-              }}
-            >
-              Search
-            </button>
-
-            <button
-              onClick={() => {
-                setSearch("");
-                setAppliedSearch("");
-                setPage(1);
-              }}
-              style={{ marginLeft: "8px" }}
-            >
-              Clear Search
-            </button>
-          </div>
-
-          <div
-            style={{
-              marginBottom: "16px",
-              display: "flex",
-              gap: "8px",
-              alignItems: "center",
-            }}
-          >
-            <label>Sort by:</label>
-
-            <select
-              value={sortBy}
-              onChange={(e) => {
-                setPage(1);
-                setSortBy(e.target.value);
-              }}
-            >
-              <option value="title">Title</option>
-              <option value="artist">Artist</option>
-              <option value="album">Album</option>
-              <option value="duration">Duration</option>
-            </select>
-
-            <select
-              value={order}
-              onChange={(e) => {
-                setPage(1);
-                setOrder(e.target.value);
-              }}
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </div>
-
-          <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
-            <input
-              placeholder="Filter by artist"
-              value={artistFilter}
-              onChange={(e) => {
-                setPage(1);
-                setArtistFilter(e.target.value);
-              }}
-            />
-
-            <input
-              placeholder="Filter by album"
-              value={albumFilter}
-              onChange={(e) => {
-                setPage(1);
-                setAlbumFilter(e.target.value);
-              }}
-            />
-
-            <select
-              value={extensionFilter}
-              onChange={(e) => {
-                setPage(1);
-                setExtensionFilter(e.target.value);
-              }}
-            >
-              <option value="">All</option>
-              <option value=".mp3">MP3</option>
-              <option value=".flac">FLAC</option>
-              <option value=".wav">WAV</option>
-            </select>
-
-            <button onClick={clearAllFilters}>Clear All</button>
-          </div>
+          <TrackFilterControls
+            artistFilter={artistFilter}
+            albumFilter={albumFilter}
+            extensionFilter={extensionFilter}
+            setPage={setPage}
+            setArtistFilter={setArtistFilter}
+            setAlbumFilter={setAlbumFilter}
+            setExtensionFilter={setExtensionFilter}
+            clearAllFilters={clearAllFilters}
+          />
 
           <p>Total Tracks: {totalItems}</p>
 

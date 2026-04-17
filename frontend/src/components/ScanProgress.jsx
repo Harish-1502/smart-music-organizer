@@ -9,6 +9,7 @@ export default function ScanProgress({ status }) {
       <p>Supported Found: {status.supported_found}</p>
       <p>Inserted: {status.inserted}</p>
       <p>Duplicates: {status.duplicates}</p>
+      <p>User Edited: {status.user_edited}</p>
       <p>Failed: {status.failed}</p>
       {status.last_error && <p>Error: {status.last_error}</p>}
     </div>

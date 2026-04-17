@@ -15,7 +15,7 @@ def start_library_scan(payload: LibraryScanRequest):
     try:
 
         # validate path
-        validate_folder(payload.folder_path)
+        # validate_folder(payload.folder_path)
 
         message = run_scan_library(payload.folder_path)
         # scan_library(payload.folder_path, db) #This would be removed and replaced with the threaded version
