@@ -1,12 +1,12 @@
 export default function TrackSortControls({
     search,
-    setSearch,
+    onSearchChange,
     appliedSearch,
     setAppliedSearch,
     sortBy,
-    setSortBy,
+    onSortChange,
     order,
-    setOrder,
+    onOrderChange,
     setPage
 }) {
   return (
@@ -16,7 +16,7 @@ export default function TrackSortControls({
           type="text"
           placeholder="Search by title, artist, or album"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => onSearchChange(e.target.value)}
           style={{
             width: "300px",
             padding: "8px",
@@ -35,7 +35,7 @@ export default function TrackSortControls({
 
         <button
           onClick={() => {
-            setSearch("");
+            onSearchChange("");
             setAppliedSearch("");
             setPage(1);
           }}
@@ -59,7 +59,7 @@ export default function TrackSortControls({
           value={sortBy}
           onChange={(e) => {
             setPage(1);
-            setSortBy(e.target.value);
+            onSortChange(e.target.value);
           }}
         >
           <option value="title">Title</option>
@@ -72,7 +72,7 @@ export default function TrackSortControls({
           value={order}
           onChange={(e) => {
             setPage(1);
-            setOrder(e.target.value);
+            onOrderChange(e.target.value);
           }}
         >
           <option value="asc">Ascending</option>

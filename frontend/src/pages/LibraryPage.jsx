@@ -4,8 +4,6 @@ import {
   getScanStatus,
   clearLibrary,
   getTracks,
-  getArtists,
-  getAlbums,
 } from "../api/libraryApi";
 import ScanProgress from "../components/ScanProgress";
 import TrackTable from "../components/TrackTable";
@@ -167,20 +165,20 @@ export default function LibraryPage() {
       page
     });
 
-  const {
-    editStatus,
-    showModal,
-    selectedTrack,
-    editForm,
-    handleEditTrack,
-    handleFormChange,
-    handleCancelEdit,
-    handleSaveEdit,
-  } = useTrackEdit({ loadTracks, setMessage }); 
+    const {
+      showModal,
+      editForm,
+      handleEditTrack,
+      handleFormChange,
+      handleCancelEdit,
+      handleSaveEdit,
+    } = useTrackEdit({ loadTracks, setMessage });
   
   useEffect(() => {
     loadTracks();
   }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, extensionFilter]);
+
+  console.log("Tracks State:", tracks);
 
   return (
     <div style={{ padding: "24px" }}>
@@ -216,11 +214,10 @@ export default function LibraryPage() {
 
       <hr style={{ margin: "24px 0" }} />
 
-      <LibraryViewTabs 
-        setViewMode = {setViewMode}
-        handleRefresh = {handleRefresh}
-        loading = {loading}
-        tracksLoading = {tracksLoading}
+      <LibraryViewTabs
+        onChangeView={setViewMode}
+        onRefresh={handleRefresh}
+        refreshDisabled={loading || tracksLoading}
       />
 
       {viewMode === "tracks" && (
@@ -229,12 +226,12 @@ export default function LibraryPage() {
 
           <TrackSortControls
             search={search}
-            setSearch={setSearch}
+            onSearchChange={setSearch}
             setAppliedSearch={setAppliedSearch}
             sortBy={sortBy}
-            setSortBy={setSortBy}
+            onSortChange={setSortBy}
             order={order}
-            setOrder={setOrder}
+            onOrderChange={setOrder}
             setPage={setPage}
           />
 
@@ -257,7 +254,7 @@ export default function LibraryPage() {
             <p>No tracks found.</p>
           ) : (
             <>
-              <TrackTable tracks={tracks} handleEditTrack={handleEditTrack} />
+              <TrackTable tracks={tracks} onEdit={handleEditTrack} />
               <EditTrackModal
                 isOpen={showModal}
                 formData={editForm}

@@ -32,31 +32,31 @@ def get_tracks(
         search_term = f"%{search.strip()}%"
         query = query.filter(
             or_(
-                Track.title.ilike(search_term),
-                Track.artist.ilike(search_term),
-                Track.album.ilike(search_term),
+                Track.display_title.ilike(search_term),
+                Track.display_artist.ilike(search_term),
+                Track.display_album.ilike(search_term),
             )
         )   
         print("search applied")
 
     if artist:
-        query = query.filter(Track.artist.ilike(f"%{artist.strip()}%"))
+        query = query.filter(Track.display_artist.ilike(f"%{artist.strip()}%"))
         print(query)
 
     if album:
-        query = query.filter(Track.album.ilike(f"%{album.strip()}%"))
+        query = query.filter(Track.display_album.ilike(f"%{album.strip()}%"))
 
     if extension:
         query = query.filter(Track.extension == extension)
 
     allowed_sort_fields = {
-        "title": Track.title,
-        "artist": Track.artist,
-        "album": Track.album,
+        "title": Track.display_title,
+        "artist": Track.display_artist,
+        "album": Track.display_album,
         "duration": Track.duration,
     }
 
-    sort_column = allowed_sort_fields.get(sort_by, Track.title)
+    sort_column = allowed_sort_fields.get(sort_by, Track.display_title)
 
     if order.lower() == "desc":
         query = query.order_by(sort_column.desc())

@@ -15,9 +15,9 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     setEditStatus("editing");
     setSelectedTrack(track);
     setEditForm({
-      title: track.title || "",
-      artist: track.artist || "",
-      album: track.album || "",
+      title: track.display_title || "",
+      artist: track.display_artist || "",
+      album: track.display_album || "",
     });
     setShowModal(true);
   }

@@ -4,7 +4,7 @@ import {
   formatMetadataSource,
 } from "../utils/trackFormatters";
 
-export default function TrackTable({ tracks, handleEditTrack }) {
+export default function TrackTable({ tracks, onEdit }) {
   if (!tracks || tracks.length === 0) {
     return <p>No tracks found.</p>;
   }
@@ -46,16 +46,16 @@ export default function TrackTable({ tracks, handleEditTrack }) {
                 )}
               </td>
 
-              <td style={tdStyle}>{displayValue(track.title)}</td>
-              <td style={tdStyle}>{displayValue(track.artist)}</td>
-              <td style={tdStyle}>{displayValue(track.album)}</td>
+              <td style={tdStyle}>{displayValue(track.display_title)}</td>
+              <td style={tdStyle}>{displayValue(track.display_artist)}</td>
+              <td style={tdStyle}>{displayValue(track.display_album)}</td>
               <td style={tdStyle}>{formatDuration(track.duration)}</td>
               <td style={tdStyle}>
                 {formatMetadataSource(track.metadata_source)}
               </td>
               <td style={tdStyle}>{displayValue(track.file_name)}</td>
               <td style={tdStyle}>
-                <button onClick={() => handleEditTrack(track)}>Edit</button>
+                <button onClick={() => onEdit(track)}>Edit</button>
               </td>
             </tr>
           ))}

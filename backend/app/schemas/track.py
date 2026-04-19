@@ -11,9 +11,19 @@ class TrackOut(BaseModel):
     title: Optional[str] = None
     artist: Optional[str] = None
     album: Optional[str] = None
+    scanned_title: Optional[str] = None
+    scanned_artist: Optional[str] = None
+    scanned_album: Optional[str] = None
+    display_title: Optional[str] = None
+    display_artist: Optional[str] = None
+    display_album: Optional[str] = None
+    title_normalized: Optional[str] = None
+    artist_normalized: Optional[str] = None
+    album_normalized: Optional[str] = None
     duration: Optional[float] = None
     art_path: Optional[str] = None
     metadata_source: Optional[str] = None
+    user_edited: Optional[bool] = None
 
     class Config:
         from_attributes = True

@@ -11,20 +11,20 @@ router = APIRouter(prefix="/artists", tags=["artists"])
 def get_artists(db: Session = Depends(get_db)):
     results = (
         db.query(
-            Track.artist,
+            Track.display_artist,
             func.count(Track.id).label("track_count")
         )
-        .filter(Track.artist.isnot(None))
-        .filter(Track.artist != "")
-        .group_by(Track.artist)
-        .order_by(Track.artist.asc())
+        .filter(Track.display_artist.isnot(None))
+        .filter(Track.display_artist != "")
+        .group_by(Track.display_artist)
+        .order_by(Track.display_artist.asc())
         .all()
     )
 
     return [
         {
-            "artist": artist,
+            "artist": display_artist,
             "track_count": track_count,
         }
-        for artist, track_count in results
+        for display_artist, track_count in results
     ]

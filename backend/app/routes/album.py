@@ -12,22 +12,22 @@ router = APIRouter(prefix="/albums", tags=["albums"])
 def get_albums(db: Session = Depends(get_db)):
     results = (
         db.query(
-            Track.album,
-            Track.artist,
+            Track.display_album,
+            Track.display_artist,
             func.count(Track.id).label("track_count")
         )
-        .filter(Track.album.isnot(None))
-        .filter(Track.album != "")
-        .group_by(Track.album, Track.artist)
-        .order_by(Track.album.asc())
+        .filter(Track.display_album.isnot(None))
+        .filter(Track.display_album != "")
+        .group_by(Track.display_album, Track.display_artist)
+        .order_by(Track.display_album.asc())
         .all()
     )
 
     return [
         {
-            "album": album,
-            "artist": artist,
+            "album": display_album,
+            "artist": display_artist,
             "track_count": track_count,
         }
-        for album, artist, track_count in results
+        for display_album, display_artist, track_count in results
     ]

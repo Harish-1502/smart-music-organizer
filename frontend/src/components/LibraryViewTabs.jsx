@@ -1,15 +1,14 @@
 export default function LibraryViewTabs({
-    setViewMode, 
-    handleRefresh,
-    loading, 
-    tracksLoading
+    onChangeView, 
+    onRefresh,
+    refreshDisabled,
 }) {
     return (
         <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
-        <button onClick={() => setViewMode("tracks")}>Tracks</button>
-        <button onClick={() => setViewMode("artists")}>Artists</button>
-        <button onClick={() => setViewMode("albums")}>Albums</button>
-        <button onClick={handleRefresh} disabled={loading || tracksLoading}>
+        <button onClick={() => onChangeView("tracks")}>Tracks</button>
+        <button onClick={() => onChangeView("artists")}>Artists</button>
+        <button onClick={() => onChangeView("albums")}>Albums</button>
+        <button onClick={onRefresh} disabled={refreshDisabled}>
           Refresh
         </button>
       </div>   

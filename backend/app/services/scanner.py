@@ -53,13 +53,14 @@ def validate_folder(folder_path: str) -> Path:
     return path
 
 
-def scan_library(root: Path, db: Session):
+def scan_library(root: Path | str, db: Session):
     """
     Scans all file in the folder and saves them in the database.
     Does extension check, file check, folder check and checks for
     duplicates by using its full path.
     """
-
+    root = Path(root)
+    root = validate_folder(str(root))
     try:
         # All files and subfolders
         for path in root.rglob("*"):
