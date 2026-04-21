@@ -12,3 +12,8 @@ class ScanStatusResponse(BaseModel):
     duplicates: int
     failed: int
     last_error: str | None = None
+
+class TrackUpdateRequest(BaseModel):
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None

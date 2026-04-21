@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.models.track import Track
-from app.services.scanner import scan_library, scan_state
+from app.services.scanner import scan_library, scan_state, reset_scan_state
 import pytest
 
 TEST_DB_URL = "sqlite:///./test_scanner.db"
@@ -32,7 +32,7 @@ def test_scan_library_inserts_supported_files(tmp_path):
     db = TestingSessionLocal()
 
     try:
-        scan_library(str(music_dir), db)
+        scan_library(str(music_dir),db)
         print(scan_state)
         tracks = db.query(Track).all()
         assert len(tracks) == 2
@@ -69,4 +69,33 @@ def test_scan_library_invalid_folder():
     finally:
         db.close()
 
-        
+
+def test_reset_scan_state_resets_all_fields():
+    """
+    Test:
+    - scan_state is changed manually
+
+    Expected result:
+    - reset_scan_state restores defaults
+    """
+    scan_state["status"] = "failed"
+    scan_state["current_file"] = "C:/music/song.mp3"
+    scan_state["files_seen"] = 10
+    scan_state["supported_found"] = 5
+    scan_state["inserted"] = 3
+    scan_state["duplicates"] = 2
+    scan_state["failed"] = 1
+    scan_state["user_edited"] = 4
+    scan_state["last_error"] = "some error"
+
+    reset_scan_state()
+
+    assert scan_state["status"] == "idle"
+    assert scan_state["current_file"] is None
+    assert scan_state["files_seen"] == 0
+    assert scan_state["supported_found"] == 0
+    assert scan_state["inserted"] == 0
+    assert scan_state["duplicates"] == 0
+    assert scan_state["failed"] == 0
+    assert scan_state["user_edited"] == 0
+    assert scan_state["last_error"] is None

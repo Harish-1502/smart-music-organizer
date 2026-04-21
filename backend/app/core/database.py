@@ -1,24 +1,29 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, MetaData
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Used to store the database in this path
 DATABASE_URL = "sqlite:///./data/app.db"
+
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+metadata = MetaData(naming_convention=convention)
 
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False}
 )
 
-# Creates the factory sessions with parameters that force changes to happens only when I do db.commit()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+Base = declarative_base(metadata=metadata)
 
 def get_db():
-    # A request to get a new DB session
     db = SessionLocal()
     try:
-        # gives the session
         yield db
     finally:
-        # closes the session
         db.close()

@@ -1,8 +1,11 @@
 from pathlib import Path
+from app.core.database import SessionLocal
 from sqlalchemy.orm import Session
 from app.models.track import Track
 from app.services.metadata import extract_metadata
 from app.services.art import detect_album_art
+from app.utils.normalize import apply_normalized_fields
+import threading
 
 # All support audio files
 SUPPORTED_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}
@@ -16,8 +19,11 @@ scan_state = {
     "inserted": 0,
     "duplicates": 0,
     "failed": 0,
+    "user_edited": 0,
     "last_error": None,
 }
+
+thread_lock = threading.Lock()
 
 # Reset internal scan checks before each scan
 def reset_scan_state():
@@ -29,6 +35,7 @@ def reset_scan_state():
         "inserted": 0,
         "duplicates": 0,
         "failed": 0,
+        "user_edited": 0,
         "last_error": None,
     })
 
@@ -46,19 +53,14 @@ def validate_folder(folder_path: str) -> Path:
     return path
 
 
-def scan_library(folder_path: str, db: Session):
+def scan_library(root: Path | str, db: Session):
     """
     Scans all file in the folder and saves them in the database.
     Does extension check, file check, folder check and checks for
     duplicates by using its full path.
     """
-
-    # validate path
-    root = validate_folder(folder_path)
-
-    reset_scan_state()
-    scan_state["status"] = "scanning"
-    
+    root = Path(root)
+    root = validate_folder(str(root))
     try:
         # All files and subfolders
         for path in root.rglob("*"):
@@ -86,9 +88,8 @@ def scan_library(folder_path: str, db: Session):
             # print("Before:")
             # print(scan_state)
             # Duplicate check
-            if existing:
-                scan_state["duplicates"] += 1
-                continue          
+             
+
             metadata = {
                     "title": None,
                     "artist": None,
@@ -103,22 +104,95 @@ def scan_library(folder_path: str, db: Session):
                 art_path = detect_album_art(resolved_path)
             except Exception as e:
                 scan_state["last_error"] = f"Metadata extraction failed for {normalized_file_path}: {e}"
+            
+            scanned_artist = metadata["artist"]
+            scanned_album = metadata["album"]
+            scanned_title = metadata["title"]
 
+            if existing:
+                scan_state["duplicates"] += 1
+                changed = False
+
+                changed |= update_if_changed(existing, "file_name", resolved_path.name)
+                changed |= update_if_changed(existing, "extension", resolved_path.suffix.lower())
+                changed |= update_if_changed(existing, "folder_path", normalized_folder_path)
+
+                changed |= update_if_changed(existing, "scanned_title", scanned_title)
+                changed |= update_if_changed(existing, "scanned_artist", scanned_artist)
+                changed |= update_if_changed(existing, "scanned_album", scanned_album)
+
+                changed |= update_if_changed(existing, "duration", metadata.get("duration"))
+                changed |= update_if_changed(existing, "metadata_source", metadata.get("metadata_source", "unknown"))
+                changed |= update_if_changed(existing, "art_path", art_path)
+
+                if not existing.user_edited:
+                    if existing.title != scanned_title:
+                        existing.title = scanned_title
+                        changed = True
+                    if existing.artist != scanned_artist:
+                        existing.artist = scanned_artist
+                        changed = True
+                    if existing.album != scanned_album:
+                        existing.album = scanned_album
+                        changed = True
+
+                    if existing.display_title != scanned_title:
+                        existing.display_title = scanned_title
+                        changed = True
+                    if existing.display_artist != scanned_artist:
+                        existing.display_artist = scanned_artist
+                        changed = True
+                    if existing.display_album != scanned_album:
+                        existing.display_album = scanned_album
+                        changed = True
+                else:
+                    scan_state["user_edited"] += 1
+
+                if changed:
+                    apply_normalized_fields(existing)
+                    try:
+                        db.commit()
+                        db.refresh(existing)
+                    except Exception as exc:
+                        db.rollback()
+                        scan_state["failed"] += 1
+                        scan_state["last_error"] = f"Update failed for {normalized_file_path}: {exc}"
+
+                continue
             # print("After:")
             # print(scan_state)
+
+            
             try:
                 track = Track(
                     file_path=normalized_file_path,
                     file_name=resolved_path.name,
                     extension=resolved_path.suffix.lower(),
                     folder_path=normalized_folder_path,
-                    title=metadata["title"],
-                    artist=metadata["artist"],
-                    album=metadata["album"],
-                    duration=metadata["duration"],
-                    metadata_source=metadata["metadata_source"],
+
+                    # old fields kept temporarily for compatibility
+                    title=scanned_title,
+                    artist=scanned_artist,
+                    album=scanned_album,
+
+                    # new scanner-owned fields
+                    scanned_title=scanned_title,
+                    scanned_artist=scanned_artist,
+                    scanned_album=scanned_album,
+
+                    # display fields start equal to scanned fields
+                    display_title=scanned_title,
+                    display_artist=scanned_artist,
+                    display_album=scanned_album,
+
+                    duration=metadata.get("duration"),
+                    metadata_source=metadata.get("metadata_source", "unknown"),
                     art_path=art_path,
+
+                    user_edited=False,
                 )
+
+                apply_normalized_fields(track)
 
                 db.add(track)
                 db.commit()
@@ -127,15 +201,54 @@ def scan_library(folder_path: str, db: Session):
             except Exception as exc:
                 db.rollback()
                 scan_state["failed"] += 1
-                # print(f"Insert failed for {normalized_file_path}: {exc}")
                 scan_state["last_error"] = f"Insert failed for {normalized_file_path}: {exc}"
 
         # End of scanning
         scan_state["status"] = "completed"
         scan_state["current_file"] = None
-
+        
     except Exception as exc:
         scan_state["status"] = "failed"
         scan_state["last_error"] = f"Scan failed: {exc}"
         scan_state["current_file"] = None
         raise
+
+def scan_library_worker(root: Path):
+    db = SessionLocal()
+    try:
+        scan_library(root, db)
+    finally:
+        db.close()
+
+# This function would be to create a thread for the scan and run it in the background, allowing the API to remain responsive.
+def run_scan_library(folder_path: str) -> str:
+
+    with thread_lock:
+        # Check if a scan is already running
+        if scan_state["status"] == "scanning":
+            # return message saying that it's already running
+            return "Scan already in progress"
+    
+        # validate path
+        root = validate_folder(folder_path)
+
+        reset_scan_state()
+        scan_state["status"] = "scanning"
+        
+        # Create a new thread
+        try:
+            scan_thread = threading.Thread(target=scan_library_worker, args = (root,),daemon=True)
+
+            # Start it
+            scan_thread.start() 
+            return "Scan started"
+        
+        except Exception as exc:
+            reset_scan_state()
+            raise ValueError(f"Failed to start scan: {exc}")
+    
+def update_if_changed(obj, field_name, new_value):
+    if getattr(obj, field_name) != new_value:
+        setattr(obj, field_name, new_value)
+        return True
+    return False

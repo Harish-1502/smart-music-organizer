@@ -5,22 +5,31 @@ from fastapi.responses import FileResponse
 
 from app.core.database import get_db
 from app.schemas.library import LibraryScanRequest
-from app.services.scanner import scan_library, scan_state, reset_scan_state
+from app.services.scanner import run_scan_library, scan_state, reset_scan_state, validate_folder
 from app.models.track import Track
 
 router = APIRouter(prefix="/library", tags=["library"])
 
 @router.post("/scan")
-def start_library_scan(payload: LibraryScanRequest, db: Session = Depends(get_db)):
+def start_library_scan(payload: LibraryScanRequest):
     try:
-        scan_library(payload.folder_path, db)
-        return {"message": "Scan completed"}
+
+        # validate path
+        # validate_folder(payload.folder_path)
+
+        message = run_scan_library(payload.folder_path)
+        # scan_library(payload.folder_path, db) #This would be removed and replaced with the threaded version
+
+        return {"message": message}
+
+        # To be replaced 
+        # return {"message": "Scan completed"}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Scan failed: {exc}")
 
-@router.get("/scan-status")
+@router.get("/scan_status")
 def get_scan_status():
     return scan_state
 
@@ -34,10 +43,6 @@ def clear_library(db: Session = Depends(get_db)):
         "message": "Library cleared",
         "deleted_tracks": deleted,
     }
-
-@router.get("/tracks")
-def get_tracks(db: Session = Depends(get_db)):
-    return db.query(Track).all()
 
 @router.get("/art")
 def get_album_art(path: str):
