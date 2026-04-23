@@ -29,9 +29,13 @@ export async function getTracks(
   sort_By = "title",
   order = "asc",
   artist = "",
+  exactArtist = "",
   album = "",
+  exactAlbum = "",
   extension = "") {
-  console.log("API CALL: getTracks", { page, pageSize });
+  // console.log("API CALL: getTracks", { page, pageSize });
+  // console.log("Current Exact Artist Filter from API:", exactArtist);
+
   const res = await axios.get(`${API_BASE}/tracks`, {
     params: {
       search: search.trim() || undefined,
@@ -39,6 +43,8 @@ export async function getTracks(
       order: order,
       artist: artist || undefined,
       album: album || undefined,
+      exact_artist: exactArtist || undefined,
+      exact_album: exactAlbum || undefined,
       extension: extension || undefined,
       page,
       page_size: pageSize,

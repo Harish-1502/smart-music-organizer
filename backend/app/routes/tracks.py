@@ -18,15 +18,17 @@ def get_tracks(
     order: str = Query(default="asc"),
     artist: str | None = Query(default=None),
     album: str | None = Query(default=None),
+    exact_artist: str | None = Query(default=None),
+    exact_album: str | None = Query(default=None),
     extension: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    print("GET /tracks called")
-    print(f"Query params - search: {search}, sort_by: {sort_by}, order: {order}, artist: {artist}, album: {album}, extension: {extension}, page: {page}, page_size: {page_size}")
+    # print("GET /tracks called")
+    # print(f"Query params - search: {search}, sort_by: {sort_by}, order: {order}, artist: {artist}, album: {album}, exact_artist: {exact_artist}, exact_album: {exact_album},extension: {extension}, page: {page}, page_size: {page_size}")
     query = db.query(Track)
-    print("base query created")
+    # print("base query created")
 
     if search:
         search_term = f"%{search.strip()}%"
@@ -38,12 +40,19 @@ def get_tracks(
             )
         )   
         print("search applied")
+    
+    # DUBUG
+    # print("Exact artist:", exact_artist)
+    # print("Artist:", artist)
 
-    if artist:
+    if exact_artist:
+        query = query.filter(Track.display_artist == exact_artist.strip())
+    elif artist:
         query = query.filter(Track.display_artist.ilike(f"%{artist.strip()}%"))
-        print(query)
 
-    if album:
+    if exact_album:
+        query = query.filter(Track.display_album == exact_album.strip())
+    elif album:
         query = query.filter(Track.display_album.ilike(f"%{album.strip()}%"))
 
     if extension:
@@ -63,16 +72,16 @@ def get_tracks(
     else:
         query = query.order_by(sort_column.asc())
 
-    print("before count")
+    # print("before count")
     total_items = query.count()
-    print("after count", total_items)
+    # print("after count", total_items)
 
     total_pages = ceil(total_items / page_size) if total_items > 0 else 1
 
     offset = (page - 1) * page_size
-    print("before fetch")
+    # print("before fetch")
     tracks = query.offset(offset).limit(page_size).all()
-    print("after fetch", len(tracks))
+    # print("after fetch", len(tracks))
 
     return PaginatedTracks(
         items=tracks,

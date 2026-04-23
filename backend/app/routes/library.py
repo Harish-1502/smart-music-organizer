@@ -16,6 +16,9 @@ def start_library_scan(payload: LibraryScanRequest):
 
         # validate path
         # validate_folder(payload.folder_path)
+        resolved = validate_folder(payload.folder_path).resolve()
+        print(f"\n[DEBUG /library/scan] raw_folder={payload.folder_path!r}")
+        print(f"[DEBUG /library/scan] resolved_folder={resolved}")
 
         message = run_scan_library(payload.folder_path)
         # scan_library(payload.folder_path, db) #This would be removed and replaced with the threaded version
@@ -35,9 +38,19 @@ def get_scan_status():
 
 @router.delete("/clear")
 def clear_library(db: Session = Depends(get_db)):
+    # deleted = db.query(Track).delete()
+    # db.commit()
+    # reset_scan_state()
+
+    before = db.query(Track).count()
+    print(f"\n[DEBUG /library/clear] tracks_before={before}")
     deleted = db.query(Track).delete()
+    print(f"[DEBUG /library/clear] delete_returned={deleted}")
     db.commit()
+    after = db.query(Track).count()
+    print(f"[DEBUG /library/clear] tracks_after={after}")
     reset_scan_state()
+
 
     return {
         "message": "Library cleared",

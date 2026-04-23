@@ -55,20 +55,31 @@ def validate_folder(folder_path: str) -> Path:
 
 def scan_library(root: Path | str, db: Session):
     """
-    Scans all file in the folder and saves them in the database.
+    Scans all files in the folder and saves them in the database.
     Does extension check, file check, folder check and checks for
     duplicates by using its full path.
     """
     root = Path(root)
     root = validate_folder(str(root))
+    root_str = str(root.resolve())
+
+    print(f"\n[DEBUG scan_library:start] root={root_str}")
+    print(f"[DEBUG scan_library:start] total_tracks_in_db={db.query(Track).count()}")
+    print(
+        f"[DEBUG scan_library:start] tracks_under_root="
+        f"{db.query(Track).filter(Track.file_path.startswith(root_str)).count()}"
+    )
+
+    seen_paths = set()
+
     try:
         # All files and subfolders
         for path in root.rglob("*"):
-            
+
             # File check
             if not path.is_file():
                 continue
-                
+
             scan_state["files_seen"] += 1
             scan_state["current_file"] = str(path)
 
@@ -83,20 +94,17 @@ def scan_library(root: Path | str, db: Session):
             normalized_file_path = str(resolved_path)
             normalized_folder_path = str(resolved_path.parent)
 
+            seen_paths.add(normalized_file_path)
+
             existing = db.query(Track).filter(Track.file_path == normalized_file_path).first()
 
-            # print("Before:")
-            # print(scan_state)
-            # Duplicate check
-             
-
             metadata = {
-                    "title": None,
-                    "artist": None,
-                    "album": None,
-                    "duration": None,
-                    "metadata_source": "unknown",
-                }
+                "title": None,
+                "artist": None,
+                "album": None,
+                "duration": None,
+                "metadata_source": "unknown",
+            }
             art_path = None
 
             try:
@@ -104,7 +112,7 @@ def scan_library(root: Path | str, db: Session):
                 art_path = detect_album_art(resolved_path)
             except Exception as e:
                 scan_state["last_error"] = f"Metadata extraction failed for {normalized_file_path}: {e}"
-            
+
             scanned_artist = metadata["artist"]
             scanned_album = metadata["album"]
             scanned_title = metadata["title"]
@@ -170,17 +178,14 @@ def scan_library(root: Path | str, db: Session):
                     extension=resolved_path.suffix.lower(),
                     folder_path=normalized_folder_path,
 
-                    # old fields kept temporarily for compatibility
                     title=scanned_title,
                     artist=scanned_artist,
                     album=scanned_album,
 
-                    # new scanner-owned fields
                     scanned_title=scanned_title,
                     scanned_artist=scanned_artist,
                     scanned_album=scanned_album,
 
-                    # display fields start equal to scanned fields
                     display_title=scanned_title,
                     display_artist=scanned_artist,
                     display_album=scanned_album,
@@ -203,16 +208,59 @@ def scan_library(root: Path | str, db: Session):
                 scan_state["failed"] += 1
                 scan_state["last_error"] = f"Insert failed for {normalized_file_path}: {exc}"
 
-        # End of scanning
+        # after loop: remove tracks under this root that were not seen this scan
+        print(
+            f"[DEBUG scan_library:cleanup] supported_found={scan_state['supported_found']} "
+            f"seen_paths={len(seen_paths)}"
+        )
+        if not seen_paths:
+            print(
+                f"[DEBUG scan_library:cleanup] WARNING seen_paths is empty for root={root_str}; "
+                "cleanup will target every DB row whose file_path starts with this root"
+            )
+
+        stale_tracks = db.query(Track).filter(Track.file_path.startswith(root_str))
+        if seen_paths:
+            stale_tracks = stale_tracks.filter(~Track.file_path.in_(seen_paths))
+
+        stale_list = stale_tracks.all()
+
+        print(f"[DEBUG scan_library:cleanup] stale_count={len(stale_list)}")
+        for track in stale_list[:10]:
+            candidate = Path(track.file_path)
+            real_inside_root = candidate == root or root in candidate.parents
+            print(
+                f"[DEBUG scan_library:cleanup] stale_candidate={track.file_path} "
+                f"real_inside_root={real_inside_root}"
+            )
+            
+        try:
+            stale_query = db.query(Track).filter(Track.file_path.startswith(root_str))
+
+            if seen_paths:
+                stale_query = stale_query.filter(~Track.file_path.in_(seen_paths))
+
+            deleted = stale_query.delete(synchronize_session=False)
+            print(f"[DEBUG scan_library:cleanup] delete_returned={deleted}")
+            db.commit()
+            print(
+                f"[DEBUG scan_library:cleanup] tracks_under_root_after="
+                f"{db.query(Track).filter(Track.file_path.startswith(root_str)).count()}"
+            )
+        except Exception as exc:
+            db.rollback()
+            scan_state["failed"] += 1
+            scan_state["last_error"] = f"Missing-file cleanup failed: {exc}"
+
         scan_state["status"] = "completed"
         scan_state["current_file"] = None
-        
+
     except Exception as exc:
         scan_state["status"] = "failed"
         scan_state["last_error"] = f"Scan failed: {exc}"
         scan_state["current_file"] = None
         raise
-
+    
 def scan_library_worker(root: Path):
     db = SessionLocal()
     try:

@@ -19,16 +19,24 @@ export default function useTrackViewControls({
 }) {
     const [artistFilter, setArtistFilter] = useState("");
     const [albumFilter, setAlbumFilter] = useState("");
+    const [exactArtistFilter, setExactArtistFilter] = useState("");
+    const [exactAlbumFilter, setExactAlbumFilter] = useState("");
 
 
     function handleArtistClick(artistName) {
         setArtistFilter(artistName);
+        setExactArtistFilter(artistName);
+        setAlbumFilter("");
+        setExactAlbumFilter("");
         setPage(1);
         setViewMode("tracks");
       }
     
-      function handleAlbumClick(albumName) {
+      function handleAlbumClick(albumName, artistName) {
         setAlbumFilter(albumName);
+        setExactAlbumFilter(albumName);
+        setArtistFilter("");
+        setExactArtistFilter(artistName || "");
         setPage(1);
         setViewMode("tracks");
       }
@@ -38,6 +46,8 @@ export default function useTrackViewControls({
         setAppliedSearch("");
         setArtistFilter("");
         setAlbumFilter("");
+        setExactArtistFilter("");
+        setExactAlbumFilter("");
         setExtensionFilter("");
         setSortBy("title");
         setOrder("asc");
@@ -65,8 +75,12 @@ export default function useTrackViewControls({
     return {
         artistFilter,
         albumFilter,
+        exactArtistFilter,
+        exactAlbumFilter,
         setArtistFilter,
         setAlbumFilter,
+        setExactArtistFilter,
+        setExactAlbumFilter,
         handleArtistClick,
         handleAlbumClick,
         clearAllFilters,

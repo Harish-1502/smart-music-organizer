@@ -42,12 +42,16 @@ export default function LibraryPage() {
     currentSortBy = sortBy,
     currentOrder = order,
     currentArtist = artistFilter,
+    currentExactArtist = exactArtistFilter,
+    currentExactAlbum = exactAlbumFilter,
     currentAlbum = albumFilter,
     currentExtension = extensionFilter
   ) 
   {
     setTracksLoading(true);
-    console.log("Current Artist Filter:", currentArtist);
+    // DEBUG
+    // console.log("Current Artist Filter:", currentArtist);
+    // console.log("Current Exact Artist Filter:", currentExactArtist);
     try {
       const data = await getTracks(
         currentPage,
@@ -56,11 +60,14 @@ export default function LibraryPage() {
         currentSortBy,
         currentOrder,
         currentArtist,
+        currentExactArtist,
         currentAlbum,
+        currentExactAlbum,
         currentExtension
       );
 
-      console.log("TRACKS FROM API:", data);
+      // DEBUG
+      // console.log("TRACKS FROM API:", data);
 
       setTracks(data.items || []);
       setTotalPages(data.total_pages || 1);
@@ -113,6 +120,9 @@ export default function LibraryPage() {
   }
 
   async function deleteAllSong() {
+    console.warn("[DEBUG deleteAllSong] clicked", {
+      time: new Date().toISOString(),
+    });
     setLoading(true);
     setStatus(null);
     setMessage("");
@@ -142,8 +152,12 @@ export default function LibraryPage() {
   const {
     artistFilter,
     albumFilter,
+    exactArtistFilter,
+    exactAlbumFilter,
     setArtistFilter,
     setAlbumFilter,
+    setExactArtistFilter,
+    setExactAlbumFilter,
     handleArtistClick,
     handleAlbumClick,
     clearAllFilters,
@@ -176,9 +190,10 @@ export default function LibraryPage() {
   
   useEffect(() => {
     loadTracks();
-  }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, extensionFilter]);
+  }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, exactArtistFilter, exactAlbumFilter, extensionFilter]);
 
-  console.log("Tracks State:", tracks);
+  // DUBUG
+  // console.log("Tracks State:", tracks);
 
   return (
     <div style={{ padding: "24px" }}>
