@@ -1,23 +1,22 @@
-// import { useEffect, useState } from 'react'
-// import { getHealth } from './services/api'
+import { Link, Routes, Route, Navigate } from "react-router-dom";
+import LibraryPage from "./pages/LibraryPage";
+import PlaylistsPage from "./pages/PlaylistsPage";
+import PlaylistDetailPage from "./pages/PlaylistDetailPage";
 
-function App() {
-  // const [message, setMessage] = useState('Loading...')
-
-  // // When loaded it runs getHealth to check status
-  // useEffect(() => {
-  //   getHealth()
-  //     // Returns status
-  //     .then((data) => setMessage(data.status))
-  //     .catch(() => setMessage('Backend unreachable'))
-  // }, [])
-
+export default function App() {
   return (
-    <div style={{ padding: '2rem' }}>
-      <h1>Smart Music Organizer</h1>
-      {/* <p>Backend status: {message}</p> */}
-    </div>
-  )
-}
+    <div>
+      <nav style={{ display: "flex", gap: "12px", padding: "12px" }}>
+        <Link to="/library">Library</Link>
+        <Link to="/playlists">Playlists</Link>
+      </nav>
 
-export default App
+      <Routes>
+        <Route path="/" element={<Navigate to="/library" replace />} />
+        <Route path="/library" element={<LibraryPage />} />
+        <Route path="/playlists" element={<PlaylistsPage />} />
+        <Route path="/playlists/:playlistId" element={<PlaylistDetailPage />} />
+      </Routes>
+    </div>
+  );
+}
