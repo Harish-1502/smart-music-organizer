@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getTracks } from "../../api/libraryApi";
 import { addTrackToPlaylist } from "../../api/playlistApi";
+import useTrackBrowser from "../../hooks/useTrackBrowser";
+import TrackBrowser from "../TrackBrowser";
 
 export default function AddTracksModal({ playlistId, onClose, onTracksAdded }) {
   const [tracks, setTracks] = useState([]);
@@ -8,27 +10,7 @@ export default function AddTracksModal({ playlistId, onClose, onTracksAdded }) {
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    loadTracks();
-  }, []);
-
-  async function loadTracks() {
-    const cleanSearch = search?.trim() || ""
-    try {
-      const data = await getTracks({
-        cleanSearch,
-        page: 1,
-        
-      });
-
-      // adjust this depending on your GET /tracks response shape
-      setTracks(data.tracks || data.items || data);
-    } catch (error) {
-      setMessage("Failed to load tracks.");
-      console.log("Load tracks error:", error);
-    }
-  }
+  const browser = useTrackBrowser();
 
   function toggleTrack(trackId) {
     setSelectedTrackIds((prev) =>
@@ -60,43 +42,64 @@ export default function AddTracksModal({ playlistId, onClose, onTracksAdded }) {
     }
   }
 
-  return (
-    <div>
-      <h2>Add Tracks</h2>
+   return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1000,
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          width: "90vw",
+          maxWidth: "1100px",
+          height: "85vh",
+          padding: "20px",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <h2>Add Tracks</h2>
 
-      <input
-        value={search}
-        placeholder="Search tracks..."
-        onChange={(e) => setSearch(e.target.value)}
-      />
+        {message && <p style={{ color: "red" }}>{message}</p>}
 
-      <button onClick={loadTracks}>Search</button>
+        <p>Selected: {selectedTrackIds.length}</p>
 
-      {message && <p>{message}</p>}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <TrackBrowser
+            browser={browser}
+            mode="picker"
+            selectedTrackIds={selectedTrackIds}
+            onToggleTrack={toggleTrack}
+          />
+        </div>
 
-      <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-        {tracks.map((track) => (
-          <div key={track.id}>
-            <label>
-              <input
-                type="checkbox"
-                checked={selectedTrackIds.includes(track.id)}
-                onChange={() => toggleTrack(track.id)}
-              />
+        <div
+          style={{
+            borderTop: "1px solid #ddd",
+            paddingTop: "12px",
+            marginTop: "12px",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "8px",
+          }}
+        >
+          <button onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
 
-              {track.title} — {track.artist || "Unknown Artist"}
-            </label>
-          </div>
-        ))}
+          <button onClick={handleAddSelected} disabled={saving}>
+            {saving ? "Adding..." : `Add Selected (${selectedTrackIds.length})`}
+          </button>
+        </div>
       </div>
-
-      <button onClick={onClose} disabled={saving}>
-        Cancel
-      </button>
-
-      <button onClick={handleAddSelected} disabled={saving}>
-        {saving ? "Adding..." : "Add Selected"}
-      </button>
     </div>
   );
 }
