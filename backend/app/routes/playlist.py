@@ -22,13 +22,18 @@ from app.services.playlist import (
     reorder_playlist_tracks
 )
 
-router = APIRouter(prefix="/playlist", tags=["playlist"])
+router = APIRouter(prefix="/playlists", tags=["playlist"])
 
-@router.post("", response_model=PlaylistCreateRequest)
+@router.post("", response_model=PlaylistResponse)
 def create_playlist(request: PlaylistCreateRequest, db: Session = Depends(get_db)):
     try:
         playlist = add_playlist(db, request.name)
-        return playlist
+        return PlaylistResponse(
+            id=playlist.id,
+            name=playlist.name,
+            created_at=playlist.created_at,
+            updated_at=playlist.updated_at,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     

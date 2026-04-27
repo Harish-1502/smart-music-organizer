@@ -38,7 +38,7 @@ export async function getTracks(
 
   const res = await axios.get(`${API_BASE}/tracks`, {
     params: {
-      search: search.trim() || undefined,
+      search: (search || "").trim() || undefined,
       sort_by: sort_By,
       order: order,
       artist: artist || undefined,

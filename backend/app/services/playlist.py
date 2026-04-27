@@ -98,7 +98,7 @@ def rename_playlist(db, playlist_id: int, new_name: str) -> Playlist:
         playlist.name = clean_name
 
         # Manually update timestamp because renaming changes playlist
-        playlist.updated_at = datetime.now(timezone.utc)
+        # playlist.updated_at = datetime.now(timezone.utc)
 
         # Save changes
         db.commit()

@@ -1,85 +1,23 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   scanLibrary,
   getScanStatus,
   clearLibrary,
-  getTracks,
 } from "../api/libraryApi";
 import ScanProgress from "../components/ScanProgress";
-import TrackTable from "../components/TrackTable";
 import ArtistList from "../components/ArtistList";
 import AlbumList from "../components/AlbumList";
-import EditTrackModal from "../components/EditTrackModal";
-import TrackSortControls from "../components/TrackSortControls";
 import LibraryViewTabs from "../components/LibraryViewTabs";
-import TrackFilterControls from "../components/TrackFilterControls";
-import useTrackEdit from "../hooks/useTrackEdit";
-import useTrackViewControls from "../hooks/useTrackViewControls";
 import useLibraryViews from "../hooks/useLibraryViews";
+import useTrackBrowser from "../hooks/useTrackBrowser";
+import TrackBrowser from "../components/TrackBrowser";
 
 export default function LibraryPage() {
   const [folderPath, setFolderPath] = useState("");
   const [status, setStatus] = useState(null);
-  const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [tracksLoading, setTracksLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const [page, setPage] = useState(1);
-  const pageSize = 25;
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-
-  const [search, setSearch] = useState("");
-  const [appliedSearch, setAppliedSearch] = useState("");
-  const [order, setOrder] = useState("asc");
-  const [sortBy, setSortBy] = useState("title");
-  const [extensionFilter, setExtensionFilter] = useState("");
-
-  async function loadTracks(
-    currentPage = page,
-    currentSearch = appliedSearch,
-    currentSortBy = sortBy,
-    currentOrder = order,
-    currentArtist = artistFilter,
-    currentExactArtist = exactArtistFilter,
-    currentExactAlbum = exactAlbumFilter,
-    currentAlbum = albumFilter,
-    currentExtension = extensionFilter
-  ) 
-  {
-    setTracksLoading(true);
-    // DEBUG
-    // console.log("Current Artist Filter:", currentArtist);
-    // console.log("Current Exact Artist Filter:", currentExactArtist);
-    try {
-      const data = await getTracks(
-        currentPage,
-        pageSize,
-        currentSearch,
-        currentSortBy,
-        currentOrder,
-        currentArtist,
-        currentExactArtist,
-        currentAlbum,
-        currentExactAlbum,
-        currentExtension
-      );
-
-      // DEBUG
-      // console.log("TRACKS FROM API:", data);
-
-      setTracks(data.items || []);
-      setTotalPages(data.total_pages || 1);
-      setTotalItems(data.total_items || 0);
-    } catch (error) {
-      console.error("LOAD TRACKS ERROR:", error);
-      setMessage(error.message || "Failed to load tracks");
-    } finally {
-      setTracksLoading(false);
-    }
-  }
-
+  const trackBrowser = useTrackBrowser();
+  
   const {
     viewMode,
     setViewMode,
@@ -89,31 +27,42 @@ export default function LibraryPage() {
     albumsLoading,
     loadArtists,
     loadAlbums,
-  } = useLibraryViews({ setMessage });
+  } = useLibraryViews({setMessage: trackBrowser.setMessage,
+  });
+  
+  function handleArtistClick(artistName) {
+    trackBrowser.applyArtistClick(artistName);
+    setViewMode("tracks");
+  }
+
+  function handleAlbumClick(albumName, artistName){
+    trackBrowser.applyAlbumClick(albumName, artistName);
+    setViewMode("tracks");
+  }
 
   async function handleScan() {
     setLoading(true);
     setStatus(null);
-    setMessage("");
+    trackBrowser.setMessage("");
 
     try {
       const scanResponse = await scanLibrary(folderPath);
       const latestStatus = await getScanStatus();
       setStatus(latestStatus);
 
-      if (page !== 1) {
-        setPage(1);
+      if (trackBrowser.page !== 1) {
+        trackBrowser.setPage(1);
       } else {
-        await loadTracks(1);
+        await trackBrowser.loadTracks(1);
       }
 
       if (viewMode === "artists") {
         await loadArtists();
       }
 
-      setMessage(scanResponse.message);
+      trackBrowser.setMessage(scanResponse.message);
     } catch (error) {
-      setMessage(error.message || "Scan failed");
+      trackBrowser.setMessage(error.message || "Scan failed");
     } finally {
       setLoading(false);
     }
@@ -125,72 +74,47 @@ export default function LibraryPage() {
     });
     setLoading(true);
     setStatus(null);
-    setMessage("");
+    trackBrowser.setMessage("");
 
     try {
       const latestDeleteStatus = await clearLibrary();
       setStatus(latestDeleteStatus);
 
-      if (page !== 1) {
-        setPage(1);
+      if (trackBrowser.page !== 1) {
+        trackBrowser.setPage(1);
       } else {
-        await loadTracks(1);
+        await trackBrowser.loadTracks(1);
       }
 
       if (viewMode === "artists") {
         await loadArtists();
       }
 
-      setMessage("Delete complete");
+      trackBrowser.setMessage("Delete complete");
     } catch (error) {
-      setMessage(error.message || "Delete failed");
+      trackBrowser.setMessage(error.message || "Delete failed");
     } finally {
       setLoading(false);
     }
   }
 
-  const {
-    artistFilter,
-    albumFilter,
-    exactArtistFilter,
-    exactAlbumFilter,
-    setArtistFilter,
-    setAlbumFilter,
-    setExactArtistFilter,
-    setExactAlbumFilter,
-    handleArtistClick,
-    handleAlbumClick,
-    clearAllFilters,
-    handleRefresh,
-  } = useTrackViewControls({
-      setSearch,
-      setAppliedSearch,
-      setExtensionFilter,
-      setSortBy,
-      setOrder,
-      setPage,
-      setMessage,
-      setStatus,
-      setViewMode,
-      loadTracks,
-      loadArtists,
-      loadAlbums,
-      viewMode,
-      page
-    });
+    async function handleRefresh() {
+      trackBrowser.setMessage("");
+      const latestStatus = await getScanStatus();
+      setStatus(latestStatus);
 
-    const {
-      showModal,
-      editForm,
-      handleEditTrack,
-      handleFormChange,
-      handleCancelEdit,
-      handleSaveEdit,
-    } = useTrackEdit({ loadTracks, setMessage });
-  
-  useEffect(() => {
-    loadTracks();
-  }, [page, appliedSearch, sortBy, order, artistFilter, albumFilter, exactArtistFilter, exactAlbumFilter, extensionFilter]);
+      if (viewMode === "tracks") {
+          if (trackBrowser.page !== 1) {
+            trackBrowser.setPage(1);
+          } else {
+            await trackBrowser.loadTracks(1);
+          }
+      } else if (viewMode === "artists") {
+          await loadArtists();
+      } else if (viewMode === "albums") {
+          await loadAlbums();
+      }
+    }
 
   // DUBUG
   // console.log("Tracks State:", tracks);
@@ -223,7 +147,7 @@ export default function LibraryPage() {
         Delete
       </button>
 
-      {message && <p>{message}</p>}
+      {trackBrowser.message && <p>{trackBrowser.message}</p>}
 
       <ScanProgress status={status} />
 
@@ -232,83 +156,12 @@ export default function LibraryPage() {
       <LibraryViewTabs
         onChangeView={setViewMode}
         onRefresh={handleRefresh}
-        refreshDisabled={loading || tracksLoading}
+        refreshDisabled={loading || trackBrowser.tracksLoading}
       />
 
       {viewMode === "tracks" && (
-        <>
-          <h2>Tracks</h2>
-
-          <TrackSortControls
-            search={search}
-            onSearchChange={setSearch}
-            setAppliedSearch={setAppliedSearch}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            order={order}
-            onOrderChange={setOrder}
-            setPage={setPage}
-          />
-
-          <TrackFilterControls
-            artistFilter={artistFilter}
-            albumFilter={albumFilter}
-            extensionFilter={extensionFilter}
-            setPage={setPage}
-            setArtistFilter={setArtistFilter}
-            setAlbumFilter={setAlbumFilter}
-            setExtensionFilter={setExtensionFilter}
-            clearAllFilters={clearAllFilters}
-          />
-
-          <p>Total Tracks: {totalItems}</p>
-
-          {tracksLoading ? (
-            <p>Loading tracks...</p>
-          ) : tracks.length === 0 ? (
-            <p>No tracks found.</p>
-          ) : (
-            <>
-              <TrackTable tracks={tracks} onEdit={handleEditTrack} />
-              <EditTrackModal
-                isOpen={showModal}
-                formData={editForm}
-                onChange={handleFormChange}
-                onSave={handleSaveEdit}
-                onCancel={handleCancelEdit}
-              />
-              <div
-                style={{
-                  marginTop: "16px",
-                  display: "flex",
-                  gap: "8px",
-                  alignItems: "center",
-                }}
-              >
-                <button
-                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={page === 1}
-                >
-                  Previous
-                </button>
-
-                <span>
-                  Page {page} of {totalPages}
-                </span>
-
-                <button
-                  onClick={() =>
-                    setPage((prev) => Math.min(prev + 1, totalPages))
-                  }
-                  disabled={page === totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
+        <TrackBrowser browser={trackBrowser} mode="library" />
+      )} 
 
       {viewMode === "artists" && (
         <>

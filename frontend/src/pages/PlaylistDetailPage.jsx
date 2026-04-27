@@ -5,11 +5,13 @@ import {
   removeTrackFromPlaylist,
 } from "../api/playlistApi";
 import PlaylistTrackRow from "../components/playlists/PlaylistTrackRow";
+import AddTracksModal from "../components/playlists/AddTracksModal";
 
 export default function PlaylistDetailPage() {
   const { playlistId } = useParams();
 
   const [playlist, setPlaylist] = useState(null);
+  const [showAddTracksModal, setShowAddTracksModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -55,7 +57,9 @@ export default function PlaylistDetailPage() {
 
       {message && <p>{message}</p>}
 
-      <button>Add Tracks</button>
+      <button onClick={() => setShowAddTracksModal(true)}>
+        Add Tracks
+      </button>
       <button>Reorder</button>
 
       {playlist.tracks.length === 0 ? (
@@ -70,6 +74,14 @@ export default function PlaylistDetailPage() {
             />
           ))}
         </div>
+      )}
+
+      {showAddTracksModal && (
+        <AddTracksModal
+            playlistId={playlistId}
+            onClose={() => setShowAddTracksModal(false)}
+            onTracksAdded={loadPlaylist}
+        />
       )}
     </div>
   );
