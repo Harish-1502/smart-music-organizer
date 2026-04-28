@@ -7,6 +7,7 @@ import {
   renamePlaylist,
 } from "../api/playlistApi";
 import CreatePlaylistModal from "../components/playlists/CreatePlaylistModal";
+import "../styles/PlaylistsPage.css";
 
 export default function PlaylistsPage() {
   const [playlists, setPlaylists] = useState([]);
@@ -67,12 +68,13 @@ export default function PlaylistsPage() {
       // Update state without refetching
       setPlaylists((prev) =>
         prev.map((p) =>
-          p.id === playlist.id 
+          p.id === playlist.id
             ? {
-                 ...p,
-                 name: updated.name,
-                 updated_at: updated.updated_at    
-            } : p
+                ...p,
+                name: updated.name,
+                updated_at: updated.updated_at,
+              }
+            : p
         )
       );
     } catch (error) {
@@ -81,64 +83,216 @@ export default function PlaylistsPage() {
   }
 
   return (
-    <div>
-      <h1>Playlists</h1>
+    <section className="playlist-page" aria-labelledby="playlists-title">
+      <div className="playlist-page__inner">
+        <header className="playlist-page__hero">
+          <div className="playlist-page__hero-panel">
+            <div className="playlist-page__header">
+              <div className="playlist-page__copy">
+                <p className="playlist-page__eyebrow">Your library</p>
+                <h1 id="playlists-title" className="playlist-page__title">
+                  Playlists
+                </h1>
+                <p className="playlist-page__subtitle">
+                  Build collections you can jump back into fast.
+                </p>
+              </div>
 
-      <button onClick={() => setShowCreateModal(true)}>
-        + Create Playlist
-      </button>
+              <button
+                type="button"
+                className="playlist-page__create"
+                onClick={() => setShowCreateModal(true)}
+              >
+                + Create Playlist
+              </button>
+            </div>
 
-      {message && <p style={{ color: "red" }}>{message}</p>}
-      {loading && <p>Loading playlists...</p>}
+            <div
+              className="playlist-page__hero-stats"
+              aria-label="Playlist summary"
+            >
+              <div className="playlist-page__hero-stat">
+                <span className="playlist-page__hero-stat-value">
+                  {playlists.length}
+                </span>
+                <span className="playlist-page__hero-stat-label">
+                  Saved playlists
+                </span>
+              </div>
+              <div className="playlist-page__hero-stat">
+                <span className="playlist-page__hero-stat-value">Instant</span>
+                <span className="playlist-page__hero-stat-label">
+                  Access from your library
+                </span>
+              </div>
+            </div>
+          </div>
+        </header>
 
-      {!loading && playlists.length === 0 && (
-        <p>No playlists yet. Create one to get started.</p>
-      )}
+        {message && (
+          <p className="playlist-page__message" role="alert">
+            {message}
+          </p>
+        )}
 
-      {!loading && playlists.length > 0 && (
-        <table
-          border="1"
-          cellPadding="10"
-          style={{ marginTop: "16px", width: "100%" }}
-        >
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Last Updated</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+        {loading && (
+          <div className="playlist-page__state" aria-live="polite">
+            <p className="playlist-page__state-title">Loading playlists...</p>
+            <p className="playlist-page__state-text">
+              Fetching your saved collections.
+            </p>
+          </div>
+        )}
 
-          <tbody>
-            {playlists.map((playlist) => (
-              <tr key={playlist.id}>
-                <td>
-                    <Link to={`/playlists/${playlist.id}`}>
-                        {playlist.name}
-                    </Link>
-                </td>
+        {!loading && playlists.length === 0 && (
+          <div className="playlist-page__state playlist-page__state--empty">
+            <p className="playlist-page__state-title">No playlists yet</p>
+            <p className="playlist-page__state-text">
+              Create your first playlist to organize favorites, moods, or sets.
+            </p>
+          </div>
+        )}
 
-                <td>
-                  {new Date(playlist.updated_at).toLocaleString()}
-                </td>
+        {!loading && playlists.length > 0 && (
+          <div className="playlist-page__content">
+            <section
+              className="playlist-page__section playlist-page__section--primary"
+              aria-label="All playlists"
+            >
+              <div className="playlist-page__section-header">
+                <div>
+                  <h2 className="playlist-page__section-title">All playlists</h2>
+                  <p className="playlist-page__section-subtitle">
+                    Your main listening spaces, arranged for quick scanning and
+                    fast actions.
+                  </p>
+                </div>
+                <span
+                  className="playlist-page__section-count"
+                  aria-label={`${playlists.length} playlists`}
+                >
+                  {playlists.length} total
+                </span>
+              </div>
 
-                <td>
-                  <button onClick={() => handleRenameClick(playlist)}>
-                    Rename
-                  </button>
+              <ul className="playlist-list" aria-label="Playlist library">
+                {playlists.map((playlist) => (
+                  <li key={playlist.id} className="playlist-card">
+                    <Link
+                      to={`/playlists/${playlist.id}`}
+                      className="playlist-card__link"
+                      aria-label={`Open ${playlist.name}`}
+                    />
 
-                  <button
-                    onClick={() => handleDeletePlaylist(playlist.id)}
-                    style={{ marginLeft: "8px", color: "red" }}
+                    <div className="playlist-card__row">
+                      <div className="playlist-card__main">
+                        <span className="playlist-card__art" aria-hidden="true">
+                          <span className="playlist-card__art-tile"></span>
+                          <span className="playlist-card__art-tile"></span>
+                          <span className="playlist-card__art-tile"></span>
+                          <span className="playlist-card__art-tile"></span>
+                        </span>
+
+                        <span className="playlist-card__body">
+                          <span className="playlist-card__label">Playlist</span>
+                          <span className="playlist-card__name">
+                            {playlist.name}
+                          </span>
+                          <time
+                            className="playlist-card__meta"
+                            dateTime={playlist.updated_at}
+                          >
+                            Updated {new Date(playlist.updated_at).toLocaleString()}
+                          </time>
+                        </span>
+                      </div>
+
+                      <div
+                        className="playlist-card__actions"
+                        role="group"
+                        aria-label={`Actions for ${playlist.name}`}
+                      >
+                        <button
+                          type="button"
+                          className="playlist-card__action"
+                          onClick={() => handleRenameClick(playlist)}
+                        >
+                          Rename
+                        </button>
+
+                        <button
+                          type="button"
+                          className="playlist-card__action playlist-card__action--danger"
+                          onClick={() => handleDeletePlaylist(playlist.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section
+              className="playlist-page__section playlist-page__section--secondary"
+              aria-labelledby="recently-updated-title"
+            >
+              <div className="playlist-page__section-header">
+                <h2
+                  id="recently-updated-title"
+                  className="playlist-page__section-title"
+                >
+                  Recently updated
+                </h2>
+                <p className="playlist-page__section-subtitle">
+                  Quick access to the playlists you changed most recently.
+                </p>
+              </div>
+
+              <ul
+                className="playlist-list playlist-page__recent-list"
+                aria-label="Recently updated playlists"
+              >
+                {playlists.slice(0, 5).map((playlist) => (
+                  <li
+                    key={`recent-${playlist.id}`}
+                    className="playlist-card playlist-card--compact"
                   >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+                    <Link
+                      to={`/playlists/${playlist.id}`}
+                      className="playlist-card__main playlist-card__main--compact"
+                    >
+                      <span
+                        className="playlist-card__art playlist-card__art--compact"
+                        aria-hidden="true"
+                      >
+                        <span className="playlist-card__art-tile"></span>
+                        <span className="playlist-card__art-tile"></span>
+                        <span className="playlist-card__art-tile"></span>
+                        <span className="playlist-card__art-tile"></span>
+                      </span>
+
+                      <span className="playlist-card__body">
+                        <span className="playlist-card__label">Playlist</span>
+                        <span className="playlist-card__name">
+                          {playlist.name}
+                        </span>
+                        <time
+                          className="playlist-card__meta"
+                          dateTime={playlist.updated_at}
+                        >
+                          Updated {new Date(playlist.updated_at).toLocaleString()}
+                        </time>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        )}
+      </div>
 
       {showCreateModal && (
         <CreatePlaylistModal
@@ -146,6 +300,6 @@ export default function PlaylistsPage() {
           onCreate={handleCreatePlaylist}
         />
       )}
-    </div>
+    </section>
   );
 }

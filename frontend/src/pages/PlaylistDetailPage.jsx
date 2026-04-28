@@ -6,6 +6,7 @@ import {
 } from "../api/playlistApi";
 import PlaylistTrackRow from "../components/playlists/PlaylistTrackRow";
 import AddTracksModal from "../components/playlists/AddTracksModal";
+import ReorderTracksModal from "../components/playlists/ReorderTracksModal"
 
 export default function PlaylistDetailPage() {
   const { playlistId } = useParams();
@@ -14,6 +15,7 @@ export default function PlaylistDetailPage() {
   const [showAddTracksModal, setShowAddTracksModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [showReorderModal, setShowReorderModal] = useState(false);
 
   useEffect(() => {
     loadPlaylist();
@@ -60,7 +62,9 @@ export default function PlaylistDetailPage() {
       <button onClick={() => setShowAddTracksModal(true)}>
         Add Tracks
       </button>
-      <button>Reorder</button>
+      <button onClick={() => setShowReorderModal(true)}>
+        Reorder Tracks
+      </button>
 
       {playlist.tracks.length === 0 ? (
         <p>This playlist is empty.</p>
@@ -81,6 +85,15 @@ export default function PlaylistDetailPage() {
             playlistId={playlistId}
             onClose={() => setShowAddTracksModal(false)}
             onTracksAdded={loadPlaylist}
+        />
+      )}
+
+      {showReorderModal && (
+        <ReorderTracksModal
+            playlistId={playlistId}
+            tracks={playlist.tracks}
+            onClose={() => setShowReorderModal(false)}
+            onReorder={loadPlaylist}
         />
       )}
     </div>

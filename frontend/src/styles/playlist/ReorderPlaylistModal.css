@@ -1,0 +1,44 @@
+/* Overlay background */
+.reorder-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  z-index: 1000;
+}
+
+/* Modal container */
+.reorder-modal {
+  background: white;
+  padding: 20px;
+  width: 500px;
+  border-radius: 8px;
+}
+
+/* Individual draggable row */
+.reorder-track-row {
+  padding: 10px;
+  border: 1px solid #ccc;
+  margin-bottom: 8px;
+  background: white;
+  cursor: grab;
+  border-radius: 4px;
+}
+
+/* Button container */
+.reorder-modal-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Optional: error message */
+.reorder-modal-error {
+  color: red;
+  margin-bottom: 8px;
+}

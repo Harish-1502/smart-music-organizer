@@ -1,13 +1,10 @@
-import { useEffect, useState } from "react";
-import { getTracks } from "../../api/libraryApi";
+import { useState } from "react";
 import { addTrackToPlaylist } from "../../api/playlistApi";
 import useTrackBrowser from "../../hooks/useTrackBrowser";
 import TrackBrowser from "../TrackBrowser";
 
 export default function AddTracksModal({ playlistId, onClose, onTracksAdded }) {
-  const [tracks, setTracks] = useState([]);
   const [selectedTrackIds, setSelectedTrackIds] = useState([]);
-  const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const browser = useTrackBrowser();

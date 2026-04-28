@@ -23,27 +23,62 @@ export default function CreatePlaylistModal({ onClose, onCreate }) {
   }
 
   return (
-    <div>
-      <div>
-        <h2>Create Playlist</h2>
+    <div className="playlist-modal__overlay">
+      <div
+        className="playlist-modal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-playlist-title"
+      >
+        <div className="playlist-modal__header">
+          <h2 id="create-playlist-title" className="playlist-modal__title">
+            Create Playlist
+          </h2>
+          <p className="playlist-modal__subtitle">
+            Give your playlist a name to start building it.
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            value={name}
-            placeholder="Playlist name"
-            onChange={(e) => setName(e.target.value)}
-          />
+        <form className="playlist-modal__form" onSubmit={handleSubmit}>
+          <div className="playlist-modal__field">
+            <label className="playlist-modal__label" htmlFor="playlist-name">
+              Playlist name
+            </label>
 
-          {error && <p>{error}</p>}
+            <input
+              id="playlist-name"
+              className="playlist-modal__input"
+              type="text"
+              value={name}
+              placeholder="Playlist name"
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
 
-          <button type="button" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
+          {error && (
+            <p className="playlist-modal__error" role="alert">
+              {error}
+            </p>
+          )}
 
-          <button type="submit" disabled={saving}>
-            {saving ? "Creating..." : "Create"}
-          </button>
+          <div className="playlist-modal__actions">
+            <button
+              type="button"
+              className="playlist-modal__button playlist-modal__button--secondary"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="playlist-modal__button playlist-modal__button--primary"
+              disabled={saving}
+            >
+              {saving ? "Creating..." : "Create"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
