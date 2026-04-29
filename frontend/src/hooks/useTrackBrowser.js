@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getTracks } from "../api/libraryApi";
 
 export default function useTrackBrowser() {
+    const maxQueuePageSize = 100;
 
     const [tracks, setTracks] = useState([]);
     const [tracksLoading, setTracksLoading] = useState(false);
@@ -63,6 +64,55 @@ export default function useTrackBrowser() {
           setTracksLoading(false);
         }
       }
+
+    async function loadAllTracksForQueue() {
+        const queuePageSize =
+          totalItems > 0 && totalItems <= maxQueuePageSize
+            ? totalItems
+            : maxQueuePageSize;
+
+        try {
+          const firstPage = await getTracks(
+            1,
+            queuePageSize,
+            appliedSearch,
+            sortBy,
+            order,
+            artistFilter,
+            exactArtistFilter,
+            albumFilter,
+            exactAlbumFilter,
+            extensionFilter
+          );
+
+          const queue = [...(firstPage.items || [])];
+          const queueTotalPages = firstPage.total_pages || 1;
+
+          for (let currentPage = 2; currentPage <= queueTotalPages; currentPage += 1) {
+            const pageData = await getTracks(
+              currentPage,
+              maxQueuePageSize,
+              appliedSearch,
+              sortBy,
+              order,
+              artistFilter,
+              exactArtistFilter,
+              albumFilter,
+              exactAlbumFilter,
+              extensionFilter
+            );
+
+            queue.push(...(pageData.items || []));
+          }
+
+          return queue;
+        } catch (error) {
+          console.error("LOAD QUEUE ERROR:", error);
+          setMessage(error.message || "Failed to build track queue");
+          throw error;
+        }
+      }
+
     function clearAllFilters() {
         setSearch("");
         setAppliedSearch("");
@@ -138,6 +188,7 @@ export default function useTrackBrowser() {
         exactAlbumFilter,
 
         loadTracks,
+        loadAllTracksForQueue,
         clearAllFilters,
         applyArtistClick,
         applyAlbumClick,

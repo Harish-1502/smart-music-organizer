@@ -2,6 +2,7 @@ import { useState } from "react";
 import { addTrackToPlaylist } from "../../api/playlistApi";
 import useTrackBrowser from "../../hooks/useTrackBrowser";
 import TrackBrowser from "../TrackBrowser";
+import "../../styles/playlist/AddTracksModal.css";
 
 export default function AddTracksModal({ playlistId, onClose, onTracksAdded }) {
   const [selectedTrackIds, setSelectedTrackIds] = useState([]);
@@ -39,60 +40,70 @@ export default function AddTracksModal({ playlistId, onClose, onTracksAdded }) {
     }
   }
 
-   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1000,
-      }}
-    >
+  return (
+    <div className="add-tracks-modal__overlay">
       <div
-        style={{
-          background: "white",
-          width: "90vw",
-          maxWidth: "1100px",
-          height: "85vh",
-          padding: "20px",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
+        className="add-tracks-modal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-tracks-modal-title"
+        aria-describedby="add-tracks-modal-help"
       >
-        <h2>Add Tracks</h2>
+        <div className="add-tracks-modal__header">
+          <div className="add-tracks-modal__header-copy">
+            <p className="add-tracks-modal__eyebrow">Playlist</p>
+            <h2
+              id="add-tracks-modal-title"
+              className="add-tracks-modal__title"
+            >
+              Add tracks
+            </h2>
+            <p
+              id="add-tracks-modal-help"
+              className="add-tracks-modal__subtitle"
+            >
+              Search, filter, and select tracks to add to this playlist.
+            </p>
+          </div>
 
-        {message && <p style={{ color: "red" }}>{message}</p>}
-
-        <p>Selected: {selectedTrackIds.length}</p>
-
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          <TrackBrowser
-            browser={browser}
-            mode="picker"
-            selectedTrackIds={selectedTrackIds}
-            onToggleTrack={toggleTrack}
-          />
+          <p className="add-tracks-modal__count" aria-live="polite">
+            {selectedTrackIds.length} selected
+          </p>
         </div>
 
-        <div
-          style={{
-            borderTop: "1px solid #ddd",
-            paddingTop: "12px",
-            marginTop: "12px",
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "8px",
-          }}
-        >
-          <button onClick={onClose} disabled={saving}>
+        {message && (
+          <p className="add-tracks-modal__message" role="alert">
+            {message}
+          </p>
+        )}
+
+        <div className="add-tracks-modal__body">
+          <div className="add-tracks-modal__browser">
+            <TrackBrowser
+              browser={browser}
+              mode="picker"
+              selectedTrackIds={selectedTrackIds}
+              onToggleTrack={toggleTrack}
+            />
+          </div>
+        </div>
+
+        <div className="add-tracks-modal__actions">
+          <button
+            type="button"
+            className="add-tracks-modal__button add-tracks-modal__button--secondary"
+            onClick={onClose}
+            disabled={saving}
+          >
             Cancel
           </button>
 
-          <button onClick={handleAddSelected} disabled={saving}>
+          <button
+            type="button"
+            className="add-tracks-modal__button add-tracks-modal__button--primary"
+            onClick={handleAddSelected}
+            disabled={saving}
+          >
             {saving ? "Adding..." : `Add Selected (${selectedTrackIds.length})`}
           </button>
         </div>

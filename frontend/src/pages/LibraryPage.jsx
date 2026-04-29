@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   scanLibrary,
   getScanStatus,
@@ -11,8 +12,12 @@ import LibraryViewTabs from "../components/LibraryViewTabs";
 import useLibraryViews from "../hooks/useLibraryViews";
 import useTrackBrowser from "../hooks/useTrackBrowser";
 import TrackBrowser from "../components/TrackBrowser";
+import { usePlayer } from "../context/PlayerContext";
+import "../styles/library/LibraryPage.css";
 
 export default function LibraryPage() {
+  const navigate = useNavigate();
+  const { playQueue } = usePlayer();
   const [folderPath, setFolderPath] = useState("");
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -38,6 +43,18 @@ export default function LibraryPage() {
   function handleAlbumClick(albumName, artistName){
     trackBrowser.applyAlbumClick(albumName, artistName);
     setViewMode("tracks");
+  }
+
+  async function handleTrackPlay(track, trackIndex) {
+    try {
+      const queue = await trackBrowser.loadAllTracksForQueue();
+      const startIndex = queue.findIndex((queueTrack) => queueTrack.id === track.id);
+
+      playQueue(queue, startIndex >= 0 ? startIndex : trackIndex);
+      navigate("/player");
+    } catch (error) {
+      // The hook already surfaces the error message for the page UI.
+    }
   }
 
   async function handleScan() {
@@ -120,76 +137,109 @@ export default function LibraryPage() {
   // console.log("Tracks State:", tracks);
 
   return (
-    <div style={{ padding: "24px" }}>
-      <h1>Library Scanner</h1>
+    <main className="library-page" aria-labelledby="library-title">
+      <div className="library-page__inner">
+        <header className="library-page__hero">
+          <div className="library-page__hero-panel">
+            <div className="library-page__hero-copy">
+              <p className="library-page__eyebrow">Library</p>
+              <h1 id="library-title" className="library-page__title">
+                Library Scanner
+              </h1>
+              <p className="library-page__subtitle">
+                Scan your music folders, browse tracks, and jump between artists
+                and albums fast.
+              </p>
+            </div>
 
-      <input
-        type="text"
-        placeholder="Enter music folder path"
-        value={folderPath}
-        onChange={(e) => setFolderPath(e.target.value)}
-        style={{
-          width: "300px",
-          padding: "8px",
-          marginRight: "8px",
-        }}
-      />
+            <div className="library-page__scan-controls">
+              <label className="library-page__field">
+                <span className="library-page__label">Music folder</span>
+                <input
+                  className="library-page__input"
+                  type="text"
+                  placeholder="Enter music folder path"
+                  value={folderPath}
+                  onChange={(e) => setFolderPath(e.target.value)}
+                />
+              </label>
 
-      <button onClick={handleScan} disabled={loading || !folderPath.trim()}>
-        {loading ? "Scanning..." : "Scan Library"}
-      </button>
+              <div className="library-page__scan-actions">
+                <button
+                  type="button"
+                  className="library-page__button library-page__button--primary"
+                  onClick={handleScan}
+                  disabled={loading || !folderPath.trim()}
+                >
+                  {loading ? "Scanning..." : "Scan Library"}
+                </button>
 
-      <button
-        onClick={deleteAllSong}
-        disabled={loading}
-        style={{ marginLeft: "8px" }}
-      >
-        Delete
-      </button>
+                <button
+                  type="button"
+                  className="library-page__button library-page__button--danger"
+                  onClick={deleteAllSong}
+                  disabled={loading}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
 
-      {trackBrowser.message && <p>{trackBrowser.message}</p>}
+        {trackBrowser.message && (
+          <p className="library-page__message" role="alert">
+            {trackBrowser.message}
+          </p>
+        )}
 
-      <ScanProgress status={status} />
+        <ScanProgress status={status} />
 
-      <hr style={{ margin: "24px 0" }} />
+        <section className="library-page__section" aria-label="Library browser">
+          <LibraryViewTabs
+            onChangeView={setViewMode}
+            onRefresh={handleRefresh}
+            refreshDisabled={loading || trackBrowser.tracksLoading}
+          />
 
-      <LibraryViewTabs
-        onChangeView={setViewMode}
-        onRefresh={handleRefresh}
-        refreshDisabled={loading || trackBrowser.tracksLoading}
-      />
-
-      {viewMode === "tracks" && (
-        <TrackBrowser browser={trackBrowser} mode="library" />
-      )} 
-
-      {viewMode === "artists" && (
-        <>
-          <h2>Artists</h2>
-
-          {artistsLoading ? (
-            <p>Loading artists...</p>
-          ) : artists.length === 0 ? (
-            <p>No artists found.</p>
-          ) : (
-            <ArtistList artists={artists} onArtistClick={handleArtistClick} />
+          {viewMode === "tracks" && (
+            <TrackBrowser
+              browser={trackBrowser}
+              mode="library"
+              onPlayTrack={handleTrackPlay}
+            />
           )}
-        </>
-      )}
 
-      {viewMode === "albums" && (
-        <>
-          <h2>Albums</h2>
+          {viewMode === "artists" && (
+            <>
+              <h2 className="library-page__section-title">Artists</h2>
 
-          {albumsLoading ? (
-            <p>Loading albums...</p>
-          ) : albums.length === 0 ? (
-            <p>No albums found.</p>
-          ) : (
-            <AlbumList albums={albums} onAlbumClick={handleAlbumClick} />
+              {artistsLoading ? (
+                <p className="library-page__state">Loading artists...</p>
+              ) : artists.length === 0 ? (
+                <p className="library-page__state">No artists found.</p>
+              ) : (
+                <ArtistList artists={artists} onArtistClick={handleArtistClick} />
+              )}
+            </>
           )}
-        </>
-      )}
-    </div>
+
+          {viewMode === "albums" && (
+            <>
+              <h2 className="library-page__section-title">Albums</h2>
+
+              {albumsLoading ? (
+                <p className="library-page__state">Loading albums...</p>
+              ) : albums.length === 0 ? (
+                <p className="library-page__state">No albums found.</p>
+              ) : (
+                <AlbumList albums={albums} onAlbumClick={handleAlbumClick} />
+              )}
+            </>
+          )}
+        </section>
+      </div>
+    </main>
   );
+
 }

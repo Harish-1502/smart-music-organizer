@@ -82,6 +82,10 @@ export default function PlaylistsPage() {
     }
   }
 
+  const recentlyUpdatedPlaylists = [...playlists]
+  .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+  .slice(0, 3);
+
   return (
     <section className="playlist-page" aria-labelledby="playlists-title">
       <div className="playlist-page__inner">
@@ -254,7 +258,7 @@ export default function PlaylistsPage() {
                 className="playlist-list playlist-page__recent-list"
                 aria-label="Recently updated playlists"
               >
-                {playlists.slice(0, 5).map((playlist) => (
+                {recentlyUpdatedPlaylists.slice(0, 5).map((playlist) => (
                   <li
                     key={`recent-${playlist.id}`}
                     className="playlist-card playlist-card--compact"

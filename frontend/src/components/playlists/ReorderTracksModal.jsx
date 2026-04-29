@@ -40,12 +40,17 @@ function SortableTrackRow({ track }) {
       {...attributes}
       {...listeners}
     >
-      <strong>{track.title}</strong>
-      <span> — {track.artist || "Unknown Artist"}</span>
+      <span className="reorder-track-row__handle" aria-hidden="true"></span>
+
+      <div className="reorder-track-row__content">
+        <strong className="reorder-track-row__title">{track.title}</strong>
+        <span className="reorder-track-row__meta">
+          {track.artist || "Unknown Artist"}
+        </span>
+      </div>
     </div>
   );
 }
-
 
 export default function ReorderTracksModal({ playlistId, tracks, onClose, onReorder }) {
     const [trackOrder, setTrackOrder] = useState(tracks);
@@ -98,11 +103,29 @@ export default function ReorderTracksModal({ playlistId, tracks, onClose, onReor
 
   return (
     <div className="reorder-modal-overlay">
-      <div className="reorder-modal">
-        <h2>Reorder Playlist</h2>
+    <div
+      className="reorder-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reorder-modal-title"
+      aria-describedby="reorder-modal-help"
+    >
+      <div className="reorder-modal__header">
+        <h2 id="reorder-modal-title" className="reorder-modal__title">
+          Reorder playlist
+        </h2>
+        <p id="reorder-modal-help" className="reorder-modal__subtitle">
+          Drag tracks to change the sequence, then save the new order.
+        </p>
+      </div>
 
-        {message && <p className="reorder-modal-error">{message}</p>}
+      {message && (
+        <p className="reorder-modal-error" role="alert">
+          {message}
+        </p>
+      )}
 
+      <div className="reorder-modal__list-shell">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -112,25 +135,38 @@ export default function ReorderTracksModal({ playlistId, tracks, onClose, onReor
             items={trackOrder.map((t) => t.playlist_track_id)}
             strategy={verticalListSortingStrategy}
           >
-            {trackOrder.map((track) => (
-              <SortableTrackRow
-                key={track.playlist_track_id}
-                track={track}
-              />
-            ))}
+            <div className="reorder-modal__track-list" aria-label="Tracks in playlist">
+              {trackOrder.map((track) => (
+                <SortableTrackRow
+                  key={track.playlist_track_id}
+                  track={track}
+                />
+              ))}
+            </div>
           </SortableContext>
         </DndContext>
+      </div>
 
-        <div className="reorder-modal-actions">
-          <button onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
+      <div className="reorder-modal-actions">
+        <button
+          type="button"
+          className="reorder-modal__button reorder-modal__button--secondary"
+          onClick={onClose}
+          disabled={saving}
+        >
+          Cancel
+        </button>
 
-          <button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save Order"}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="reorder-modal__button reorder-modal__button--primary"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? "Saving..." : "Save Order"}
+        </button>
       </div>
     </div>
+  </div>
   );
 }

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
 from app.models.track import Track
-from app.routes import library, tracks, artist, album, playlist
+from app.routes import library, tracks, artist, album, playlist, playback
 
 Base.metadata.create_all(bind=engine)
 
@@ -34,3 +34,4 @@ app.include_router(tracks.router)
 app.include_router(artist.router)
 app.include_router(album.router)
 app.include_router(playlist.router)
+app.include_router(playback.router)

@@ -1,56 +1,161 @@
-import {
-  displayValue,
-  formatDuration,
-  formatMetadataSource,
-} from "../utils/trackFormatters";
-
 export default function TrackTable({
   tracks,
   onEdit,
   mode = "library",
   selectedTrackIds = [],
   onToggleTrack,
+  onPlayTrack,
 }) {
   return (
-    <table border="1" cellPadding="8" style={{ width: "100%" }}>
-      <thead>
-        <tr>
-          {mode === "picker" && <th>Select</th>}
-          <th>Title</th>
-          <th>Artist</th>
-          <th>Album</th>
-          <th>Duration</th>
-          <th>File Name</th>
-          {mode === "library" && <th>Actions</th>}
+    <table className={`track-table track-table--${mode}`}>
+      <thead className="track-table__head">
+        <tr className="track-table__head-row">
+          {mode === "picker" && (
+            <th
+              scope="col"
+              className="track-table__head-cell track-table__head-cell--select"
+            >
+              Select
+            </th>
+          )}
+          <th scope="col" className="track-table__head-cell">
+            Title
+          </th>
+          <th scope="col" className="track-table__head-cell">
+            Artist
+          </th>
+          <th scope="col" className="track-table__head-cell">
+            Album
+          </th>
+          <th
+            scope="col"
+            className="track-table__head-cell track-table__head-cell--duration"
+          >
+            Duration
+          </th>
+          <th scope="col" className="track-table__head-cell">
+            File Name
+          </th>
+          {mode === "library" && (
+            <th
+              scope="col"
+              className="track-table__head-cell track-table__head-cell--actions"
+            >
+              Actions
+            </th>
+          )}
         </tr>
       </thead>
 
-      <tbody>
-        {tracks.map((track) => (
-          <tr key={track.id}>
-            {mode === "picker" && (
-              <td>
-                <input
-                  type="checkbox"
-                  checked={selectedTrackIds.includes(track.id)}
-                  onChange={() => onToggleTrack(track.id)}
-                />
-              </td>
-            )}
+      <tbody className="track-table__body">
+        {tracks.map((track, index) => {
+          const isPlayable = typeof onPlayTrack === "function";
 
-            <td>{track.title}</td>
-            <td>{track.artist || "—"}</td>
-            <td>{track.album || "—"}</td>
-            <td>{track.duration || "—"}</td>
-            <td>{track.file_name}</td>
+          function handlePlay() {
+            onPlayTrack(track, index);
+          }
 
-            {mode === "library" && (
-              <td>
-                <button onClick={() => onEdit(track)}>Edit</button>
+          return (
+            <tr
+              key={track.id}
+              className={`track-table__row${
+                isPlayable ? " track-table__row--interactive" : ""
+              }`}
+              onClick={isPlayable ? handlePlay : undefined}
+              onKeyDown={
+                isPlayable
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        handlePlay();
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={isPlayable ? 0 : undefined}
+              role={isPlayable ? "button" : undefined}
+              aria-label={isPlayable ? `Play ${track.title}` : undefined}
+            >
+              {mode === "picker" && (
+                <td
+                  className="track-table__cell track-table__cell--select"
+                  data-label="Select"
+                >
+                  <input
+                    className="track-table__checkbox"
+                    type="checkbox"
+                    checked={selectedTrackIds.includes(track.id)}
+                    onChange={() => onToggleTrack(track.id)}
+                  />
+                </td>
+              )}
+
+              <td
+                className="track-table__cell track-table__cell--title"
+                data-label="Title"
+              >
+                <span className="track-table__text track-table__text--primary">
+                  {track.title}
+                </span>
               </td>
-            )}
-          </tr>
-        ))}
+
+              <td
+                className="track-table__cell track-table__cell--artist"
+                data-label="Artist"
+              >
+                <span className="track-table__text track-table__text--secondary">
+                  {track.artist || "-"}
+                </span>
+              </td>
+
+              <td
+                className="track-table__cell track-table__cell--album"
+                data-label="Album"
+              >
+                <span className="track-table__text track-table__text--secondary">
+                  {track.album || "-"}
+                </span>
+              </td>
+
+              <td
+                className="track-table__cell track-table__cell--duration"
+                data-label="Duration"
+              >
+                <span className="track-table__text track-table__text--duration">
+                  {track.duration || "-"}
+                </span>
+              </td>
+
+              <td
+                className="track-table__cell track-table__cell--filename"
+                data-label="File Name"
+              >
+                <span className="track-table__text track-table__text--secondary">
+                  {track.file_name}
+                </span>
+              </td>
+
+              {mode === "library" && (
+                <td
+                  className="track-table__cell track-table__cell--actions"
+                  data-label="Actions"
+                >
+                  <button
+                    type="button"
+                    className="track-table__action"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onEdit(track);
+                    }}
+                    aria-label={`Edit ${track.title}`}
+                  >
+                    Edit
+                  </button>
+                </td>
+              )}
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

@@ -9,6 +9,7 @@ export default function TrackBrowser({
   mode = "library",
   selectedTrackIds = [],
   onToggleTrack,
+  onPlayTrack,
 }) {
   const {
     tracks,
@@ -49,88 +50,97 @@ export default function TrackBrowser({
     handleSaveEdit,
   } = useTrackEdit({ loadTracks, setMessage: () => {} });
 
-    return (
-        <div>
-            <h2>{mode === "picker" ? "Select Tracks" : "Tracks"}</h2>
+  return (
+    <div className={`track-browser track-browser--${mode}`}>
+      <div className="track-browser__header">
+        <h2 className="track-browser__title">
+          {mode === "picker" ? "Select Tracks" : "Tracks"}
+        </h2>
+        <p className="track-browser__summary">Total Tracks: {totalItems}</p>
+      </div>
 
-            {message && <p>{message}</p>}
+      {message && <p className="track-browser__message">{message}</p>}
 
-            <TrackSortControls
-                search={search}
-                onSearchChange={setSearch}
-                setAppliedSearch={setAppliedSearch}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-                order={order}
-                onOrderChange={setOrder}
-                setPage={setPage}
+      <div className="track-browser__toolbar-card">
+        <TrackSortControls
+          search={search}
+          onSearchChange={setSearch}
+          setAppliedSearch={setAppliedSearch}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          order={order}
+          onOrderChange={setOrder}
+          setPage={setPage}
+        />
+
+        <TrackFilterControls
+          artistFilter={artistFilter}
+          albumFilter={albumFilter}
+          extensionFilter={extensionFilter}
+          setPage={setPage}
+          setArtistFilter={setArtistFilter}
+          setAlbumFilter={setAlbumFilter}
+          setExtensionFilter={setExtensionFilter}
+          clearAllFilters={clearAllFilters}
+        />
+      </div>
+
+      {tracksLoading ? (
+        <p className="track-browser__state">Loading tracks...</p>
+      ) : tracks.length === 0 ? (
+        <p className="track-browser__state">No tracks found.</p>
+      ) : (
+        <>
+          <TrackTable
+            tracks={tracks}
+            onEdit={mode === "library" ? handleEditTrack : undefined}
+            mode={mode}
+            selectedTrackIds={selectedTrackIds}
+            onToggleTrack={onToggleTrack}
+            onPlayTrack={onPlayTrack}
+          />
+
+          {mode === "library" && (
+            <EditTrackModal
+              isOpen={showModal}
+              formData={editForm}
+              onChange={handleFormChange}
+              onSave={handleSaveEdit}
+              onCancel={handleCancelEdit}
             />
+          )}
 
-            <TrackFilterControls
-                artistFilter={artistFilter}
-                albumFilter={albumFilter}
-                extensionFilter={extensionFilter}
-                setPage={setPage}
-                setArtistFilter={setArtistFilter}
-                setAlbumFilter={setAlbumFilter}
-                setExtensionFilter={setExtensionFilter}
-                clearAllFilters={clearAllFilters}
-            />
+          <div className="track-browser__pagination">
+            <div
+              className="track-browser__pagination-pill"
+              role="group"
+              aria-label="Track pagination"
+            >
+              <button
+                type="button"
+                className="track-browser__button track-browser__button--secondary"
+                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                disabled={page === 1}
+              >
+                Previous
+              </button>
 
-            <p>Total Tracks: {totalItems}</p>
+              <span className="track-browser__pagination-status">
+                Page {page} of {totalPages}
+              </span>
 
-            {tracksLoading ? (
-                <p>Loading tracks...</p>
-            ) : tracks.length === 0 ? (
-                <p>No tracks found.</p>
-            ) : (
-                <>
-                <TrackTable
-                    tracks={tracks}
-                    onEdit={mode === "library" ? handleEditTrack : undefined}
-                    mode={mode}
-                    selectedTrackIds={selectedTrackIds}
-                    onToggleTrack={onToggleTrack}
-                />
-
-                {mode === "library" && (
-                    <EditTrackModal
-                    isOpen={showModal}
-                    formData={editForm}
-                    onChange={handleFormChange}
-                    onSave={handleSaveEdit}
-                    onCancel={handleCancelEdit}
-                    />
-                )}
-
-                <div
-                    style={{
-                    marginTop: "16px",
-                    display: "flex",
-                    gap: "8px",
-                    alignItems: "center",
-                    }}
-                >
-                    <button
-                    onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={page === 1}
-                    >
-                    Previous
-                    </button>
-
-                    <span>
-                    Page {page} of {totalPages}
-                    </span>
-
-                    <button
-                    onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={page === totalPages}
-                    >
-                    Next
-                    </button>
-                </div>
-                </>
-            )}
-        </div>
-    );
+              <button
+                type="button"
+                className="track-browser__button track-browser__button--secondary"
+                onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={page === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

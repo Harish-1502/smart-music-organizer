@@ -8,91 +8,81 @@ export default function EditTrackModal({
   if (!isOpen) return null;
 
   return (
-    <div style={backdropStyle}>
-      <div style={modalStyle}>
-        <h2>Edit Track</h2>
+    <div className="edit-track-modal__overlay">
+      <div
+        className="edit-track-modal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-track-modal-title"
+      >
+        <div className="edit-track-modal__header">
+          <h2 id="edit-track-modal-title" className="edit-track-modal__title">
+            Edit Track
+          </h2>
+          <p className="edit-track-modal__subtitle">
+            Update the track details shown in your library.
+          </p>
+        </div>
 
-        <div style={fieldGroupStyle}>
-          <label style={labelStyle}>Title</label>
+        <div className="edit-track-modal__field">
+          <label className="edit-track-modal__label" htmlFor="edit-track-title">
+            Title
+          </label>
           <input
+            id="edit-track-title"
+            className="edit-track-modal__input"
             type="text"
             value={formData.title}
             onChange={(e) => onChange("title", e.target.value)}
-            style={inputStyle}
           />
         </div>
 
-        <div style={fieldGroupStyle}>
-          <label style={labelStyle}>Artist</label>
+        <div className="edit-track-modal__field">
+          <label
+            className="edit-track-modal__label"
+            htmlFor="edit-track-artist"
+          >
+            Artist
+          </label>
           <input
+            id="edit-track-artist"
+            className="edit-track-modal__input"
             type="text"
             value={formData.artist}
             onChange={(e) => onChange("artist", e.target.value)}
-            style={inputStyle}
           />
         </div>
 
-        <div style={fieldGroupStyle}>
-          <label style={labelStyle}>Album</label>
+        <div className="edit-track-modal__field">
+          <label className="edit-track-modal__label" htmlFor="edit-track-album">
+            Album
+          </label>
           <input
+            id="edit-track-album"
+            className="edit-track-modal__input"
             type="text"
             value={formData.album}
             onChange={(e) => onChange("album", e.target.value)}
-            style={inputStyle}
           />
         </div>
 
-        <div style={actionsStyle}>
-          <button onClick={onCancel}>Cancel</button>
-          <button onClick={onSave}>Save</button>
+        <div className="edit-track-modal__actions">
+          <button
+            type="button"
+            className="edit-track-modal__button edit-track-modal__button--secondary"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="edit-track-modal__button edit-track-modal__button--primary"
+            onClick={onSave}
+          >
+            Save
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
-const backdropStyle = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0, 0, 0, 0.5)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 1000,
-};
-
-const modalStyle = {
-  backgroundColor: "#fff",
-  padding: "20px",
-  borderRadius: "8px",
-  width: "400px",
-  maxWidth: "90%",
-  boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
-};
-
-const fieldGroupStyle = {
-  marginBottom: "12px",
-};
-
-const labelStyle = {
-  display: "block",
-  marginBottom: "6px",
-  fontWeight: "bold",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "8px",
-  border: "1px solid #ccc",
-  borderRadius: "4px",
-};
-
-const actionsStyle = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "8px",
-  marginTop: "16px",
-};

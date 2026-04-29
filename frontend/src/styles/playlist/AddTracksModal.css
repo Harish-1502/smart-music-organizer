@@ -1,0 +1,519 @@
+.add-tracks-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  background: rgba(6, 10, 18, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.add-tracks-modal__dialog {
+  --surface-strong: linear-gradient(
+    180deg,
+    rgba(20, 26, 36, 0.96),
+    rgba(13, 18, 27, 0.98)
+  );
+  --panel-bg: rgba(14, 19, 28, 0.9);
+  --border-strong: rgba(90, 110, 138, 0.3);
+  --text-strong: #ffffff;
+  --text-muted: #a7b1c2;
+  --text-subtle: #7f8da3;
+  --action-border: rgba(95, 112, 136, 0.48);
+  --action-text: #dbe4f0;
+  --shadow-strong: 0 24px 60px rgba(0, 0, 0, 0.34);
+
+  width: min(1120px, 100%);
+  max-height: min(88vh, 920px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(125, 211, 252, 0.07), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    var(--surface-strong);
+  box-shadow: var(--shadow-strong);
+  color: #f5f7fb;
+}
+
+
+.add-tracks-modal__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.add-tracks-modal__header-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.add-tracks-modal__eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.add-tracks-modal__title {
+  margin: 0;
+  color: var(--text-strong);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.add-tracks-modal__subtitle {
+  margin: 0;
+  max-width: 40rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.add-tracks-modal__count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.add-tracks-modal__message {
+  margin: 0;
+  padding: 12px 13px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 16px;
+  background: rgba(127, 29, 29, 0.18);
+  color: #fda4af;
+}
+
+.add-tracks-modal__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 22px;
+  background: var(--panel-bg);
+}
+
+.add-tracks-modal__browser {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.add-tracks-modal__browser > div {
+  display: grid;
+  gap: 12px;
+}
+
+.add-tracks-modal__browser .track-browser {
+  display: grid;
+  gap: 12px;
+}
+
+.add-tracks-modal__browser .track-browser__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.add-tracks-modal__browser .track-browser__summary,
+.add-tracks-modal__browser .track-browser__pagination-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.add-tracks-modal__browser .track-browser__toolbar-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.add-tracks-modal__browser .track-browser__search-row,
+.add-tracks-modal__browser .track-browser__sort-row,
+.add-tracks-modal__browser .track-browser__filter-row {
+  display: grid;
+  gap: 8px;
+}
+
+.add-tracks-modal__browser .track-browser__search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.add-tracks-modal__browser .track-browser__input,
+.add-tracks-modal__browser .track-browser__select {
+  width: 100%;
+}
+
+.add-tracks-modal__browser .track-browser__button {
+  border: 1px solid var(--action-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--action-text);
+}
+
+.add-tracks-modal__browser .track-browser__button--danger-ghost {
+  border-color: rgba(127, 29, 29, 0.38);
+  background: rgba(127, 29, 29, 0.08);
+  color: #fca5a5;
+}
+
+.add-tracks-modal__browser .track-browser__pagination {
+  display: flex;
+  justify-content: center;
+}
+
+.add-tracks-modal__browser .track-browser__pagination-pill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.add-tracks-modal__browser h2 {
+  margin: 0;
+  font-size: 17px;
+  color: #e5e7eb;
+}
+
+.add-tracks-modal__browser p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.add-tracks-modal__browser input:not([type="checkbox"]),
+.add-tracks-modal__browser select {
+  min-height: 38px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--action-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.add-tracks-modal__browser input:not([type="checkbox"])::placeholder {
+  color: var(--text-subtle);
+}
+
+.add-tracks-modal__browser select {
+  color-scheme: dark;
+  background-color: rgba(17, 24, 39, 0.92);
+  color: var(--text-strong);
+}
+
+.add-tracks-modal__browser select option,
+.add-tracks-modal__browser select optgroup {
+  background-color: #111827;
+  color: #f5f7fb;
+}
+
+.add-tracks-modal__browser select option:checked {
+  background-color: #1f2937;
+  color: #ffffff;
+}
+
+.add-tracks-modal__browser input:not([type="checkbox"]):focus-visible,
+.add-tracks-modal__browser select:focus-visible,
+.add-tracks-modal__browser button:focus-visible,
+.add-tracks-modal__button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.add-tracks-modal__browser select:focus-visible {
+  border-color: rgba(125, 211, 252, 0.38);
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.14);
+}
+
+.add-tracks-modal__browser button,
+.add-tracks-modal__button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    filter 0.2s ease;
+}
+
+.add-tracks-modal__button {
+  min-height: 48px;
+  padding: 0 16px;
+  font-weight: 700;
+}
+
+.add-tracks-modal__browser button {
+  border: 1px solid var(--action-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--action-text);
+}
+
+.add-tracks-modal__browser button:hover,
+.add-tracks-modal__button--secondary:hover {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(125, 211, 252, 0.24);
+  color: var(--text-strong);
+}
+
+.add-tracks-modal__browser input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #34d399;
+  cursor: pointer;
+}
+
+.add-tracks-modal__browser table {
+  width: 100% !important;
+  border: 0 !important;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  font-size: 13px;
+}
+
+.add-tracks-modal__browser thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0 10px 8px;
+  border: 0;
+  background: rgba(14, 19, 28, 0.98);
+  color: var(--text-subtle);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.add-tracks-modal__browser tbody tr {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    rgba(20, 26, 36, 0.92);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.add-tracks-modal__browser tbody tr:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.22);
+}
+
+.add-tracks-modal__browser tbody tr:has(input[type="checkbox"]:checked) {
+  background:
+    linear-gradient(180deg, rgba(52, 211, 153, 0.12), rgba(14, 165, 233, 0.06)),
+    rgba(20, 26, 36, 0.96);
+  box-shadow:
+    inset 0 0 0 1px rgba(52, 211, 153, 0.22),
+    0 16px 30px rgba(0, 0, 0, 0.24);
+}
+
+.add-tracks-modal__browser tbody td {
+  padding: 10px;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+
+.add-tracks-modal__browser tbody td:first-child {
+  border-left: 1px solid var(--border-strong);
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+  width: 42px;
+}
+
+.add-tracks-modal__browser tbody td:last-child {
+  border-right: 1px solid var(--border-strong);
+  border-top-right-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+.add-tracks-modal__browser tbody td:nth-child(2) {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.add-tracks-modal__browser tbody td:nth-child(3),
+.add-tracks-modal__browser tbody td:nth-child(4),
+.add-tracks-modal__browser tbody td:nth-child(5),
+.add-tracks-modal__browser tbody td:nth-child(6) {
+  color: var(--text-subtle);
+}
+
+.add-tracks-modal__actions {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(124, 138, 165, 0.14);
+  background: linear-gradient(
+    180deg,
+    rgba(10, 14, 22, 0) 0%,
+    rgba(10, 14, 22, 0.96) 28%,
+    rgba(10, 14, 22, 0.96) 100%
+  );
+}
+
+
+.add-tracks-modal__button--secondary {
+  border: 1px solid var(--action-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--action-text);
+}
+
+.add-tracks-modal__button--primary {
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: linear-gradient(135deg, #34d399 0%, #0ea5e9 100%);
+  color: var(--text-strong);
+  box-shadow: 0 16px 36px rgba(14, 165, 233, 0.24);
+}
+
+.add-tracks-modal__button--primary:hover {
+  filter: brightness(1.05);
+}
+
+.add-tracks-modal__button:hover {
+  transform: translateY(-1px);
+}
+
+.add-tracks-modal__browser button:disabled,
+.add-tracks-modal__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 900px) {
+  .add-tracks-modal__dialog {
+    max-height: 90vh;
+    padding: 16px;
+  }
+
+  .add-tracks-modal__browser {
+    padding: 12px;
+  }
+
+  .add-tracks-modal__browser table {
+    font-size: 12px;
+  }
+
+  .add-tracks-modal__browser .track-browser__search-row,
+  .add-tracks-modal__browser .track-browser__sort-row,
+  .add-tracks-modal__browser .track-browser__filter-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .add-tracks-modal__overlay {
+    padding: 12px;
+  }
+
+  .add-tracks-modal__dialog {
+    width: 100%;
+    max-height: 92vh;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 22px;
+  }
+
+  .add-tracks-modal__header {
+    align-items: start;
+  }
+
+  .add-tracks-modal__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .add-tracks-modal__browser .track-browser__search-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .add-tracks-modal__browser .track-browser__pagination-pill {
+    width: 100%;
+    border-radius: 20px;
+  }
+}
+
+@media (min-width: 700px) {
+  .add-tracks-modal__browser .track-browser__search-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .add-tracks-modal__browser .track-browser__sort-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .add-tracks-modal__browser .track-browser__filter-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px auto;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-tracks-modal__browser .track-browser__search-actions,
+  .add-tracks-modal__browser .track-browser__pagination-pill {
+    grid-template-columns: 1fr;
+  }
+
+  .add-tracks-modal__browser .track-browser__pagination-pill {
+    display: grid;
+  }
+}
