@@ -121,55 +121,74 @@ Prompt parsing, tag inference, rule-based scoring, and playlist generation logic
 ```bash
 git clone https://github.com/your-username/smart-music-organizer.git
 cd smart-music-organizer/backend
-
-### Backend Setup
-
-1. Download the repository
-
-```bash
-git clone https://github.com/your-username/smart-music-organizer.git
-cd smart-music-organizer/backend
+```
 
 2. Create and activate a virtual environment
+
+```bash
 python -m venv venv
+```
 
 On Windows:
 
+```bash
 venv\Scripts\activate
+```
 
 On macOS/Linux:
 
+```bash
 source venv/bin/activate
+```
 
-Install backend dependencies:
+3. Install backend dependencies
 
+```bash
 pip install -r requirements.txt
+```
 
-Run database migrations:
+4. Run database migrations
 
+```bash
 alembic upgrade head
+```
 
-Start the backend server:
+5. Start the backend server
+
+```bash
 uvicorn app.main:app --reload
+```
 
 The backend should run at:
 
+```text
 http://127.0.0.1:8000
+```
 
-Frontend Setup
+---
 
-Open a new terminal and go to the frontend folder:
+### Frontend Setup
 
+1. Open a new terminal and go to the frontend folder
+
+```bash
 cd smart-music-organizer/frontend
+```
 
-Install frontend dependencies:
+2. Install frontend dependencies
 
+```bash
 npm install
+```
 
-Start the frontend development server:
+3. Start the frontend development server
 
+```bash
 npm run dev
+```
 
 The frontend should run at:
 
+```text
 http://localhost:5173
+```
