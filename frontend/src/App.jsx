@@ -3,10 +3,17 @@ import LibraryPage from "./pages/LibraryPage";
 import PlaylistsPage from "./pages/PlaylistsPage";
 import PlaylistDetailPage from "./pages/PlaylistDetailPage";
 import PlayerPage from "./pages/PlayerPage.jsx";
+import MiniPlayer from "./components/MiniPlayer";
+import { usePlayer } from "./context/PlayerContext";
 
 export default function App() {
+  const { currentTrack, audioRef, getStreamUrl, handleEnded } = usePlayer();
+  const hasMiniPlayer = Boolean(currentTrack);
+
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell${hasMiniPlayer ? " app-shell--has-mini-player" : ""}`}
+    >
       <nav className="app-shell__nav" aria-label="Primary">
         <div className="app-shell__nav-inner">
           <Link
@@ -52,10 +59,25 @@ export default function App() {
           <Route path="/" element={<Navigate to="/library" replace />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/playlists" element={<PlaylistsPage />} />
-          <Route path="/playlists/:playlistId" element={<PlaylistDetailPage />} />
+          <Route
+            path="/playlists/:playlistId"
+            element={<PlaylistDetailPage />}
+          />
           <Route path="/player" element={<PlayerPage />} />
         </Routes>
       </main>
+
+      <MiniPlayer />
+
+      {currentTrack ? (
+        <audio
+          ref={audioRef}
+          src={getStreamUrl(currentTrack)}
+          autoPlay
+          preload="metadata"
+          onEnded={handleEnded}
+        />
+      ) : null}
     </div>
   );
 }

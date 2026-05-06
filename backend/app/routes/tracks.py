@@ -1,13 +1,15 @@
 from fastapi import HTTPException
 from math import ceil
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.track import Track
 from app.schemas.track import PaginatedTracks, TrackUpdateRequest
+from app.services.art import upload_track_art
+from app.services.tag_inference import apply_inferred_tags
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
@@ -109,6 +111,8 @@ def update_track(track_id: int, data: TrackUpdateRequest, db: Session = Depends(
         track.album = data.album
         track.display_album = data.album
 
+    apply_inferred_tags(db, track)
+
     try:
         db.commit()
         db.refresh(track)
@@ -121,3 +125,18 @@ def update_track(track_id: int, data: TrackUpdateRequest, db: Session = Depends(
         artist=track.artist,
         album=track.album,
     )
+
+@router.post("/{track_id}/art")
+def update_track_art(
+    track_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        return upload_track_art(
+            db=db,
+            track_id=track_id,
+            file=file,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

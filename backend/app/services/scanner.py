@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.track import Track
 from app.services.metadata import extract_metadata
 from app.services.art import detect_album_art
+from app.services.tag_inference import apply_inferred_tags, refresh_inferred_tags
 from app.utils.normalize import apply_normalized_fields
 import threading
 
@@ -158,6 +159,7 @@ def scan_library(root: Path | str, db: Session):
 
                 if changed:
                     apply_normalized_fields(existing)
+                    refresh_inferred_tags(db, existing)
                     try:
                         db.commit()
                         db.refresh(existing)
@@ -199,7 +201,10 @@ def scan_library(root: Path | str, db: Session):
 
                 apply_normalized_fields(track)
 
-                db.add(track)
+                db.add(track)                
+                db.flush()                
+                apply_inferred_tags(db, track)
+
                 db.commit()
                 db.refresh(track)
                 scan_state["inserted"] += 1

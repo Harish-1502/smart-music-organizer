@@ -28,6 +28,7 @@ class PlaylistTrackResponse(BaseModel):
     title: str
     artist: str | None = None
     album: str | None = None
+    art_path: str | None = None
 
 class PlaylistDetailResponse(BaseModel):
     id: int

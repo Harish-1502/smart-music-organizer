@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, func, Float, Boolean
+from sqlalchemy.orm import relationship
 from app.core.database import Base
+
 
 class Track(Base):
     __tablename__ = "tracks"
@@ -34,3 +36,9 @@ class Track(Base):
     metadata_source = Column(String, nullable=False, default="unknown")
 
     user_edited = Column(Boolean, nullable=False, default=False)
+
+    track_tags = relationship(
+        "TrackTag",
+        back_populates="track",
+        cascade="all, delete-orphan",
+    )
