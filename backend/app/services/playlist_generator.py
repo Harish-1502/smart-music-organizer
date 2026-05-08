@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.track import Track
 from app.models.tag import Tag
 from app.models.track_tag import TrackTag
-
+import re
 
 SOURCE_WEIGHT = {
     "manual": 1.25,
@@ -82,6 +82,37 @@ def get_match_info(track_tags, include_tags, exclude_tags):
 
     return score, matched_tags, excluded_matches
 
+def apply_playlist_duration_limit(
+    scored_tracks: list[tuple[Track, float]],
+    max_duration_seconds: int | None,
+) -> list[tuple[Track, float]]:
+    """
+    Keep adding scored tracks until the playlist reaches the requested duration.
+
+    Tracks with missing duration are skipped when a time limit exists because
+    they could accidentally make the playlist much longer than requested.
+    """
+
+    if max_duration_seconds is None:
+        return scored_tracks
+
+    selected = []
+    total_duration = 0.0
+
+    for track, score in scored_tracks:
+        if track.duration is None:
+            continue
+
+        next_total = total_duration + float(track.duration)
+
+        if next_total > max_duration_seconds:
+            continue
+
+        selected.append((track, score))
+        total_duration = next_total
+
+    return selected
+
 def generate_scored_tracks_from_rules(
     db: Session,
     include_tags: list[str],
@@ -120,4 +151,51 @@ def generate_scored_tracks_from_rules(
 
     scored_tracks.sort(key=lambda item: item[1], reverse=True)
 
-    return scored_tracks[:limit]
+    return scored_tracks[: max(limit * 3, limit)]
+
+def generate_playlist_name_from_prompt(prompt: str) -> str:
+    """
+    Generate a readable playlist name from the user's prompt.
+
+    This is intentionally simple for V1.
+    Later, you can make this smarter using parsed tags.
+    """
+
+    cleaned = prompt.lower().strip()
+
+    # Remove common filler words.
+    cleaned = re.sub(
+        r"\b(make|create|generate|give|me|a|an|the|playlist|songs|music|for|with)\b",
+        " ",
+        cleaned,
+    )
+
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if not cleaned:
+        return "AI Playlist"
+
+    # Keep name short.
+    words = cleaned.split()[:5]
+    name = " ".join(words).title()
+
+    return f"{name} Mix"
+
+def make_unique_playlist_name(db: Session, base_name: str) -> str:
+    from app.models.playlist import Playlist
+
+    existing = db.query(Playlist).filter(Playlist.name == base_name).first()
+
+    if not existing:
+        return base_name
+
+    counter = 2
+
+    while True:
+        candidate = f"{base_name} {counter}"
+        existing = db.query(Playlist).filter(Playlist.name == candidate).first()
+
+        if not existing:
+            return candidate
+
+        counter += 1

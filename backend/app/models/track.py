@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, func, Float, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, func, Float, Boolean, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -35,10 +35,21 @@ class Track(Base):
     art_path = Column(String, nullable=True)
     metadata_source = Column(String, nullable=False, default="unknown")
 
+    bpm = Column(Float, nullable=True)
+    bpm_confidence = Column(Float, nullable=True)
+
+    energy_score = Column(Float, nullable=True)
+    energy_label = Column(String, nullable=True)
+    energy_confidence = Column(Float, nullable=True)
+
+    audio_analyzed_at = Column(DateTime(timezone=True), nullable=True)
+    audio_analysis_error = Column(Text, nullable=True)
+
     user_edited = Column(Boolean, nullable=False, default=False)
 
     track_tags = relationship(
         "TrackTag",
         back_populates="track",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )

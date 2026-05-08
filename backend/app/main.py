@@ -12,6 +12,15 @@ from app.routes import (
     ai_playlists,
     tags
 )
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 Base.metadata.create_all(bind=engine)
 

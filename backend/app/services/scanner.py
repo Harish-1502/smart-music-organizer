@@ -6,6 +6,7 @@ from app.services.metadata import extract_metadata
 from app.services.art import detect_album_art
 from app.services.tag_inference import apply_inferred_tags, refresh_inferred_tags
 from app.utils.normalize import apply_normalized_fields
+from app.services.track_audio_analysis import analyze_track_audio
 import threading
 
 # All support audio files
@@ -159,6 +160,7 @@ def scan_library(root: Path | str, db: Session):
 
                 if changed:
                     apply_normalized_fields(existing)
+                    analyze_track_audio(db, existing)
                     refresh_inferred_tags(db, existing)
                     try:
                         db.commit()
@@ -202,7 +204,8 @@ def scan_library(root: Path | str, db: Session):
                 apply_normalized_fields(track)
 
                 db.add(track)                
-                db.flush()                
+                db.flush()
+                analyze_track_audio(db, track)                
                 apply_inferred_tags(db, track)
 
                 db.commit()

@@ -336,6 +336,16 @@ TAG_RULES = {
         ],
         "confidence": 0.75,
     },
+    "edm": {
+        "category": "genre",
+        "keywords": [
+            "edm",
+            "electronic dance music",
+            "festival mix",
+            "rave",
+        ],
+        "confidence": 0.85,
+    },
 
     # -------------------------
     # Clean / explicit signals
@@ -372,5 +382,117 @@ TAG_RULES = {
             "long", "extended", "extended version", "extended mix",
         ],
         "confidence": 0.60,
+    },
+    # YouTube / edited music tags
+    "nightcore": {
+        "category": "version",
+        "keywords": [
+            "nightcore",
+            "night core",
+        ],
+        "confidence": 0.95,
+    },
+
+    "sped_up": {
+        "category": "version",
+        "keywords": [
+            "sped up",
+            "sped-up",
+            "speed up",
+            "speed-up",
+            "fast version",
+            "speed version",
+            "speed audio",
+        ],
+        "confidence": 0.90,
+    },
+
+    "slowed": {
+        "category": "version",
+        "keywords": [
+            "slowed",
+            "slowed reverb",
+            "slowed + reverb",
+            "slow version",
+            "slowed down",
+        ],
+        "confidence": 0.90,
+    },
+
+    "anime": {
+        "category": "context",
+        "keywords": [
+            "anime",
+            "opening",
+            "ending",
+            "ost",
+            "amv",
+            "mad",
+        ],
+        "confidence": 0.78,
+    },
+
+    "amv": {
+        "category": "context",
+        "keywords": [
+            "amv",
+            "anime music video",
+        ],
+        "confidence": 0.90,
+    },
+
+    "jpop": {
+        "category": "genre",
+        "keywords": [
+            "jpop",
+            "j-pop",
+            "j pop",
+            "japanese pop",
+        ],
+        "confidence": 0.85,
+    },
+
+    "kpop": {
+        "category": "genre",
+        "keywords": [
+            "kpop",
+            "k-pop",
+            "k pop",
+            "korean pop",
+        ],
+        "confidence": 0.85,
+    },
+
+    "phonk": {
+        "category": "genre",
+        "keywords": [
+            "phonk",
+            "drift phonk",
+            "cowbell",
+        ],
+        "confidence": 0.90,
+    },
+
+    "bass_boosted": {
+        "category": "version",
+        "keywords": [
+            "bass boosted",
+            "bassboosted",
+            "bass boost",
+            "boosted bass",
+        ],
+        "confidence": 0.90,
+    },
+
+    "tiktok": {
+        "category": "context",
+        "keywords": [
+            "tiktok",
+            "tik tok",
+            "viral",
+            "edit audio",
+            "audio edit",
+        ],
+        "confidence": 0.75,
     },
 }

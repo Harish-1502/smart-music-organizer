@@ -23,3 +23,5 @@ Thumbs.db
 # Capacitor / native builds
 android/
 ios/
+
+chromaprint-fpcalc-1.6.0-windows-x86_64/

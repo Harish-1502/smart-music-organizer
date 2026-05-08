@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   getPlaylists,
   createPlaylist,
   deletePlaylist,
   renamePlaylist,
+  generateAiPlaylist,
 } from "../api/playlistApi";
 import CreatePlaylistModal from "../components/playlists/CreatePlaylistModal";
+import GenerateAiPlaylistModal from "../components/playlists/GenerateAiPlaylistModal";
 import "../styles/PlaylistsPage.css";
 
 export default function PlaylistsPage() {
+  const navigate = useNavigate();
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
 
   useEffect(() => {
     loadPlaylists();
@@ -38,6 +42,16 @@ export default function PlaylistsPage() {
       const newPlaylist = await createPlaylist(name);
       setPlaylists((prev) => [newPlaylist, ...prev]);
       setShowCreateModal(false);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async function handleGenerateAiPlaylist(prompt) {
+    try {
+      const generatedPlaylist = await generateAiPlaylist(prompt);
+      setShowAiModal(false);
+      navigate(`/playlists/${generatedPlaylist.playlist_id}`);
     } catch (error) {
       throw error;
     }
@@ -102,13 +116,23 @@ export default function PlaylistsPage() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="playlist-page__create"
-                onClick={() => setShowCreateModal(true)}
-              >
-                + Create Playlist
-              </button>
+              <div className="playlist-page__header-actions">
+                <button
+                  type="button"
+                  className="playlist-page__create playlist-page__create--secondary"
+                  onClick={() => setShowAiModal(true)}
+                >
+                  Generate with AI
+                </button>
+
+                <button
+                  type="button"
+                  className="playlist-page__create"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  + Create Playlist
+                </button>
+              </div>
             </div>
 
             <div
@@ -302,6 +326,13 @@ export default function PlaylistsPage() {
         <CreatePlaylistModal
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreatePlaylist}
+        />
+      )}
+
+      {showAiModal && (
+        <GenerateAiPlaylistModal
+          onClose={() => setShowAiModal(false)}
+          onGenerate={handleGenerateAiPlaylist}
         />
       )}
     </section>

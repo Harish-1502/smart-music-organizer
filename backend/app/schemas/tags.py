@@ -27,3 +27,14 @@ class TrackTagResponse(BaseModel):
     source: str
     confidence: float
     created_at: datetime
+
+class TrackTagSuggestionResponse(BaseModel):
+    id: int
+    tag_id: int
+    name: str
+    category: str
+    source: str
+    confidence: float
+    status: str
+    reason: str | None
+    created_at: datetime

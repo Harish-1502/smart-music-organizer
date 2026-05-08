@@ -32,3 +32,27 @@ export async function removeTagFromTrack(trackId, tagId) {
   const response = await api.delete(`/tags/tracks/${trackId}/${tagId}`);
   return response.data;
 }
+
+export async function getTrackTagSuggestions(trackId) {
+  const response = await api.get(`/tracks/${trackId}/tag-suggestions`);
+  return response.data;
+}
+
+export async function refreshTrackTagSuggestions(trackId) {
+  const response = await api.post(`/tracks/${trackId}/tag-suggestions/refresh`);
+  return response.data;
+}
+
+export async function acceptTrackTagSuggestion(trackId, suggestionId) {
+  const response = await api.post(
+    `/tracks/${trackId}/tag-suggestions/${suggestionId}/accept`
+  );
+  return response.data;
+}
+
+export async function rejectTrackTagSuggestion(trackId, suggestionId) {
+  const response = await api.post(
+    `/tracks/${trackId}/tag-suggestions/${suggestionId}/reject`
+  );
+  return response.data;
+}

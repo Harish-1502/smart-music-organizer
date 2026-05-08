@@ -1,12 +1,25 @@
 import { useRef, useState } from "react";
 import { updateTrack, uploadTrackArt } from "../api/libraryApi";
 import {
+  acceptTrackTagSuggestion,
   addTagToTrack,
   createTag,
   getTags,
   getTrackTags,
+  getTrackTagSuggestions,
+  rejectTrackTagSuggestion,
   removeTagFromTrack,
 } from "../api/tagsApi";
+
+const FALLBACK_TAG_CATEGORIES = [
+  "mood",
+  "genre",
+  "activity",
+  "energy",
+  "source",
+  "language",
+  "custom",
+];
 
 export default function useTrackEdit({ loadTracks, setMessage }) {
   const [editStatus, setEditStatus] = useState("idle");
@@ -21,6 +34,7 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
   const [artPreviewUrl, setArtPreviewUrl] = useState("");
   const [allTags, setAllTags] = useState([]);
   const [trackTags, setTrackTags] = useState([]);
+  const [tagSuggestions, setTagSuggestions] = useState([]);
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsError, setTagsError] = useState("");
   const [selectedTagId, setSelectedTagId] = useState("");
@@ -49,6 +63,7 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     if (!trackId) {
       setAllTags([]);
       setTrackTags([]);
+      setTagSuggestions([]);
       setTagsLoading(false);
       setTagsError("");
       return;
@@ -60,17 +75,47 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     setTagsError("");
 
     try {
-      const [tags, attachedTags] = await Promise.all([
-        getTags(),
-        getTrackTags(trackId),
-      ]);
+      const [tagsResult, attachedTagsResult, suggestionsResult] =
+        await Promise.allSettled([
+          getTags(),
+          getTrackTags(trackId),
+          getTrackTagSuggestions(trackId),
+        ]);
 
       if (tagRequestIdRef.current !== requestId) {
         return;
       }
 
-      setAllTags(tags || []);
-      setTrackTags(attachedTags || []);
+      const nextTags =
+        tagsResult.status === "fulfilled" ? tagsResult.value || [] : [];
+      const nextTrackTags =
+        attachedTagsResult.status === "fulfilled"
+          ? attachedTagsResult.value || []
+          : [];
+      const nextSuggestions =
+        suggestionsResult.status === "fulfilled"
+          ? suggestionsResult.value || []
+          : [];
+
+      setAllTags(nextTags);
+      setTrackTags(nextTrackTags);
+      setTagSuggestions(nextSuggestions);
+
+      if (
+        tagsResult.status === "rejected" ||
+        attachedTagsResult.status === "rejected"
+      ) {
+        const primaryError =
+          tagsResult.status === "rejected"
+            ? tagsResult.reason
+            : attachedTagsResult.reason;
+        setTagsError(primaryError?.message || "Failed to load tags");
+      } else if (suggestionsResult.status === "rejected") {
+        setTagsError(
+          suggestionsResult.reason?.message ||
+            "Tag suggestions are temporarily unavailable.",
+        );
+      }
     } catch (error) {
       if (tagRequestIdRef.current !== requestId) {
         return;
@@ -78,6 +123,7 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
 
       setAllTags([]);
       setTrackTags([]);
+      setTagSuggestions([]);
       setTagsError(error.message || "Failed to load tags");
     } finally {
       if (tagRequestIdRef.current === requestId) {
@@ -134,6 +180,7 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     setArtPreviewUrl("");
     setAllTags([]);
     setTrackTags([]);
+    setTagSuggestions([]);
     setTagsLoading(false);
     setTagsError("");
     setSelectedTagId("");
@@ -274,6 +321,53 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     }
   }
 
+  async function handleAcceptSuggestion(suggestionId) {
+    if (!selectedTrack?.id || !suggestionId) {
+      return;
+    }
+
+    setTagActionLoading(true);
+    setTagsError("");
+
+    try {
+      await acceptTrackTagSuggestion(selectedTrack.id, suggestionId);
+      await loadTagData(selectedTrack.id);
+    } catch (error) {
+      setTagsError(error.message || "Failed to accept suggested tag");
+    } finally {
+      setTagActionLoading(false);
+    }
+  }
+
+  async function handleRejectSuggestion(suggestionId) {
+    if (!selectedTrack?.id || !suggestionId) {
+      return;
+    }
+
+    setTagActionLoading(true);
+    setTagsError("");
+
+    try {
+      await rejectTrackTagSuggestion(selectedTrack.id, suggestionId);
+      setTagSuggestions((prev) =>
+        prev.filter((suggestion) => suggestion.id !== suggestionId),
+      );
+    } catch (error) {
+      setTagsError(error.message || "Failed to reject suggested tag");
+    } finally {
+      setTagActionLoading(false);
+    }
+  }
+
+  const categoryOptions = Array.from(
+    new Set([
+      ...allTags
+        .map((tag) => (typeof tag.category === "string" ? tag.category.trim() : ""))
+        .filter(Boolean),
+      ...FALLBACK_TAG_CATEGORIES,
+    ]),
+  ).sort((a, b) => a.localeCompare(b));
+
   return {
     editStatus,
     showModal,
@@ -283,11 +377,13 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     artPreviewUrl,
     allTags,
     trackTags,
+    tagSuggestions,
     tagsLoading,
     tagsError,
     selectedTagId,
     tagActionLoading,
     newTagForm,
+    categoryOptions,
     handleEditTrack,
     handleFormChange,
     handleArtFileChange,
@@ -296,6 +392,8 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     handleAddTag,
     handleRemoveTag,
     handleCreateTag,
+    handleAcceptSuggestion,
+    handleRejectSuggestion,
     handleCancelEdit,
     handleSaveEdit,
   };

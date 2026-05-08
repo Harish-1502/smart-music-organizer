@@ -47,11 +47,13 @@ export default function TrackBrowser({
     artPreviewUrl,
     allTags,
     trackTags,
+    tagSuggestions,
     tagsLoading,
     tagsError,
     selectedTagId,
     tagActionLoading,
     newTagForm,
+    categoryOptions,
     handleEditTrack,
     handleFormChange,
     handleArtFileChange,
@@ -60,6 +62,8 @@ export default function TrackBrowser({
     handleAddTag,
     handleRemoveTag,
     handleCreateTag,
+    handleAcceptSuggestion,
+    handleRejectSuggestion,
     handleCancelEdit,
     handleSaveEdit,
   } = useTrackEdit({ loadTracks, setMessage: () => {} });
@@ -121,11 +125,13 @@ export default function TrackBrowser({
               artPreviewUrl={artPreviewUrl}
               allTags={allTags}
               trackTags={trackTags}
+              tagSuggestions={tagSuggestions}
               tagsLoading={tagsLoading}
               tagsError={tagsError}
               selectedTagId={selectedTagId}
               tagActionLoading={tagActionLoading}
               newTagForm={newTagForm}
+              categoryOptions={categoryOptions}
               onChange={handleFormChange}
               onArtFileChange={handleArtFileChange}
               onSelectedTagChange={handleSelectedTagChange}
@@ -133,6 +139,8 @@ export default function TrackBrowser({
               onAddTag={handleAddTag}
               onRemoveTag={handleRemoveTag}
               onCreateTag={handleCreateTag}
+              onAcceptSuggestion={handleAcceptSuggestion}
+              onRejectSuggestion={handleRejectSuggestion}
               onSave={handleSaveEdit}
               onCancel={handleCancelEdit}
             />

@@ -11,7 +11,8 @@ class ParsePromptResponse(BaseModel):
 
 class GeneratePlaylistRequest(BaseModel):
     prompt: str
-    limit: int = Field(default=20, ge=1, le=100)
+    limit: int = Field(default=25, ge=1, le=100)
+    playlist_name: str | None = None
 
 
 class GeneratedTrackResponse(BaseModel):
@@ -30,5 +31,8 @@ class GeneratedTrackResponse(BaseModel):
 
 class GeneratePlaylistResponse(BaseModel):
     prompt: str
+    playlist_id: int
+    playlist_name: str
+    total_duration_minutes: float | None = None
     parsed_rules: dict
     tracks: list[GeneratedTrackResponse]

@@ -140,6 +140,91 @@ def infer_duration_tags(track: Track) -> list[tuple[str, float]]:
 
     return inferred
 
+def infer_bpm_tags(track: Track) -> list[tuple[str, float]]:
+    inferred = []
+
+    bpm = getattr(track, "bpm", None)
+    confidence = getattr(track, "bpm_confidence", None) or 0.0
+
+    if bpm is None or confidence < 0.45:
+        return inferred
+
+    if bpm >= 155:
+        inferred.append(("fast", 0.8))
+    elif bpm <= 85:
+        inferred.append(("slow", 0.75))
+
+    return inferred
+
+
+def infer_energy_tags(track: Track) -> list[tuple[str, float]]:
+    inferred = []
+
+    energy_label = getattr(track, "energy_label", None)
+    confidence = getattr(track, "energy_confidence", None) or 0.0
+
+    if not energy_label or confidence < 0.45:
+        return inferred
+
+    # Low energy is safer to infer from energy alone.
+    if energy_label == "low":
+        inferred.append(("low_energy", 0.75))
+
+    # Many slow/chill songs are mastered loud, especially YouTube downloads.
+    return inferred
+
+def track_has_slow_text_signal(track: Track) -> bool:
+    text = build_track_search_text(track)
+
+    slow_keywords = [
+        "slow",
+        "slowed",
+        "slowed reverb",
+        "slowed down",
+        "slow version",
+    ]
+
+    return any(keyword_matches(text, keyword) for keyword in slow_keywords)
+
+def infer_bpm_energy_combo_tags(track: Track) -> list[tuple[str, float]]:
+    inferred = []
+
+    bpm = getattr(track, "bpm", None)
+    bpm_confidence = getattr(track, "bpm_confidence", None) or 0.0
+
+    energy_label = getattr(track, "energy_label", None)
+    energy_confidence = getattr(track, "energy_confidence", None) or 0.0
+
+    if bpm is None:
+        return inferred
+
+    if bpm_confidence < 0.45 or energy_confidence < 0.45:
+        return inferred
+
+    has_slow_text = track_has_slow_text_signal(track)
+
+    # If filename/title clearly says slowed, do not add high_energy
+    # just because the audio is mastered loud.
+    if has_slow_text:
+        inferred.append(("slow", 0.85))
+        inferred.append(("low_energy", 0.65))
+        inferred.append(("chill", 0.60))
+        return inferred
+
+    if bpm >= 140 and energy_label == "high":
+        inferred.append(("high_energy", 0.85))
+        inferred.append(("workout", 0.72))
+        inferred.append(("party", 0.65))
+
+    elif bpm >= 125 and energy_label == "high":
+        inferred.append(("high_energy", 0.70))
+        inferred.append(("party", 0.60))
+
+    if bpm <= 90 and energy_label in {"low", "medium"}:
+        inferred.append(("low_energy", 0.75))
+        inferred.append(("chill", 0.65))
+
+    return inferred
 
 def infer_track_tags(track: Track) -> list[tuple[str, float]]:
     """
@@ -159,6 +244,9 @@ def infer_track_tags(track: Track) -> list[tuple[str, float]]:
 
     inferred.extend(infer_keyword_tags(track))
     inferred.extend(infer_duration_tags(track))
+    inferred.extend(infer_bpm_tags(track))
+    inferred.extend(infer_energy_tags(track))
+    inferred.extend(infer_bpm_energy_combo_tags(track))
 
     # A track may match the same tag from multiple strategies.
     # Keep the strongest confidence instead of creating duplicates.
@@ -309,3 +397,66 @@ def parsed_rules_to_tags(parsed_rules: dict) -> tuple[list[str], list[str]]:
     exclude_tags = list(dict.fromkeys(exclude_tags))
 
     return include_tags, exclude_tags
+
+def infer_track_tag_suggestions(track: Track) -> list[dict]:
+    """
+    Infer tag suggestions from track metadata, file name, and folder path.
+
+    This is used for suggestion workflow, not direct confirmed tagging.
+    """
+    text = build_track_search_text(track)
+    suggestions = []
+
+    for tag_name, rule in TAG_RULES.items():
+        keywords = rule.get("keywords", [])
+        confidence = float(rule.get("confidence", 0.5))
+
+        matched_keywords = [
+            keyword
+            for keyword in keywords
+            if keyword_matches(text, keyword)
+        ]
+
+        if not matched_keywords:
+            continue
+
+        suggestions.append(
+            {
+                "tag_name": tag_name,
+                "confidence": confidence,
+                "reason": f"Matched keyword(s): {', '.join(matched_keywords[:3])}",
+            }
+        )
+
+    # Duration-based suggestions
+    if track.duration is not None:
+        if track.duration < 90:
+            suggestions.append(
+                {
+                    "tag_name": "short",
+                    "confidence": 0.75,
+                    "reason": "Track duration is under 90 seconds",
+                }
+            )
+
+        if track.duration > 420:
+            suggestions.append(
+                {
+                    "tag_name": "long",
+                    "confidence": 0.75,
+                    "reason": "Track duration is over 7 minutes",
+                }
+            )
+
+    # Merge duplicates and keep strongest confidence/reason
+    merged = {}
+
+    for suggestion in suggestions:
+        tag_name = suggestion["tag_name"]
+
+        existing = merged.get(tag_name)
+
+        if not existing or suggestion["confidence"] > existing["confidence"]:
+            merged[tag_name] = suggestion
+
+    return list(merged.values())
