@@ -156,11 +156,16 @@ export default function PlayerPage() {
       return;
     }
 
-    setIsLoading(true);
+    const audioElement = audioRef.current;
+    const hasPlaybackData = audioElement?.readyState >= 2;
+
+    setIsLoading(!hasPlaybackData);
     setIsBuffering(false);
-    setIsAudioReady(false);
-    setPlaybackError("");
-  }, [currentTrack]);
+    setIsAudioReady(hasPlaybackData);
+    setPlaybackError(
+      audioElement?.error ? getPlaybackErrorMessage(null, audioElement) : "",
+    );
+  }, [audioRef, currentTrack]);
 
   useEffect(() => {
     const audioElement = audioRef.current;

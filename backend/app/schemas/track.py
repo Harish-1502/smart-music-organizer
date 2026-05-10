@@ -40,6 +40,3 @@ class TrackUpdateRequest(BaseModel):
     title: str | None = None
     artist: str | None = None
     album: str | None = None
-
-class TrackUpdateArtRequest(BaseModel):
-    art_path: str | None = None

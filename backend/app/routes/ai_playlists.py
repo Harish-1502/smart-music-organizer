@@ -24,20 +24,6 @@ from app.services.playlist_generator import (
 
 router = APIRouter(prefix="/ai_playlists", tags=["ai_playlists"])
 
-
-@router.post("/parse-prompt", response_model=ParsePromptResponse)
-def parse_ai_prompt(request: ParsePromptRequest):
-    try:
-        parsed_rules = parse_prompt(request.prompt)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-
-    return {
-        "prompt": request.prompt,
-        "parsed_rules": parsed_rules,
-    }
-
-
 @router.post("/generate", response_model=GeneratePlaylistResponse)
 def generate_ai_playlist(
     request: GeneratePlaylistRequest,

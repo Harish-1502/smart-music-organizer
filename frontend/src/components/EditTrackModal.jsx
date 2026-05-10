@@ -4,7 +4,6 @@ export default function EditTrackModal({
   artPreviewUrl,
   allTags = [],
   trackTags = [],
-  tagSuggestions = [],
   tagsLoading = false,
   tagsError = "",
   selectedTagId = "",
@@ -18,8 +17,6 @@ export default function EditTrackModal({
   onAddTag,
   onRemoveTag,
   onCreateTag,
-  onAcceptSuggestion,
-  onRejectSuggestion,
   onSave,
   onCancel,
 }) {
@@ -31,21 +28,6 @@ export default function EditTrackModal({
     categoryOptions.length > 0
       ? categoryOptions
       : ["mood", "genre", "activity", "energy", "source", "language", "custom"];
-
-  function formatSuggestionConfidence(confidence) {
-    const numericConfidence = Number(confidence);
-
-    if (!Number.isFinite(numericConfidence)) {
-      return null;
-    }
-
-    const percentage =
-      numericConfidence <= 1
-        ? Math.round(numericConfidence * 100)
-        : Math.round(numericConfidence);
-
-    return `${percentage}%`;
-  }
 
   return (
     <div className="edit-track-modal__overlay">
@@ -184,125 +166,57 @@ export default function EditTrackModal({
                     No tags attached yet.
                   </p>
                 )}
-
-                <div className="edit-track-modal__tag-toolbar">
-                  <label
-                    className="edit-track-modal__tag-select-label"
-                    htmlFor="edit-track-tag-select"
-                  >
-                    Add existing tag
-                  </label>
-
-                  <div className="edit-track-modal__tag-select-row">
-                    <select
-                      id="edit-track-tag-select"
-                      className="edit-track-modal__input edit-track-modal__select"
-                      value={selectedTagId}
-                      onChange={(e) => onSelectedTagChange(e.target.value)}
-                      disabled={
-                        tagsLoading || tagActionLoading || availableTags.length === 0
-                      }
-                    >
-                      <option value="">
-                        {availableTags.length > 0
-                          ? "Select a tag"
-                          : "No existing tags available"}
-                      </option>
-                      {availableTags.map((tag) => (
-                        <option key={tag.id} value={tag.id}>
-                          {tag.name} ({tag.category})
-                        </option>
-                      ))}
-                    </select>
-
-                    <button
-                      type="button"
-                      className="edit-track-modal__button edit-track-modal__button--secondary edit-track-modal__button--compact"
-                      onClick={onAddTag}
-                      disabled={!selectedTagId || tagActionLoading || tagsLoading}
-                    >
-                      {tagActionLoading ? "Working..." : "Add"}
-                    </button>
-                  </div>
-                </div>
               </section>
 
               <section
                 className="edit-track-modal__tag-section"
-                aria-labelledby="edit-track-suggested-tags-title"
+                aria-labelledby="edit-track-add-existing-title"
               >
                 <div className="edit-track-modal__tag-section-header">
                   <div>
                     <h3
-                      id="edit-track-suggested-tags-title"
+                      id="edit-track-add-existing-title"
                       className="edit-track-modal__tag-section-title"
                     >
-                      Suggested Tags
+                      Add Existing Tag
                     </h3>
                     <p className="edit-track-modal__tag-section-subtitle">
-                      Auto-tagging suggestions you can accept or reject.
+                      Choose from tags already in your library.
                     </p>
                   </div>
                 </div>
 
-                {tagsLoading ? (
-                  <p className="edit-track-modal__helper">Loading suggestions...</p>
-                ) : tagSuggestions.length > 0 ? (
-                  <div
-                    className="edit-track-modal__suggestion-list"
-                    aria-label="Suggested tags"
+                <div className="edit-track-modal__tag-select-row">
+                  <select
+                    id="edit-track-tag-select"
+                    className="edit-track-modal__input edit-track-modal__select"
+                    value={selectedTagId}
+                    onChange={(e) => onSelectedTagChange(e.target.value)}
+                    disabled={
+                      tagsLoading || tagActionLoading || availableTags.length === 0
+                    }
                   >
-                    {tagSuggestions.map((suggestion) => {
-                      const confidenceLabel = formatSuggestionConfidence(
-                        suggestion.confidence,
-                      );
+                    <option value="">
+                      {availableTags.length > 0
+                        ? "Select a tag"
+                        : "No existing tags available"}
+                    </option>
+                    {availableTags.map((tag) => (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.name} ({tag.category})
+                      </option>
+                    ))}
+                  </select>
 
-                      return (
-                        <div
-                          key={suggestion.id}
-                          className="edit-track-modal__suggestion-item"
-                        >
-                          <div className="edit-track-modal__suggestion-main">
-                            <span className="edit-track-modal__suggestion-name">
-                              {suggestion.name}
-                            </span>
-                            <span className="edit-track-modal__suggestion-meta">
-                              {suggestion.category}
-                              {confidenceLabel ? (
-                                <span className="edit-track-modal__suggestion-confidence">
-                                  {confidenceLabel}
-                                </span>
-                              ) : null}
-                            </span>
-                          </div>
-
-                          <div className="edit-track-modal__suggestion-actions">
-                            <button
-                              type="button"
-                              className="edit-track-modal__button edit-track-modal__button--primary edit-track-modal__button--compact edit-track-modal__button--positive"
-                              onClick={() => onAcceptSuggestion(suggestion.id)}
-                              disabled={tagActionLoading}
-                            >
-                              {tagActionLoading ? "Working..." : "+ Add"}
-                            </button>
-                            <button
-                              type="button"
-                              className="edit-track-modal__button edit-track-modal__button--secondary edit-track-modal__button--compact edit-track-modal__button--ghost"
-                              onClick={() => onRejectSuggestion(suggestion.id)}
-                              disabled={tagActionLoading}
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="edit-track-modal__tag-empty">
-                    No suggested tags right now.
-                  </p>
-                )}
+                  <button
+                    type="button"
+                    className="edit-track-modal__button edit-track-modal__button--secondary edit-track-modal__button--compact"
+                    onClick={onAddTag}
+                    disabled={!selectedTagId || tagActionLoading || tagsLoading}
+                  >
+                    {tagActionLoading ? "Working..." : "Add"}
+                  </button>
+                </div>
               </section>
 
               <section

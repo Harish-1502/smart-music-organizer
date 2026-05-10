@@ -922,17 +922,6 @@
   line-height: 1;
 }
 
-.edit-track-modal__tag-toolbar {
-  display: grid;
-  gap: 8px;
-}
-
-.edit-track-modal__tag-select-label {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
 .edit-track-modal__tag-select-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
