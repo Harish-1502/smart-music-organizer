@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.track import Track
 from app.schemas.track import PaginatedTracks, TrackUpdateRequest
@@ -151,6 +152,12 @@ def deep_scan_track_route(
     track_id: int,
     db: Session = Depends(get_db),
 ):
+    if not settings.enable_deep_scan:
+        raise HTTPException(
+            status_code=403,
+            detail="Deep scan is disabled.",
+        )
+
     track = db.query(Track).filter(Track.id == track_id).first()
 
     if not track:

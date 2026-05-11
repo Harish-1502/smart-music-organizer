@@ -1,5 +1,3 @@
-# app/services/tag_inference.py
-
 import re
 
 from sqlalchemy.orm import Session

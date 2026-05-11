@@ -1,6 +1,9 @@
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models.track import Track
+from app.models.playlist import Playlist
+from app.models.playlistTrack import PlaylistTrack
+from app.models.tag import Tag
 from app.services.scanner import reset_scan_state, scan_state
 
 client = TestClient(app)
@@ -185,3 +188,91 @@ def test_clear_library_deletes_tracks_and_resets_scan_state(client, db_session):
 
     remaining = db_session.query(Track).count()
     assert remaining == 0
+
+
+def test_clear_library_deletes_tracks_but_preserves_unlinked_playlists_and_tags(
+    client,
+    db_session,
+):
+    """
+    Current behavior:
+    - /library/clear deletes rows from tracks
+    - playlists and tags are preserved when they are not linked to tracks
+    """
+    track = Track(
+        file_path="C:/music/song.mp3",
+        file_name="song.mp3",
+        extension=".mp3",
+        folder_path="C:/music",
+        title="Title",
+        artist="Artist",
+        album="Album",
+        display_title="Title",
+        display_artist="Artist",
+        display_album="Album",
+        metadata_source="test",
+        user_edited=False,
+    )
+    playlist = Playlist(name="Keep Me")
+    tag = Tag(name="keep-tag", category="test")
+
+    db_session.add_all([track, playlist, tag])
+    db_session.commit()
+
+    response = client.delete("/library/clear")
+
+    assert response.status_code == 200
+    assert response.json()["deleted_tracks"] == 1
+    assert db_session.query(Track).count() == 0
+    assert db_session.query(Playlist).count() == 1
+    assert db_session.query(Tag).count() == 1
+
+
+def test_clear_library_with_playlist_track_link_returns_500_current_bug(
+    client,
+    db_session,
+):
+    """
+    Current behavior:
+    - /library/clear tries to delete tracks directly
+    - playlist_tracks rows are not deleted first
+    - a linked playlist track causes a server error instead of a clean clear
+    """
+    track = Track(
+        file_path="C:/music/linked-song.mp3",
+        file_name="linked-song.mp3",
+        extension=".mp3",
+        folder_path="C:/music",
+        title="Linked Song",
+        artist="Artist",
+        album="Album",
+        display_title="Linked Song",
+        display_artist="Artist",
+        display_album="Album",
+        metadata_source="test",
+        user_edited=False,
+    )
+    playlist = Playlist(name="Linked Playlist")
+    db_session.add_all([track, playlist])
+    db_session.commit()
+    db_session.refresh(track)
+    db_session.refresh(playlist)
+
+    playlist_track = PlaylistTrack(
+        playlist_id=playlist.id,
+        track_id=track.id,
+        position=1,
+    )
+    db_session.add(playlist_track)
+    db_session.commit()
+
+    safe_client = TestClient(app, raise_server_exceptions=False)
+
+    response = safe_client.delete("/library/clear")
+
+    assert response.status_code == 500
+
+    db_session.rollback()
+    assert db_session.query(Track).count() == 1
+    assert db_session.query(Playlist).count() == 1
+    assert db_session.query(PlaylistTrack).count() == 1

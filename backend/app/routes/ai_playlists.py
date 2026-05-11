@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.ai_playlists import (
     GeneratePlaylistResponse,
@@ -29,6 +30,12 @@ def generate_ai_playlist(
     request: GeneratePlaylistRequest,
     db: Session = Depends(get_db),
 ):
+    if not settings.enable_ai_playlists:
+        raise HTTPException(
+            status_code=403,
+            detail="AI playlist generation is disabled.",
+        )
+
     try:
         parsed_rules = parse_prompt(request.prompt)
     except ValueError as error:

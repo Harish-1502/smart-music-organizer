@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 from fastapi.responses import FileResponse
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.library import LibraryScanRequest
 from app.services.scanner import run_scan_library, scan_state, reset_scan_state, validate_folder
@@ -59,6 +60,12 @@ def clear_library(db: Session = Depends(get_db)):
 
 @router.get("/art")
 def get_album_art(path: str):
+    if not settings.enable_legacy_art_path_route:
+        raise HTTPException(
+            status_code=403,
+            detail="Legacy artwork path access is disabled.",
+        )
+
     file_path = Path(path)
 
     if not file_path.exists() or not file_path.is_file():

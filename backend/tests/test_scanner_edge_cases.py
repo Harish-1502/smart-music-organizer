@@ -45,6 +45,29 @@ def test_scan_skips_unsupported_files_and_scans_nested_audio(tmp_path, monkeypat
     assert tracks[0].file_path == str(audio_file.resolve())
 
 
+def test_scan_ignores_folder_with_only_unsupported_files(tmp_path, db_session):
+    """
+    Current behavior:
+    - unsupported file extensions are counted as seen
+    - unsupported files are not inserted as tracks
+    """
+    from app.services.scanner import scan_state
+
+    reset_scan_state()
+
+    root = tmp_path / "Music"
+    root.mkdir()
+    (root / "notes.txt").write_text("not audio")
+    (root / "cover.gif").write_text("not a supported audio extension")
+
+    scan_library(str(root), db_session)
+
+    assert db_session.query(Track).count() == 0
+    assert scan_state["files_seen"] == 2
+    assert scan_state["supported_found"] == 0
+    assert scan_state["inserted"] == 0
+
+
 def test_scan_continues_when_metadata_extraction_fails(tmp_path, monkeypatch, db_session):
     """
     Test:
