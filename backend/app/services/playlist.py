@@ -23,26 +23,17 @@ def add_playlist(db, name: str) -> Playlist:
     if existing_playlist:
         raise ValueError("Playlist with this name already exists")
 
-    try:
-        # Create a new Playlist object
-        new_playlist = Playlist(name=clean_name)
+    # Create a new Playlist object
+    new_playlist = Playlist(name=clean_name)
 
-        # Add it to the database session
-        db.add(new_playlist)
+    # Add it to the database session
+    db.add(new_playlist)
 
-        # Save changes to the database
-        db.commit()
+    # Flush so callers can use playlist.id before the final route-level commit.
+    db.flush()
 
-        # Reload it so id/created_at/updated_at are available
-        db.refresh(new_playlist)
-
-        # Return the created playlist
-        return new_playlist
-
-    except Exception:
-        # Undo database changes if anything fails
-        db.rollback()
-        raise
+    # Return the created playlist
+    return new_playlist
 
 def remove_playlist(db, playlist_id: int) -> None:
     # Find the playlist by id
@@ -52,18 +43,9 @@ def remove_playlist(db, playlist_id: int) -> None:
     if not playlist:
         raise ValueError("Playlist not found")
 
-    try:
-        # Delete playlist
-        # Because of cascade, its PlaylistTrack rows should also be deleted
-        db.delete(playlist)
-
-        # Save deletion
-        db.commit()
-
-    except Exception:
-        # Undo if delete fails
-        db.rollback()
-        raise
+    # Delete playlist
+    # Because of cascade, its PlaylistTrack rows should also be deleted
+    db.delete(playlist)
 
 def rename_playlist(db, playlist_id: int, new_name: str) -> Playlist:
     # Find playlist being renamed
@@ -93,26 +75,16 @@ def rename_playlist(db, playlist_id: int, new_name: str) -> Playlist:
     if name_exists:
         raise ValueError("Playlist with this name already exists")
 
-    try:
-        # Update playlist name
-        playlist.name = clean_name
+    # Update playlist name
+    playlist.name = clean_name
 
-        # Manually update timestamp because renaming changes playlist
-        # playlist.updated_at = datetime.now(timezone.utc)
+    # Manually update timestamp because renaming changes playlist
+    # playlist.updated_at = datetime.now(timezone.utc)
 
-        # Save changes
-        db.commit()
+    db.flush()
 
-        # Reload updated playlist
-        db.refresh(playlist)
-
-        # Return updated playlist
-        return playlist
-
-    except Exception:
-        # Undo if update fails
-        db.rollback()
-        raise
+    # Return updated playlist
+    return playlist
     
 def add_tracks_to_playlist(db, track_ids: list[int], playlist_id: int) -> list[PlaylistTrack]:
     # Find playlist
@@ -171,27 +143,17 @@ def add_tracks_to_playlist(db, track_ids: list[int], playlist_id: int) -> list[P
         # Add new row object to list
         new_playlist_tracks.append(new_playlist_track)
 
-    try:
-        # Add all new playlist entries to DB session
-        db.add_all(new_playlist_tracks)
+    # Add all new playlist entries to DB session
+    db.add_all(new_playlist_tracks)
 
-        # Update playlist timestamp because contents changed
-        playlist.updated_at = datetime.now(timezone.utc)
+    # Update playlist timestamp because contents changed
+    playlist.updated_at = datetime.now(timezone.utc)
 
-        # Save all inserts at once
-        db.commit()
+    # Flush so callers can use ids before the final route-level commit.
+    db.flush()
 
-        # Refresh each new row so id/added_at are available
-        for playlist_track in new_playlist_tracks:
-            db.refresh(playlist_track)
-
-        # Return created playlist entries
-        return new_playlist_tracks
-
-    except Exception:
-        # Undo if insert fails
-        db.rollback()
-        raise
+    # Return created playlist entries
+    return new_playlist_tracks
 
 def remove_tracks_from_playlist(db, playlist_track_ids: list[int], playlist_id: int) -> None:
     # Find playlist
@@ -228,36 +190,29 @@ def remove_tracks_from_playlist(db, playlist_track_ids: list[int], playlist_id: 
         missing_ids = requested_ids - found_ids
         raise ValueError(f"Playlist tracks not found: {sorted(missing_ids)}")
 
-    try:
-        # Delete only the selected playlist-track rows
-        for row in rows_to_delete:
-            db.delete(row)
+    # Delete only the selected playlist-track rows
+    for row in rows_to_delete:
+        db.delete(row)
 
-        # Push deletion into the DB transaction before re-querying
-        db.flush()
+    # Push deletion into the DB transaction before re-querying
+    db.flush()
 
-        # Load remaining playlist entries in current order
-        remaining_rows = (
-            db.query(PlaylistTrack)
-            .filter(PlaylistTrack.playlist_id == playlist_id)
-            .order_by(PlaylistTrack.position.asc())
-            .all()
-        )
+    # Load remaining playlist entries in current order
+    remaining_rows = (
+        db.query(PlaylistTrack)
+        .filter(PlaylistTrack.playlist_id == playlist_id)
+        .order_by(PlaylistTrack.position.asc())
+        .all()
+    )
 
-        # Renumber remaining rows to 1, 2, 3...
-        for index, row in enumerate(remaining_rows, start=1):
-            row.position = index
+    # Renumber remaining rows to 1, 2, 3...
+    for index, row in enumerate(remaining_rows, start=1):
+        row.position = index
 
-        # Update playlist timestamp because contents changed
-        playlist.updated_at = datetime.now(timezone.utc)
+    # Update playlist timestamp because contents changed
+    playlist.updated_at = datetime.now(timezone.utc)
 
-        # Save deletion + renumbering together
-        db.commit()
-
-    except Exception:
-        # Undo if anything fails
-        db.rollback()
-        raise
+    db.flush()
 
 def reorder_playlist_tracks(db, playlist_id: int, playlist_track_ids: list[int]) -> None:
     # Find playlist
@@ -297,18 +252,11 @@ def reorder_playlist_tracks(db, playlist_id: int, playlist_track_ids: list[int])
     # Key = PlaylistTrack.id, Value = PlaylistTrack row
     track_by_id = {track.id: track for track in existing_tracks}
 
-    try:
-        # Rewrite position based on new order
-        for index, playlist_track_id in enumerate(playlist_track_ids, start=1):
-            track_by_id[playlist_track_id].position = index
+    # Rewrite position based on new order
+    for index, playlist_track_id in enumerate(playlist_track_ids, start=1):
+        track_by_id[playlist_track_id].position = index
 
-        # Update playlist timestamp because order changed
-        playlist.updated_at = datetime.now(timezone.utc)
+    # Update playlist timestamp because order changed
+    playlist.updated_at = datetime.now(timezone.utc)
 
-        # Save all position changes together
-        db.commit()
-
-    except Exception:
-        # Undo if reorder fails
-        db.rollback()
-        raise
+    db.flush()

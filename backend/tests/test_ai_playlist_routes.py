@@ -2,6 +2,7 @@ from app.models.tag import Tag
 from app.models.track import Track
 from app.models.track_tag import TrackTag
 from app.routes import ai_playlists as ai_playlists_route
+from app.models.playlist import Playlist
 from app.services.prompt_parser import parse_prompt
 
 
@@ -171,3 +172,29 @@ def test_generate_ai_playlist_trims_prompt_before_validation(
     assert response.status_code == 200
     assert response.json()["prompt"] == "chill study playlist"
     assert [item["id"] for item in response.json()["tracks"]] == [track.id]
+
+
+def test_generate_ai_playlist_rolls_back_playlist_when_add_tracks_fails(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    create_tagged_track(db_session, tmp_path, ["chill", "study"])
+
+    def fail_add_tracks_to_playlist(*_args, **_kwargs):
+        raise RuntimeError("forced add tracks failure")
+
+    monkeypatch.setattr(
+        ai_playlists_route,
+        "add_tracks_to_playlist",
+        fail_add_tracks_to_playlist,
+    )
+
+    response = client.post(
+        "/ai_playlists/generate",
+        json={"prompt": "chill study playlist", "limit": 10},
+    )
+
+    assert response.status_code == 500
+    assert db_session.query(Playlist).count() == 0
