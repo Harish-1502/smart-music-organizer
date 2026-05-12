@@ -96,3 +96,47 @@ def test_upload_track_art_accepts_non_image_bytes_with_image_mime_current_securi
 
     assert response.status_code == 200
     assert (art_dir / f"track_{track.id}.png").read_bytes() == b"not actually image data"
+
+
+def test_upload_track_art_ignores_filename_path_traversal(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    """
+    Hardened behavior:
+    - uploaded artwork storage uses a generated filename, not the user filename
+    """
+    art_dir = tmp_path / "track_art"
+    monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
+    track = make_track(db_session, tmp_path)
+
+    response = client.post(
+        f"/tracks/{track.id}/art",
+        files={"file": ("../../evil.png", b"image-ish", "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert (art_dir / f"track_{track.id}.png").exists()
+    assert not (tmp_path / "evil.png").exists()
+
+
+def test_upload_track_art_enforces_size_only_when_configured(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    art_dir = tmp_path / "track_art"
+    monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
+    monkeypatch.setattr("app.services.art.settings.upload_max_bytes", 4)
+    track = make_track(db_session, tmp_path)
+
+    response = client.post(
+        f"/tracks/{track.id}/art",
+        files={"file": ("cover.png", b"too-large", "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded file is too large."

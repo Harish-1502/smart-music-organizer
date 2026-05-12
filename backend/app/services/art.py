@@ -5,6 +5,12 @@ import shutil
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.path_guard import (
+    is_supported_artwork_file,
+    safe_resolve_path,
+    validate_upload_size,
+)
 from app.models.track import Track
 
 ARTWORK_FILENAMES = (
@@ -14,7 +20,7 @@ ARTWORK_FILENAMES = (
     "folder.png",
 )
 
-ART_DIR = Path("data/track_art")
+ART_DIR = settings.managed_artwork_dir
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -55,10 +61,16 @@ def upload_track_art(
     if not extension:
         raise ValueError("Invalid image type. Use JPG, PNG, or WebP.")
 
-    ART_DIR.mkdir(parents=True, exist_ok=True)
+    if not is_supported_artwork_file(f"artwork{extension}"):
+        raise ValueError("Invalid image type. Use JPG, PNG, or WebP.")
+
+    validate_upload_size(file, settings.upload_max_bytes)
+
+    art_dir = safe_resolve_path(ART_DIR, reject_parent_refs=False)
+    art_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"track_{track_id}{extension}"
-    file_path = ART_DIR / filename
+    file_path = art_dir / filename
 
     try:
         with file_path.open("wb") as buffer:

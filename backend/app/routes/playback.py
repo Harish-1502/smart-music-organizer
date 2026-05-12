@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.path_guard import (
+    PathSecurityError,
+    is_supported_audio_file,
+    is_within_any_directory,
+    safe_resolve_path,
+)
 from app.models.track import Track
 
 router = APIRouter(prefix="/tracks", tags=["playback"])
@@ -18,10 +25,22 @@ def stream_track(track_id: int, db: Session = Depends(get_db)):
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
 
-    file_path = Path(track.file_path)
+    try:
+        file_path = safe_resolve_path(track.file_path)
+    except PathSecurityError:
+        raise HTTPException(status_code=403, detail="Audio file path is not allowed")
+
+    if settings.allowed_scan_roots and not is_within_any_directory(
+        file_path,
+        settings.allowed_scan_roots,
+    ):
+        raise HTTPException(status_code=403, detail="Audio file path is not allowed")
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Audio file not found")
+
+    if not is_supported_audio_file(file_path):
+        raise HTTPException(status_code=400, detail="Unsupported audio file type")
 
     guessed_media_type, _ = mimetypes.guess_type(file_path.name)
 

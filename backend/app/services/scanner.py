@@ -1,4 +1,9 @@
 from pathlib import Path
+from app.core.config import settings
+from app.core.path_guard import (
+    is_supported_audio_file,
+    validate_scan_root,
+)
 from app.core.database import SessionLocal
 from sqlalchemy.orm import Session
 from app.models.track import Track
@@ -8,9 +13,6 @@ from app.services.tag_inference import apply_inferred_tags, refresh_inferred_tag
 from app.utils.normalize import apply_normalized_fields
 from app.services.track_audio_analysis import analyze_track_audio
 import threading
-
-# All support audio files
-SUPPORTED_EXTENSIONS = {".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}
 
 # internal scan data for send to front-end
 scan_state = {
@@ -41,18 +43,9 @@ def reset_scan_state():
         "last_error": None,
     })
 
-# Ensure file is a supported audio file
-def is_supported_audio_file(path: Path) -> bool:
-    return path.suffix.lower() in SUPPORTED_EXTENSIONS
-
 # Ensure scanning happens in the right folder
 def validate_folder(folder_path: str) -> Path:
-    path = Path(folder_path)
-    if not path.exists():
-        raise ValueError("Folder does not exist.")
-    if not path.is_dir():
-        raise ValueError("Provided path is not a folder.")
-    return path
+    return validate_scan_root(folder_path, settings.allowed_scan_roots)
 
 
 def scan_library(root: Path | str, db: Session):

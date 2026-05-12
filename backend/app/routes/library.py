@@ -5,6 +5,12 @@ from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.path_guard import (
+    PathSecurityError,
+    is_supported_artwork_file,
+    is_within_any_directory,
+    safe_resolve_path,
+)
 from app.schemas.library import LibraryScanRequest
 from app.services.scanner import run_scan_library, scan_state, reset_scan_state, validate_folder
 from app.models.track import Track
@@ -58,17 +64,48 @@ def clear_library(db: Session = Depends(get_db)):
         "deleted_tracks": deleted,
     }
 
+def _stored_track_art_paths(db: Session) -> set[Path]:
+    paths = set()
+
+    for (art_path,) in db.query(Track.art_path).filter(Track.art_path.isnot(None)).all():
+        if not art_path:
+            continue
+
+        try:
+            paths.add(safe_resolve_path(art_path, reject_parent_refs=False))
+        except PathSecurityError:
+            continue
+
+    return paths
+
+
 @router.get("/art")
-def get_album_art(path: str):
+def get_album_art(path: str, db: Session = Depends(get_db)):
     if not settings.enable_legacy_art_path_route:
         raise HTTPException(
             status_code=403,
             detail="Legacy artwork path access is disabled.",
         )
 
-    file_path = Path(path)
+    try:
+        file_path = safe_resolve_path(path)
+    except PathSecurityError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Image not found")
+
+    if not is_supported_artwork_file(file_path):
+        raise HTTPException(status_code=403, detail="Artwork path is not allowed")
+
+    managed_roots = [
+        *settings.managed_static_dirs,
+        settings.managed_artwork_dir,
+    ]
+    is_managed_file = is_within_any_directory(file_path, managed_roots)
+    is_stored_track_art = file_path in _stored_track_art_paths(db)
+
+    if not is_managed_file and not is_stored_track_art:
+        raise HTTPException(status_code=403, detail="Artwork path is not allowed")
 
     return FileResponse(file_path)

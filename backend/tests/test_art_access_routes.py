@@ -1,15 +1,42 @@
 from app.routes import library as library_route
+from app.models.track import Track
 
 
-def test_library_art_returns_existing_image_path(client, tmp_path):
+def make_track_with_art(db_session, tmp_path, art_path):
+    audio_path = tmp_path / "song.mp3"
+    audio_path.write_bytes(b"fake audio")
+
+    track = Track(
+        file_path=str(audio_path),
+        file_name="song.mp3",
+        extension=".mp3",
+        folder_path=str(tmp_path),
+        title="Song",
+        artist="Artist",
+        album="Album",
+        display_title="Song",
+        display_artist="Artist",
+        display_album="Album",
+        metadata_source="test",
+        art_path=str(art_path),
+        user_edited=False,
+    )
+    db_session.add(track)
+    db_session.commit()
+    db_session.refresh(track)
+    return track
+
+
+def test_library_art_returns_existing_stored_track_art_path(client, db_session, tmp_path):
     """
     Current behavior:
-    - /library/art accepts a raw filesystem path
-    - existing files are returned directly
+    - scanned artwork can live beside an audio file outside managed artwork dirs
+    - compatibility is preserved when the path is stored as Track.art_path
     """
     image_path = tmp_path / "cover.jpg"
     image_bytes = b"fake image bytes"
     image_path.write_bytes(image_bytes)
+    make_track_with_art(db_session, tmp_path, image_path)
 
     response = client.get("/library/art", params={"path": str(image_path)})
 
@@ -17,12 +44,20 @@ def test_library_art_returns_existing_image_path(client, tmp_path):
     assert response.content == image_bytes
 
 
-def test_library_art_enabled_by_default_allows_existing_path(client, tmp_path):
+def test_library_art_enabled_by_default_allows_managed_existing_path(
+    client,
+    tmp_path,
+    monkeypatch,
+):
     """
     Feature flag behavior:
     - ENABLE_LEGACY_ART_PATH_ROUTE defaults enabled, preserving current behavior
     """
-    image_path = tmp_path / "cover-default.jpg"
+    managed_dir = tmp_path / "managed"
+    managed_dir.mkdir()
+    monkeypatch.setattr(library_route.settings, "managed_static_dirs", [managed_dir])
+    monkeypatch.setattr(library_route.settings, "managed_artwork_dir", managed_dir / "art")
+    image_path = managed_dir / "cover-default.jpg"
     image_bytes = b"default enabled image bytes"
     image_path.write_bytes(image_bytes)
 
@@ -68,36 +103,36 @@ def test_library_art_returns_404_for_missing_path(client, tmp_path):
     assert response.json()["detail"] == "Image not found"
 
 
-def test_library_art_allows_arbitrary_existing_local_file_current_security_risk(
+def test_library_art_blocks_arbitrary_existing_local_file(
     client,
     tmp_path,
 ):
     """
-    Security-risk characterization:
+    Hardened behavior:
     - the endpoint is named for artwork
-    - current behavior returns any existing local file path, not only images
+    - arbitrary local files are no longer returned
     """
-    arbitrary_file = tmp_path / "not_art.txt"
+    arbitrary_file = tmp_path / "not-managed.jpg"
     file_bytes = b"this is not artwork"
     arbitrary_file.write_bytes(file_bytes)
 
     response = client.get("/library/art", params={"path": str(arbitrary_file)})
 
-    assert response.status_code == 200
-    assert response.content == file_bytes
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Artwork path is not allowed"
 
 
-def test_library_art_allows_parent_directory_path_traversal_current_security_risk(
+def test_library_art_blocks_parent_directory_path_traversal(
     client,
     tmp_path,
 ):
     """
-    Security-risk characterization:
-    - paths containing '..' are accepted when they resolve to an existing file
+    Hardened behavior:
+    - paths containing '..' are blocked before file access
     """
     nested_dir = tmp_path / "nested"
     nested_dir.mkdir()
-    secret_file = tmp_path / "secret.txt"
+    secret_file = tmp_path / "secret.jpg"
     secret_bytes = b"reachable through parent traversal"
     secret_file.write_bytes(secret_bytes)
 
@@ -105,5 +140,5 @@ def test_library_art_allows_parent_directory_path_traversal_current_security_ris
 
     response = client.get("/library/art", params={"path": str(traversal_path)})
 
-    assert response.status_code == 200
-    assert response.content == secret_bytes
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Parent directory references are not allowed."

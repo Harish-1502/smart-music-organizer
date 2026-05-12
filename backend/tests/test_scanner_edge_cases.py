@@ -1,4 +1,5 @@
 from app.models.track import Track
+from app.services import scanner as scanner_service
 from app.services.scanner import scan_library, reset_scan_state
 
 
@@ -66,6 +67,49 @@ def test_scan_ignores_folder_with_only_unsupported_files(tmp_path, db_session):
     assert scan_state["files_seen"] == 2
     assert scan_state["supported_found"] == 0
     assert scan_state["inserted"] == 0
+
+
+def test_scan_allows_any_existing_folder_when_allowed_scan_roots_empty(
+    tmp_path,
+    monkeypatch,
+    db_session,
+):
+    """
+    Hardened configuration behavior:
+    - empty allowed_scan_roots preserves current unrestricted scan behavior
+    """
+    monkeypatch.setattr(scanner_service.settings, "allowed_scan_roots", [])
+
+    root = tmp_path / "Music"
+    root.mkdir()
+
+    scan_library(str(root), db_session)
+
+    assert db_session.query(Track).count() == 0
+
+
+def test_scan_rejects_folder_outside_configured_allowed_scan_roots(
+    tmp_path,
+    monkeypatch,
+    db_session,
+):
+    """
+    Hardened configuration behavior:
+    - when allowed_scan_roots is configured, scans outside those roots fail
+    """
+    allowed_root = tmp_path / "Allowed"
+    blocked_root = tmp_path / "Blocked"
+    allowed_root.mkdir()
+    blocked_root.mkdir()
+
+    monkeypatch.setattr(scanner_service.settings, "allowed_scan_roots", [allowed_root])
+
+    try:
+        scan_library(str(blocked_root), db_session)
+    except ValueError as exc:
+        assert str(exc) == "Folder is outside the allowed scan roots."
+    else:
+        raise AssertionError("Expected scan_library to reject blocked_root")
 
 
 def test_scan_continues_when_metadata_extraction_fails(tmp_path, monkeypatch, db_session):
