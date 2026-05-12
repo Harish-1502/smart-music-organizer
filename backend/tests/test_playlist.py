@@ -289,3 +289,31 @@ def test_reorder_with_missing_id_fails(db_session):
 
     with pytest.raises(ValueError, match="Invalid reorder list"):
         reorder_playlist_tracks(db_session, playlist.id, bad_order)
+
+
+def test_bulk_delete_track_cascades_to_playlist_tracks(db_session):
+    playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
+    track = create_track(db_session, title="Song A")
+
+    playlist_tracks = add_tracks_to_playlist(db_session, [track.id], playlist.id)
+    db_session.commit()
+    track_id = track.id
+    playlist_track_id = playlist_tracks[0].id
+
+    deleted = (
+        db_session.query(Track)
+        .filter(Track.id == track_id)
+        .delete(synchronize_session=False)
+    )
+    db_session.commit()
+
+    assert deleted == 1
+    assert db_session.query(Track).filter(Track.id == track_id).first() is None
+    assert (
+        db_session.query(PlaylistTrack)
+        .filter(PlaylistTrack.id == playlist_track_id)
+        .first()
+        is None
+    )
