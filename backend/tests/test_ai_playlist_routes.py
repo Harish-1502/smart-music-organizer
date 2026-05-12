@@ -119,36 +119,55 @@ def test_generate_ai_playlist_returns_403_when_feature_flag_disabled(
     assert response.json()["detail"] == "AI playlist generation is disabled."
 
 
-def test_generate_ai_playlist_empty_prompt_returns_400(client):
+def test_generate_ai_playlist_empty_prompt_returns_422(client):
     """
-    Current behavior:
-    - empty prompts are rejected by the parser and returned as HTTP 400
+    Validation behavior:
+    - empty prompts are rejected before generation
     """
     response = client.post(
         "/ai_playlists/generate",
         json={"prompt": "", "limit": 10},
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Prompt cannot be empty."
+    assert response.status_code == 422
 
 
-def test_generate_ai_playlist_short_prompt_is_accepted_by_backend_current_behavior(
+def test_generate_ai_playlist_short_prompt_returns_422(
     client,
-    db_session,
-    tmp_path,
 ):
     """
-    Current behavior:
-    - the frontend rejects very short prompts, but the backend does not
-      enforce a minimum prompt length when matching tracks exist
+    Validation behavior:
+    - backend now matches the frontend's minimum prompt length expectation
     """
-    track = create_tagged_track(db_session, tmp_path, ["chill"])
-
     response = client.post(
         "/ai_playlists/generate",
         json={"prompt": "chill", "limit": 10},
     )
 
+    assert response.status_code == 422
+
+
+def test_generate_ai_playlist_too_long_prompt_returns_422(client):
+    response = client.post(
+        "/ai_playlists/generate",
+        json={"prompt": "a" * 501, "limit": 10},
+    )
+
+    assert response.status_code == 422
+
+
+def test_generate_ai_playlist_trims_prompt_before_validation(
+    client,
+    db_session,
+    tmp_path,
+):
+    track = create_tagged_track(db_session, tmp_path, ["chill", "study"])
+
+    response = client.post(
+        "/ai_playlists/generate",
+        json={"prompt": "   chill study playlist   ", "limit": 10},
+    )
+
     assert response.status_code == 200
+    assert response.json()["prompt"] == "chill study playlist"
     assert [item["id"] for item in response.json()["tracks"]] == [track.id]

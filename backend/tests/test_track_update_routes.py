@@ -93,6 +93,63 @@ def test_patch_track_updates_display_fields_too(client, db_session):
     assert track.user_edited is True
 
 
+def test_patch_track_trims_metadata_fields(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={
+            "title": "  Trimmed Title  ",
+            "artist": "  Trimmed Artist  ",
+            "album": "  Trimmed Album  ",
+        },
+    )
+
+    assert response.status_code == 200
+
+    db_session.refresh(track)
+    assert track.title == "Trimmed Title"
+    assert track.artist == "Trimmed Artist"
+    assert track.album == "Trimmed Album"
+
+
+def test_patch_track_rejects_empty_title_after_trimming(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"title": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_track_rejects_too_long_metadata_field(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"title": "a" * 256},
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_track_allows_clearing_artist_and_album(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"artist": "   ", "album": ""},
+    )
+
+    assert response.status_code == 200
+
+    db_session.refresh(track)
+    assert track.artist == ""
+    assert track.album == ""
+
+
 def test_patch_track_returns_404_for_missing_track(client):
     """
     Test:

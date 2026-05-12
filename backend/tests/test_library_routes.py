@@ -122,6 +122,24 @@ def test_post_scan_invalid_folder_returns_400(client):
     assert response.status_code == 400
 
 
+def test_post_scan_blank_folder_path_returns_422(client):
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+def test_post_scan_too_long_folder_path_returns_422(client):
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": "C:/" + ("a" * 1025)},
+    )
+
+    assert response.status_code == 422
+
+
 def test_get_scan_status_returns_expected_keys(client):
     """
     Test:

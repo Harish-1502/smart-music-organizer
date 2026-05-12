@@ -1,5 +1,8 @@
-from pydantic import BaseModel
 from typing import Optional, List
+
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.validators import strip_string
 
 class TrackOut(BaseModel):
     id: int
@@ -37,6 +40,18 @@ class PaginatedTracks(BaseModel):
     total_pages: int
 
 class TrackUpdateRequest(BaseModel):
-    title: str | None = None
-    artist: str | None = None
-    album: str | None = None
+    title: str | None = Field(default=None, max_length=255)
+    artist: str | None = Field(default=None, max_length=255)
+    album: str | None = Field(default=None, max_length=255)
+
+    @field_validator("title", "artist", "album", mode="before")
+    @classmethod
+    def strip_metadata_field(cls, value):
+        return strip_string(value)
+
+    @field_validator("title")
+    @classmethod
+    def reject_empty_title(cls, value):
+        if value == "":
+            raise ValueError("Title cannot be empty")
+        return value
