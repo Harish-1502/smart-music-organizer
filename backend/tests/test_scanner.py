@@ -18,7 +18,9 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 def setup_test_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    reset_scan_state()
     yield
+    reset_scan_state()
     Base.metadata.drop_all(bind=engine)
 
 

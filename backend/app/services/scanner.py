@@ -1,18 +1,21 @@
 from pathlib import Path
 from app.core.config import settings
 from app.core.path_guard import (
-    is_supported_audio_file,
     validate_scan_root,
 )
 from app.core.database import SessionLocal
 from sqlalchemy.orm import Session
 from app.models.track import Track
-from app.services.metadata import extract_metadata
-from app.services.art import detect_album_art
 from app.services.tag_inference import apply_inferred_tags, refresh_inferred_tags
 from app.utils.normalize import apply_normalized_fields
 from app.services.track_audio_analysis import analyze_track_audio
 from app.services.scan_state import reset_scan_state, scan_state
+from app.services.scan_file_discovery import discover_audio_files
+from app.services.scan_track_metadata import load_track_metadata_and_art
+from app.services.scan_track_persistence import (
+    apply_scanned_track_update,
+    build_scanned_track,
+)
 import threading
 
 thread_lock = threading.Lock()
@@ -42,20 +45,12 @@ def scan_library(root: Path | str, db: Session):
     seen_paths = set()
 
     try:
-        # All files and subfolders
-        for path in root.rglob("*"):
-
-            # File check
-            if not path.is_file():
-                continue
-
+        def mark_file_seen(path: Path):
             scan_state["files_seen"] += 1
             scan_state["current_file"] = str(path)
 
-            # Extension check
-            if not is_supported_audio_file(path):
-                continue
-
+        # All supported audio files from this folder and its subfolders
+        for path in discover_audio_files(root, on_file_seen=mark_file_seen):
             scan_state["supported_found"] += 1
 
             # Gets the paths from route to cur directory
@@ -67,62 +62,21 @@ def scan_library(root: Path | str, db: Session):
 
             existing = db.query(Track).filter(Track.file_path == normalized_file_path).first()
 
-            metadata = {
-                "title": None,
-                "artist": None,
-                "album": None,
-                "duration": None,
-                "metadata_source": "unknown",
-            }
-            art_path = None
-
-            try:
-                metadata = extract_metadata(resolved_path)
-                art_path = detect_album_art(resolved_path)
-            except Exception as e:
-                scan_state["last_error"] = f"Metadata extraction failed for {normalized_file_path}: {e}"
-
-            scanned_artist = metadata["artist"]
-            scanned_album = metadata["album"]
-            scanned_title = metadata["title"]
+            metadata, art_path, metadata_error = load_track_metadata_and_art(resolved_path)
+            if metadata_error:
+                scan_state["last_error"] = f"Metadata extraction failed for {normalized_file_path}: {metadata_error}"
 
             if existing:
                 scan_state["duplicates"] += 1
-                changed = False
+                changed = apply_scanned_track_update(
+                    existing,
+                    resolved_path,
+                    normalized_folder_path,
+                    metadata,
+                    art_path,
+                )
 
-                changed |= update_if_changed(existing, "file_name", resolved_path.name)
-                changed |= update_if_changed(existing, "extension", resolved_path.suffix.lower())
-                changed |= update_if_changed(existing, "folder_path", normalized_folder_path)
-
-                changed |= update_if_changed(existing, "scanned_title", scanned_title)
-                changed |= update_if_changed(existing, "scanned_artist", scanned_artist)
-                changed |= update_if_changed(existing, "scanned_album", scanned_album)
-
-                changed |= update_if_changed(existing, "duration", metadata.get("duration"))
-                changed |= update_if_changed(existing, "metadata_source", metadata.get("metadata_source", "unknown"))
-                changed |= update_if_changed(existing, "art_path", art_path)
-
-                if not existing.user_edited:
-                    if existing.title != scanned_title:
-                        existing.title = scanned_title
-                        changed = True
-                    if existing.artist != scanned_artist:
-                        existing.artist = scanned_artist
-                        changed = True
-                    if existing.album != scanned_album:
-                        existing.album = scanned_album
-                        changed = True
-
-                    if existing.display_title != scanned_title:
-                        existing.display_title = scanned_title
-                        changed = True
-                    if existing.display_artist != scanned_artist:
-                        existing.display_artist = scanned_artist
-                        changed = True
-                    if existing.display_album != scanned_album:
-                        existing.display_album = scanned_album
-                        changed = True
-                else:
+                if existing.user_edited:
                     scan_state["user_edited"] += 1
 
                 if changed:
@@ -143,29 +97,12 @@ def scan_library(root: Path | str, db: Session):
 
             
             try:
-                track = Track(
-                    file_path=normalized_file_path,
-                    file_name=resolved_path.name,
-                    extension=resolved_path.suffix.lower(),
-                    folder_path=normalized_folder_path,
-
-                    title=scanned_title,
-                    artist=scanned_artist,
-                    album=scanned_album,
-
-                    scanned_title=scanned_title,
-                    scanned_artist=scanned_artist,
-                    scanned_album=scanned_album,
-
-                    display_title=scanned_title,
-                    display_artist=scanned_artist,
-                    display_album=scanned_album,
-
-                    duration=metadata.get("duration"),
-                    metadata_source=metadata.get("metadata_source", "unknown"),
-                    art_path=art_path,
-
-                    user_edited=False,
+                track = build_scanned_track(
+                    resolved_path,
+                    normalized_file_path,
+                    normalized_folder_path,
+                    metadata,
+                    art_path,
                 )
 
                 apply_normalized_fields(track)
@@ -270,8 +207,3 @@ def run_scan_library(folder_path: str) -> str:
             reset_scan_state()
             raise ValueError(f"Failed to start scan: {exc}")
     
-def update_if_changed(obj, field_name, new_value):
-    if getattr(obj, field_name) != new_value:
-        setattr(obj, field_name, new_value)
-        return True
-    return False

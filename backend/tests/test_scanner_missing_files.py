@@ -47,8 +47,8 @@ def test_rescan_removes_tracks_for_deleted_files(tmp_path, monkeypatch, db_sessi
     def fake_detect_album_art(_path):
         return None
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     # First scan: both files should be inserted
     scan_library(str(music_dir), db_session)
@@ -111,8 +111,8 @@ def test_rescan_keeps_existing_tracks_when_no_files_are_deleted(tmp_path, monkey
     def fake_detect_album_art(_path):
         return None
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(str(music_dir), db_session)
     reset_scan_state()

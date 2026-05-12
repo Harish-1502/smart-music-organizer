@@ -36,8 +36,8 @@ def test_scan_skips_unsupported_files_and_scans_nested_audio(tmp_path, monkeypat
     def fake_detect_album_art(_path):
         return None
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(str(root), db_session)
 
@@ -138,8 +138,8 @@ def test_scan_continues_when_metadata_extraction_fails(tmp_path, monkeypatch, db
     def fake_detect_album_art(_path):
         return None
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(str(root), db_session)
 
