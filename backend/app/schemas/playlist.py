@@ -1,8 +1,9 @@
 from typing import Annotated, List
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
+from app.schemas.public_paths import expose_art_path
 from app.schemas.validators import strip_string
 
 
@@ -45,6 +46,10 @@ class PlaylistTrackResponse(BaseModel):
     artist: str | None = None
     album: str | None = None
     art_path: str | None = None
+
+    @field_serializer("art_path")
+    def serialize_art_path(self, value):
+        return expose_art_path(value)
 
 class PlaylistDetailResponse(BaseModel):
     id: int

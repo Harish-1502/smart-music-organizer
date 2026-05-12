@@ -18,6 +18,16 @@ const FALLBACK_TAG_CATEGORIES = [
   "custom",
 ];
 
+function getTrackArtPreviewUrl(track) {
+  const trackId = track?.track_id ?? track?.id;
+
+  if (trackId) {
+    return `http://localhost:8000/tracks/${trackId}/art`;
+  }
+
+  return track?.art_path || "";
+}
+
 export default function useTrackEdit({ loadTracks, setMessage }) {
   const [editStatus, setEditStatus] = useState("idle");
   const [showModal, setShowModal] = useState(false);
@@ -123,7 +133,7 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
       album: track.display_album || "",
     });
     
-    setArtPreviewUrl(track.art_path || "");
+    setArtPreviewUrl(getTrackArtPreviewUrl(track));
     setSelectedArtFile(null);
     setSelectedTagId("");
     setNewTagForm({

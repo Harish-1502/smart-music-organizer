@@ -4,6 +4,8 @@ from app.models.track import Track
 from app.models.playlist import Playlist
 from app.models.playlistTrack import PlaylistTrack
 from app.models.tag import Tag
+from app.models.track_tag import TrackTag
+from app.models.track_tag_suggestion import TrackTagSuggestion
 from app.services.scanner import reset_scan_state, scan_state
 
 client = TestClient(app)
@@ -246,15 +248,14 @@ def test_clear_library_deletes_tracks_but_preserves_unlinked_playlists_and_tags(
     assert db_session.query(Tag).count() == 1
 
 
-def test_clear_library_with_playlist_track_link_returns_500_current_bug(
+def test_clear_library_with_dependent_rows_deletes_tracks_and_links_only(
     client,
     db_session,
 ):
     """
-    Current behavior:
-    - /library/clear tries to delete tracks directly
-    - playlist_tracks rows are not deleted first
-    - a linked playlist track causes a server error instead of a clean clear
+    Expected behavior:
+    - /library/clear deletes dependent track links before deleting tracks
+    - playlists and tags are preserved
     """
     track = Track(
         file_path="C:/music/linked-song.mp3",
@@ -271,26 +272,42 @@ def test_clear_library_with_playlist_track_link_returns_500_current_bug(
         user_edited=False,
     )
     playlist = Playlist(name="Linked Playlist")
-    db_session.add_all([track, playlist])
+    tag = Tag(name="linked-tag", category="test")
+    db_session.add_all([track, playlist, tag])
     db_session.commit()
     db_session.refresh(track)
     db_session.refresh(playlist)
+    db_session.refresh(tag)
 
     playlist_track = PlaylistTrack(
         playlist_id=playlist.id,
         track_id=track.id,
         position=1,
     )
-    db_session.add(playlist_track)
+    track_tag = TrackTag(
+        track_id=track.id,
+        tag_id=tag.id,
+        source="manual",
+        confidence=1.0,
+    )
+    tag_suggestion = TrackTagSuggestion(
+        track_id=track.id,
+        tag_id=tag.id,
+        source="rule",
+        confidence=0.5,
+        status="pending",
+    )
+    db_session.add_all([playlist_track, track_tag, tag_suggestion])
     db_session.commit()
 
-    safe_client = TestClient(app, raise_server_exceptions=False)
+    response = client.delete("/library/clear")
 
-    response = safe_client.delete("/library/clear")
+    assert response.status_code == 200
+    assert response.json()["deleted_tracks"] == 1
 
-    assert response.status_code == 500
-
-    db_session.rollback()
-    assert db_session.query(Track).count() == 1
+    assert db_session.query(Track).count() == 0
+    assert db_session.query(PlaylistTrack).count() == 0
+    assert db_session.query(TrackTag).count() == 0
+    assert db_session.query(TrackTagSuggestion).count() == 0
     assert db_session.query(Playlist).count() == 1
-    assert db_session.query(PlaylistTrack).count() == 1
+    assert db_session.query(Tag).count() == 1

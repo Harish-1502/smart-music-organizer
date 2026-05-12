@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, field_validator
 
+from app.schemas.public_paths import expose_art_path
 from app.schemas.validators import strip_string
 
 
@@ -39,6 +40,10 @@ class GeneratedTrackResponse(BaseModel):
     display_album: str | None
     duration: float | None
     art_path: str | None
+
+    @field_serializer("art_path")
+    def serialize_art_path(self, value):
+        return expose_art_path(value)
 
 
 class GeneratePlaylistResponse(BaseModel):

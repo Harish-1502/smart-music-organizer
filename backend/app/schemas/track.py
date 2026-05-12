@@ -1,12 +1,13 @@
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
+from app.schemas.public_paths import expose_art_path, expose_local_path
 from app.schemas.validators import strip_string
 
 class TrackOut(BaseModel):
     id: int
-    file_path: str
+    file_path: Optional[str] = None
     file_name: str
     extension: Optional[str] = None
     folder_path: Optional[str] = None
@@ -30,6 +31,14 @@ class TrackOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("file_path", "folder_path")
+    def serialize_local_path(self, value):
+        return expose_local_path(value)
+
+    @field_serializer("art_path")
+    def serialize_art_path(self, value):
+        return expose_art_path(value)
 
 
 class PaginatedTracks(BaseModel):

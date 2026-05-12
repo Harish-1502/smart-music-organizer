@@ -13,7 +13,10 @@ from app.core.path_guard import (
 )
 from app.schemas.library import LibraryScanRequest
 from app.services.scanner import run_scan_library, scan_state, reset_scan_state, validate_folder
+from app.models.playlistTrack import PlaylistTrack
 from app.models.track import Track
+from app.models.track_tag import TrackTag
+from app.models.track_tag_suggestion import TrackTagSuggestion
 
 router = APIRouter(prefix="/library", tags=["library"])
 
@@ -45,13 +48,14 @@ def get_scan_status():
 
 @router.delete("/clear")
 def clear_library(db: Session = Depends(get_db)):
-    # deleted = db.query(Track).delete()
-    # db.commit()
-    # reset_scan_state()
-
     before = db.query(Track).count()
     print(f"\n[DEBUG /library/clear] tracks_before={before}")
-    deleted = db.query(Track).delete()
+
+    db.query(PlaylistTrack).delete(synchronize_session=False)
+    db.query(TrackTagSuggestion).delete(synchronize_session=False)
+    db.query(TrackTag).delete(synchronize_session=False)
+    deleted = db.query(Track).delete(synchronize_session=False)
+
     print(f"[DEBUG /library/clear] delete_returned={deleted}")
     db.commit()
     after = db.query(Track).count()
