@@ -1,12 +1,20 @@
 from fastapi import HTTPException
 from math import ceil
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.path_guard import (
+    PathSecurityError,
+    is_supported_artwork_file,
+    is_within_any_directory,
+    safe_resolve_path,
+)
 from app.models.track import Track
 from app.schemas.track import PaginatedTracks, TrackUpdateRequest
 from app.services.art import upload_track_art
@@ -16,6 +24,36 @@ from app.services.track_audio_analysis import analyze_track_audio
 from app.services.tag_inference import refresh_inferred_tags
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
+
+
+def _resolve_track_art_path(track: Track) -> Path:
+    if not track.art_path:
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    try:
+        file_path = safe_resolve_path(track.art_path)
+    except PathSecurityError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Artwork not found")
+
+    if not is_supported_artwork_file(file_path):
+        raise HTTPException(status_code=403, detail="Artwork path is not allowed")
+
+    managed_roots = [
+        *settings.managed_static_dirs,
+        settings.managed_artwork_dir,
+    ]
+
+    if is_within_any_directory(file_path, managed_roots):
+        return file_path
+
+    stored_path = safe_resolve_path(track.art_path, reject_parent_refs=False)
+    if file_path == stored_path:
+        return file_path
+
+    raise HTTPException(status_code=403, detail="Artwork path is not allowed")
 
 @router.get("", response_model=PaginatedTracks)
 def get_tracks(
@@ -145,6 +183,18 @@ def update_track_art(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@router.get("/{track_id}/art")
+def get_track_art(
+    track_id: int,
+    db: Session = Depends(get_db),
+):
+    track = db.query(Track).filter(Track.id == track_id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    return FileResponse(_resolve_track_art_path(track))
 
 
 @router.post("/{track_id}/deep-scan")

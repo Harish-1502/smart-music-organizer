@@ -91,7 +91,15 @@ function getPlaybackErrorMessage(error, audioElement) {
   return "Playback could not start. Try another track.";
 }
 
-function getTrackArtUrl(artPath) {
+function getTrackArtUrl(track) {
+  const trackId = track?.track_id ?? track?.id;
+
+  if (trackId) {
+    return `http://localhost:8000/tracks/${trackId}/art`;
+  }
+
+  const artPath = track?.art_path;
+
   if (typeof artPath !== "string" || !artPath.trim()) {
     return null;
   }
@@ -359,7 +367,7 @@ export default function PlayerPage() {
   const displayArtist = getDisplayArtist(currentTrack);
   const displayAlbum = getDisplayAlbum(currentTrack);
   const displayFileName = firstNonEmpty(currentTrack?.file_name, displayTitle);
-  const artUrl = getTrackArtUrl(currentTrack?.art_path);
+  const artUrl = getTrackArtUrl(currentTrack);
 
   const playerThemeVars = {
     ...(currentTrack?.accentColor

@@ -22,7 +22,15 @@ function safeInvokeAction(action) {
   }
 }
 
-function getTrackArtUrl(artPath) {
+function getTrackArtUrl(track) {
+  const trackId = track?.track_id ?? track?.id;
+
+  if (trackId) {
+    return `http://localhost:8000/tracks/${trackId}/art`;
+  }
+
+  const artPath = track?.art_path;
+
   if (typeof artPath !== "string" || !artPath.trim()) {
     return null;
   }
@@ -74,7 +82,7 @@ export default function MiniPlayer() {
     currentTrack?.scanned_artist ||
     "Unknown artist";
 
-  const artUrl = getTrackArtUrl(currentTrack?.art_path);
+  const artUrl = getTrackArtUrl(currentTrack);
 
   function handleOpenPlayer() {
     if (!currentTrack) {
