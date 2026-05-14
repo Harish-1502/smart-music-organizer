@@ -7,6 +7,7 @@ import {
   getTrackTags,
   removeTagFromTrack,
 } from "../api/tagsApi";
+import { trackArtUrlForTrack } from "../api/apiBase";
 
 const FALLBACK_TAG_CATEGORIES = [
   "mood",
@@ -19,13 +20,7 @@ const FALLBACK_TAG_CATEGORIES = [
 ];
 
 function getTrackArtPreviewUrl(track) {
-  const trackId = track?.track_id ?? track?.id;
-
-  if (trackId) {
-    return `http://localhost:8000/tracks/${trackId}/art`;
-  }
-
-  return track?.art_path || "";
+  return trackArtUrlForTrack(track) || "";
 }
 
 export default function useTrackEdit({ loadTracks, setMessage }) {

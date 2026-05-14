@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { trackStreamUrl } from "../api/apiBase";
 
 const PlayerContext = createContext(null);
 
-const API_BASE = "http://localhost:8000";
 const SHUFFLE_STORAGE_KEY = "smart-music-organizer:shuffle-enabled";
 const REPEAT_STORAGE_KEY = "smart-music-organizer:repeat-mode";
 const VALID_REPEAT_MODES = new Set(["off", "track", "playlist"]);
@@ -119,7 +119,7 @@ export function PlayerProvider({ children }) {
 
   function getStreamUrl(track) {
     const trackId = track.track_id ?? track.id;
-    return `${API_BASE}/tracks/${trackId}/stream`;
+    return trackStreamUrl(trackId);
   }
 
   function playQueue(tracks, startIndex = 0) {

@@ -12,6 +12,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { trackArtUrlForTrack } from "../api/apiBase";
 import { usePlayer } from "../context/PlayerContext";
 import "../styles/PlayerPage.css";
 
@@ -92,32 +93,7 @@ function getPlaybackErrorMessage(error, audioElement) {
 }
 
 function getTrackArtUrl(track) {
-  const trackId = track?.track_id ?? track?.id;
-
-  if (trackId) {
-    return `http://localhost:8000/tracks/${trackId}/art`;
-  }
-
-  const artPath = track?.art_path;
-
-  if (typeof artPath !== "string" || !artPath.trim()) {
-    return null;
-  }
-
-  const normalizedPath = artPath.trim();
-
-  if (
-    normalizedPath.startsWith("http://") ||
-    normalizedPath.startsWith("https://")
-  ) {
-    return normalizedPath;
-  }
-
-  if (normalizedPath.startsWith("/static/")) {
-    return `http://localhost:8000${normalizedPath}`;
-  }
-
-  return `http://localhost:8000/library/art?path=${encodeURIComponent(normalizedPath)}`;
+  return trackArtUrlForTrack(track);
 }
 
 export default function PlayerPage() {
