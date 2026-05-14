@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import mimetypes
 from pathlib import Path
 
@@ -16,6 +18,17 @@ from app.core.path_guard import (
 from app.models.track import Track
 
 router = APIRouter(prefix="/tracks", tags=["playback"])
+logger = logging.getLogger(__name__)
+
+
+class AudioFileResponse(FileResponse):
+    async def __call__(self, scope, receive, send):
+        try:
+            await super().__call__(scope, receive, send)
+        except asyncio.CancelledError:
+            logger.debug(
+                "Audio stream response was cancelled during shutdown or client disconnect."
+            )
 
 
 @router.get("/{track_id}/stream")
@@ -44,7 +57,7 @@ def stream_track(track_id: int, db: Session = Depends(get_db)):
 
     guessed_media_type, _ = mimetypes.guess_type(file_path.name)
 
-    return FileResponse(
+    return AudioFileResponse(
         path=file_path,
         media_type=guessed_media_type or "application/octet-stream",
         filename=file_path.name,

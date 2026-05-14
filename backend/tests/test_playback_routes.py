@@ -1,3 +1,8 @@
+import asyncio
+import logging
+
+import pytest
+
 from app.models.track import Track
 from app.routes import playback as playback_route
 
@@ -105,3 +110,33 @@ def test_stream_track_rejects_file_outside_allowed_scan_roots(
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Audio file path is not allowed"
+
+
+def test_audio_file_response_suppresses_expected_cancellation(monkeypatch, tmp_path, caplog):
+    audio_path = tmp_path / "song.mp3"
+    audio_path.write_bytes(b"fake audio")
+
+    async def raise_cancelled_error(self, scope, receive, send):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(playback_route.FileResponse, "__call__", raise_cancelled_error)
+    response = playback_route.AudioFileResponse(path=audio_path)
+
+    with caplog.at_level(logging.DEBUG, logger=playback_route.__name__):
+        asyncio.run(response({}, None, None))
+
+    assert "Audio stream response was cancelled" in caplog.text
+
+
+def test_audio_file_response_does_not_hide_real_errors(monkeypatch, tmp_path):
+    audio_path = tmp_path / "song.mp3"
+    audio_path.write_bytes(b"fake audio")
+
+    async def raise_runtime_error(self, scope, receive, send):
+        raise RuntimeError("real file send failure")
+
+    monkeypatch.setattr(playback_route.FileResponse, "__call__", raise_runtime_error)
+    response = playback_route.AudioFileResponse(path=audio_path)
+
+    with pytest.raises(RuntimeError, match="real file send failure"):
+        asyncio.run(response({}, None, None))
