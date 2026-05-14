@@ -16,6 +16,7 @@ from app.services.scan_track_persistence import (
     apply_scanned_track_update,
     build_scanned_track,
 )
+from app.services.scan_stale_cleanup import cleanup_stale_tracks
 import threading
 
 thread_lock = threading.Lock()
@@ -120,49 +121,16 @@ def scan_library(root: Path | str, db: Session):
                 scan_state["failed"] += 1
                 scan_state["last_error"] = f"Insert failed for {normalized_file_path}: {exc}"
 
-        # after loop: remove tracks under this root that were not seen this scan
-        print(
-            f"[DEBUG scan_library:cleanup] supported_found={scan_state['supported_found']} "
-            f"seen_paths={len(seen_paths)}"
+        _deleted, cleanup_error = cleanup_stale_tracks(
+            db,
+            root,
+            root_str,
+            seen_paths,
+            scan_state["supported_found"],
         )
-        if not seen_paths:
-            print(
-                f"[DEBUG scan_library:cleanup] WARNING seen_paths is empty for root={root_str}; "
-                "cleanup will target every DB row whose file_path starts with this root"
-            )
-
-        stale_tracks = db.query(Track).filter(Track.file_path.startswith(root_str))
-        if seen_paths:
-            stale_tracks = stale_tracks.filter(~Track.file_path.in_(seen_paths))
-
-        stale_list = stale_tracks.all()
-
-        print(f"[DEBUG scan_library:cleanup] stale_count={len(stale_list)}")
-        for track in stale_list[:10]:
-            candidate = Path(track.file_path)
-            real_inside_root = candidate == root or root in candidate.parents
-            print(
-                f"[DEBUG scan_library:cleanup] stale_candidate={track.file_path} "
-                f"real_inside_root={real_inside_root}"
-            )
-            
-        try:
-            stale_query = db.query(Track).filter(Track.file_path.startswith(root_str))
-
-            if seen_paths:
-                stale_query = stale_query.filter(~Track.file_path.in_(seen_paths))
-
-            deleted = stale_query.delete(synchronize_session=False)
-            print(f"[DEBUG scan_library:cleanup] delete_returned={deleted}")
-            db.commit()
-            print(
-                f"[DEBUG scan_library:cleanup] tracks_under_root_after="
-                f"{db.query(Track).filter(Track.file_path.startswith(root_str)).count()}"
-            )
-        except Exception as exc:
-            db.rollback()
+        if cleanup_error:
             scan_state["failed"] += 1
-            scan_state["last_error"] = f"Missing-file cleanup failed: {exc}"
+            scan_state["last_error"] = f"Missing-file cleanup failed: {cleanup_error}"
 
         scan_state["status"] = "completed"
         scan_state["current_file"] = None

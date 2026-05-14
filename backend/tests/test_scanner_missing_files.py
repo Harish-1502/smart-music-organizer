@@ -185,15 +185,16 @@ def test_rescan_does_not_delete_tracks_outside_scanned_root(
     assert db_session.query(Track).count() == 2
 
 
-def test_rescan_with_no_supported_files_deletes_all_tracks_under_root(
+def test_rescan_with_no_supported_files_preserves_tracks_under_root(
     tmp_path,
     monkeypatch,
     db_session,
+    capsys,
 ):
     """
-    Current risky behavior:
+    Hardened behavior:
     - when no supported files are seen, seen_paths is empty
-    - cleanup deletes every DB track whose file_path starts with the scanned root
+    - cleanup is skipped and DB tracks under the root are preserved
     """
 
     reset_scan_state()
@@ -228,9 +229,13 @@ def test_rescan_with_no_supported_files_deletes_all_tracks_under_root(
 
     scan_library(str(music_dir), db_session)
 
-    assert db_session.query(Track).count() == 0
+    output = capsys.readouterr().out
+
+    assert db_session.query(Track).count() == 1
+    assert db_session.query(Track).filter(Track.id == stale_track.id).first() is not None
     assert scan_state["files_seen"] == 1
     assert scan_state["supported_found"] == 0
+    assert "cleanup skipped because no supported audio files were found" in output
 
 
 def test_rescan_stale_track_linked_to_playlist_cascades_playlist_rows(
@@ -251,7 +256,9 @@ def test_rescan_stale_track_linked_to_playlist_cascades_playlist_rows(
     music_dir = tmp_path / "Music"
     music_dir.mkdir()
 
+    keep_file = music_dir / "keep.mp3"
     stale_file = music_dir / "stale.mp3"
+    keep_file.write_bytes(b"fake audio keep")
     stale_track = Track(
         file_path=str(stale_file.resolve()),
         file_name=stale_file.name,
