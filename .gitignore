@@ -1,27 +1,67 @@
-# Node
-node_modules/
-dist/
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
 
-# Python
+# Python / backend generated files
 __pycache__/
-*.pyc
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
 venv/
+backend/.venv/
+backend/venv/
 
-# Env
-.env
-
-# Database
+# SQLite databases and app data
 *.db
+*.sqlite
 *.sqlite3
+data/
+backend/data/
+backend/test_app.db
+backend/test_scanner.db
+
+# Frontend generated files
+node_modules/
+dist/
+dist-ssr/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+frontend/playwright/.cache/
+frontend/playwright/.auth/
+
+# Docker/local runtime data
+music/
+logs/
+*.log
 
 # OS / IDE
 .DS_Store
 Thumbs.db
+desktop.ini
 .vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # Capacitor / native builds
 android/
 ios/
+frontend/android/
+frontend/ios/
 
+# Project-specific local binaries
 chromaprint-fpcalc-1.6.0-windows-x86_64/

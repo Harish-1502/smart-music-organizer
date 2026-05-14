@@ -1,11 +1,15 @@
 services:
-  backend:
-    build: ./backend
-    container_name: smart-music-backend
+  smart-music-organizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-music-organizer
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/app:/app/app
-      - ./backend/data:/app/data
+      - ./data:/app/backend/data
+      - "${MUSIC_PATH:-./music}:/music:ro"
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: "1"
+      ALLOWED_SCAN_ROOTS: '["/music"]'
+      ACOUSTID_API_KEY: ${ACOUSTID_API_KEY:-}
