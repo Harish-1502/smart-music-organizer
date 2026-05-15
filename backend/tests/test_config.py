@@ -1,6 +1,11 @@
 from pathlib import Path
 
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.testclient import TestClient
+
+from app.core import database
 from app.core.config import Settings
+from app.main import app, settings as main_settings
 
 
 def test_default_settings_preserve_current_local_behavior():
@@ -51,3 +56,34 @@ def test_settings_support_environment_overrides(monkeypatch):
     assert settings.enable_deep_scan is False
     assert settings.enable_legacy_art_path_route is False
     assert settings.expose_local_paths is False
+
+
+def test_database_uses_configured_database_url():
+    assert database.DATABASE_URL == database.settings.database_url
+    assert str(database.engine.url) == database.settings.database_url
+
+
+def test_cors_allows_default_configured_origins():
+    client = TestClient(app)
+
+    for origin in main_settings.cors_origins:
+        response = client.options(
+            "/",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_main_cors_middleware_uses_settings_origins():
+    cors_middleware = next(
+        middleware
+        for middleware in app.user_middleware
+        if middleware.cls is CORSMiddleware
+    )
+
+    assert cors_middleware.kwargs["allow_origins"] == main_settings.cors_origins
