@@ -1,4 +1,7 @@
+import logging
+
 from app.models.track import Track
+from app.services import scan_stale_cleanup
 from app.services.scan_stale_cleanup import cleanup_stale_tracks
 
 
@@ -98,7 +101,7 @@ def test_cleanup_stale_tracks_preserves_tracks_outside_root(tmp_path, db_session
 def test_cleanup_stale_tracks_skips_cleanup_when_seen_paths_empty(
     tmp_path,
     db_session,
-    capsys,
+    caplog,
 ):
     root = tmp_path / "Music"
     root.mkdir()
@@ -107,20 +110,19 @@ def test_cleanup_stale_tracks_skips_cleanup_when_seen_paths_empty(
     db_session.add(make_track(stale_file, title="Stale"))
     db_session.commit()
 
-    deleted, error = cleanup_stale_tracks(
-        db_session,
-        root.resolve(),
-        str(root.resolve()),
-        set(),
-        supported_found=0,
-    )
-
-    output = capsys.readouterr().out
+    with caplog.at_level(logging.WARNING, logger=scan_stale_cleanup.__name__):
+        deleted, error = cleanup_stale_tracks(
+            db_session,
+            root.resolve(),
+            str(root.resolve()),
+            set(),
+            supported_found=0,
+        )
 
     assert error is None
     assert deleted == 0
     assert db_session.query(Track).count() == 1
-    assert "cleanup skipped because no supported audio files were found" in output
+    assert "Stale cleanup skipped because no supported audio files were found." in caplog.text
 
 
 def test_cleanup_stale_tracks_rolls_back_on_delete_error(

@@ -85,7 +85,7 @@ def get_tracks(
                 Track.display_album.ilike(search_term),
             )
         )   
-        print("search applied")
+        logger.debug("Track search filter applied")
     
     # DUBUG
     # print("Exact artist:", exact_artist)

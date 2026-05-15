@@ -1,4 +1,7 @@
 from pathlib import Path
+import logging
+import threading
+
 from app.core.config import settings
 from app.core.path_guard import (
     validate_scan_root,
@@ -17,8 +20,8 @@ from app.services.scan_track_persistence import (
     build_scanned_track,
 )
 from app.services.scan_stale_cleanup import cleanup_stale_tracks
-import threading
 
+logger = logging.getLogger(__name__)
 thread_lock = threading.Lock()
 
 # Ensure scanning happens in the right folder
@@ -36,11 +39,11 @@ def scan_library(root: Path | str, db: Session):
     root = validate_folder(str(root))
     root_str = str(root.resolve())
 
-    print(f"\n[DEBUG scan_library:start] root={root_str}")
-    print(f"[DEBUG scan_library:start] total_tracks_in_db={db.query(Track).count()}")
-    print(
-        f"[DEBUG scan_library:start] tracks_under_root="
-        f"{db.query(Track).filter(Track.file_path.startswith(root_str)).count()}"
+    logger.debug("Starting library scan for root=%s", root_str)
+    logger.debug("Total tracks in database before scan: %s", db.query(Track).count())
+    logger.debug(
+        "Tracks under scan root before scan: %s",
+        db.query(Track).filter(Track.file_path.startswith(root_str)).count(),
     )
 
     seen_paths = set()
@@ -93,10 +96,6 @@ def scan_library(root: Path | str, db: Session):
                         scan_state["last_error"] = f"Update failed for {normalized_file_path}: {exc}"
 
                 continue
-            # print("After:")
-            # print(scan_state)
-
-            
             try:
                 track = build_scanned_track(
                     resolved_path,

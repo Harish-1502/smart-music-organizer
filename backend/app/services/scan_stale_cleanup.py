@@ -1,8 +1,11 @@
 from pathlib import Path
+import logging
 
 from sqlalchemy.orm import Session
 
 from app.models.track import Track
+
+logger = logging.getLogger(__name__)
 
 
 def cleanup_stale_tracks(
@@ -12,14 +15,14 @@ def cleanup_stale_tracks(
     seen_paths: set[str],
     supported_found: int,
 ) -> tuple[int | None, Exception | None]:
-    print(
-        f"[DEBUG scan_library:cleanup] supported_found={supported_found} "
-        f"seen_paths={len(seen_paths)}"
+    logger.debug(
+        "Starting stale cleanup: supported_found=%s seen_paths=%s",
+        supported_found,
+        len(seen_paths),
     )
     if not seen_paths:
-        print(
-            f"[DEBUG scan_library:cleanup] WARNING seen_paths is empty for root={root_str}; "
-            "cleanup skipped because no supported audio files were found"
+        logger.warning(
+            "Stale cleanup skipped because no supported audio files were found."
         )
         return 0, None
 
@@ -29,13 +32,14 @@ def cleanup_stale_tracks(
 
     stale_list = stale_tracks.all()
 
-    print(f"[DEBUG scan_library:cleanup] stale_count={len(stale_list)}")
+    logger.debug("Stale cleanup candidate count: %s", len(stale_list))
     for track in stale_list[:10]:
         candidate = Path(track.file_path)
         real_inside_root = candidate == root or root in candidate.parents
-        print(
-            f"[DEBUG scan_library:cleanup] stale_candidate={track.file_path} "
-            f"real_inside_root={real_inside_root}"
+        logger.debug(
+            "Stale cleanup candidate=%s real_inside_root=%s",
+            track.file_path,
+            real_inside_root,
         )
 
     try:
@@ -45,11 +49,11 @@ def cleanup_stale_tracks(
             stale_query = stale_query.filter(~Track.file_path.in_(seen_paths))
 
         deleted = stale_query.delete(synchronize_session=False)
-        print(f"[DEBUG scan_library:cleanup] delete_returned={deleted}")
+        logger.debug("Stale cleanup delete returned: %s", deleted)
         db.commit()
-        print(
-            f"[DEBUG scan_library:cleanup] tracks_under_root_after="
-            f"{db.query(Track).filter(Track.file_path.startswith(root_str)).count()}"
+        logger.debug(
+            "Tracks under scan root after stale cleanup: %s",
+            db.query(Track).filter(Track.file_path.startswith(root_str)).count(),
         )
         return deleted, None
     except Exception as exc:

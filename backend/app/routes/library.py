@@ -29,8 +29,8 @@ def start_library_scan(payload: LibraryScanRequest):
         # validate path
         # validate_folder(payload.folder_path)
         resolved = validate_folder(payload.folder_path).resolve()
-        print(f"\n[DEBUG /library/scan] raw_folder={payload.folder_path!r}")
-        print(f"[DEBUG /library/scan] resolved_folder={resolved}")
+        logger.debug("Scan requested for raw folder=%r", payload.folder_path)
+        logger.debug("Resolved scan folder=%s", resolved)
 
         message = run_scan_library(payload.folder_path)
         # scan_library(payload.folder_path, db) #This would be removed and replaced with the threaded version
@@ -60,17 +60,17 @@ def get_scan_status():
 @router.delete("/clear")
 def clear_library(db: Session = Depends(get_db)):
     before = db.query(Track).count()
-    print(f"\n[DEBUG /library/clear] tracks_before={before}")
+    logger.debug("Clearing library with tracks_before=%s", before)
 
     db.query(PlaylistTrack).delete(synchronize_session=False)
     db.query(TrackTagSuggestion).delete(synchronize_session=False)
     db.query(TrackTag).delete(synchronize_session=False)
     deleted = db.query(Track).delete(synchronize_session=False)
 
-    print(f"[DEBUG /library/clear] delete_returned={deleted}")
+    logger.debug("Library clear track delete returned=%s", deleted)
     db.commit()
     after = db.query(Track).count()
-    print(f"[DEBUG /library/clear] tracks_after={after}")
+    logger.debug("Library clear tracks_after=%s", after)
     reset_scan_state()
 
 

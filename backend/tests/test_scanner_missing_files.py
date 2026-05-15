@@ -1,6 +1,8 @@
 from app.models.track import Track
+import logging
 from app.models.playlist import Playlist
 from app.models.playlistTrack import PlaylistTrack
+from app.services import scan_stale_cleanup
 from app.services.scan_state import scan_state
 from app.services.scanner import reset_scan_state, scan_library
 
@@ -189,7 +191,7 @@ def test_rescan_with_no_supported_files_preserves_tracks_under_root(
     tmp_path,
     monkeypatch,
     db_session,
-    capsys,
+    caplog,
 ):
     """
     Hardened behavior:
@@ -227,15 +229,14 @@ def test_rescan_with_no_supported_files_preserves_tracks_under_root(
     db_session.add(stale_track)
     db_session.commit()
 
-    scan_library(str(music_dir), db_session)
-
-    output = capsys.readouterr().out
+    with caplog.at_level(logging.WARNING, logger=scan_stale_cleanup.__name__):
+        scan_library(str(music_dir), db_session)
 
     assert db_session.query(Track).count() == 1
     assert db_session.query(Track).filter(Track.id == stale_track.id).first() is not None
     assert scan_state["files_seen"] == 1
     assert scan_state["supported_found"] == 0
-    assert "cleanup skipped because no supported audio files were found" in output
+    assert "Stale cleanup skipped because no supported audio files were found." in caplog.text
 
 
 def test_rescan_stale_track_linked_to_playlist_cascades_playlist_rows(
