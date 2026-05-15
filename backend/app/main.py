@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
 from fastapi.responses import FileResponse
+from app.core.config import settings
 from app.core.database import Base, engine
 from fastapi.staticfiles import StaticFiles
 from app.routes import (
@@ -77,6 +78,13 @@ def get_frontend_root_file(path: str) -> Path | None:
     return requested_path if requested_path.is_file() else None
 
 
+def resolve_backend_path(path: Path) -> Path:
+    if path.is_absolute():
+        return path
+
+    return BACKEND_ROOT / path
+
+
 @app.middleware("http")
 async def serve_react_app_for_html_navigation(request: Request, call_next):
     if frontend_build_available() and request.method in {"GET", "HEAD"}:
@@ -110,7 +118,13 @@ def root():
 if FRONTEND_ASSETS.is_dir():
     app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS), name="frontend-assets")
 
-app.mount("/static", StaticFiles(directory=BACKEND_ROOT / "data"), name="static")
+MANAGED_ARTWORK_STATIC_DIR = resolve_backend_path(settings.managed_artwork_dir)
+MANAGED_ARTWORK_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/static/track_art",
+    StaticFiles(directory=MANAGED_ARTWORK_STATIC_DIR),
+    name="track-art-static",
+)
 
 app.include_router(library.router)
 app.include_router(tracks.router)
