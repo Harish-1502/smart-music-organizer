@@ -6,6 +6,7 @@ from app.models.playlistTrack import PlaylistTrack
 from app.models.tag import Tag
 from app.models.track_tag import TrackTag
 from app.models.track_tag_suggestion import TrackTagSuggestion
+from app.routes import library as library_route
 from app.services.scanner import reset_scan_state, scan_state
 
 client = TestClient(app)
@@ -165,6 +166,67 @@ def test_get_scan_status_returns_expected_keys(client):
     assert "failed" in body
     assert "user_edited" in body
     assert "last_error" in body
+
+
+def test_scan_status_exposes_paths_by_default(client, monkeypatch):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", True)
+    reset_scan_state()
+    scan_state["current_file"] = "C:/Music/private/song.mp3"
+    scan_state["last_error"] = "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["current_file"] == "C:/Music/private/song.mp3"
+    assert body["last_error"] == "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+
+def test_scan_status_hides_current_file_when_local_paths_are_hidden(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", False)
+    reset_scan_state()
+    scan_state["current_file"] = "C:/Music/private/song.mp3"
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    assert response.json()["current_file"] is None
+    assert scan_state["current_file"] == "C:/Music/private/song.mp3"
+
+
+def test_scan_status_hides_last_error_when_local_paths_are_hidden(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", False)
+    reset_scan_state()
+    scan_state["last_error"] = "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    assert response.json()["last_error"] == "Scan error details hidden."
+    assert scan_state["last_error"] == "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+
+def test_scan_status_preserves_empty_last_error_when_local_paths_are_hidden(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", False)
+    reset_scan_state()
+    scan_state["current_file"] = "C:/Music/private/song.mp3"
+    scan_state["last_error"] = None
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    assert response.json()["current_file"] is None
+    assert response.json()["last_error"] is None
+    assert scan_state["last_error"] is None
 
 
 def test_clear_library_deletes_tracks_and_resets_scan_state(client, db_session):

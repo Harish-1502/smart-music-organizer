@@ -44,7 +44,15 @@ def start_library_scan(payload: LibraryScanRequest):
 
 @router.get("/scan_status")
 def get_scan_status():
-    return scan_state
+    public_scan_state = scan_state.copy()
+
+    if not settings.expose_local_paths:
+        public_scan_state["current_file"] = None
+
+        if public_scan_state.get("last_error"):
+            public_scan_state["last_error"] = "Scan error details hidden."
+
+    return public_scan_state
 
 @router.delete("/clear")
 def clear_library(db: Session = Depends(get_db)):
