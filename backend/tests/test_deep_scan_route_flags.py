@@ -78,3 +78,25 @@ def test_deep_scan_route_returns_403_when_feature_flag_disabled(
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Deep scan is disabled."
+
+
+def test_deep_scan_route_unexpected_error_hides_raw_exception(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    track = make_track(db_session, tmp_path)
+    private_path = "C:/Private/Music/song.mp3"
+
+    def fail_deep_scan_track(*_args, **_kwargs):
+        raise RuntimeError(f"fingerprint failed for {private_path}")
+
+    monkeypatch.setattr(tracks_route, "deep_scan_track", fail_deep_scan_track)
+
+    response = client.post(f"/tracks/{track.id}/deep-scan")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to deep scan track"
+    assert private_path not in response.text
+    assert "fingerprint failed" not in response.text

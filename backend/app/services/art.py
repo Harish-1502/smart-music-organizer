@@ -28,6 +28,10 @@ ALLOWED_IMAGE_TYPES = {
 }
 
 
+class ArtworkUploadError(RuntimeError):
+    """Raised when artwork upload fails after request validation passes."""
+
+
 def detect_album_art(file_path: str | Path) -> str | None:
     """
     Look for common local album art files in the same directory
@@ -66,13 +70,13 @@ def upload_track_art(
 
     validate_upload_size(file, settings.upload_max_bytes)
 
-    art_dir = safe_resolve_path(ART_DIR, reject_parent_refs=False)
-    art_dir.mkdir(parents=True, exist_ok=True)
-
     filename = f"track_{track_id}{extension}"
-    file_path = art_dir / filename
 
     try:
+        art_dir = safe_resolve_path(ART_DIR, reject_parent_refs=False)
+        art_dir.mkdir(parents=True, exist_ok=True)
+        file_path = art_dir / filename
+
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
@@ -88,9 +92,9 @@ def upload_track_art(
             "art_path": f"/static/track_art/{filename}",
         }
 
-    except Exception as e:
+    except Exception as exc:
         db.rollback()
-        raise ValueError(f"Failed to update track art: {e}")
+        raise ArtworkUploadError("Failed to upload artwork") from exc
 
     finally:
         file.file.close()

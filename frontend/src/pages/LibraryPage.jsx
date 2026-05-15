@@ -13,6 +13,7 @@ import useLibraryViews from "../hooks/useLibraryViews";
 import useTrackBrowser from "../hooks/useTrackBrowser";
 import TrackBrowser from "../components/TrackBrowser";
 import { usePlayer } from "../context/PlayerContext";
+import { isDemoMode } from "../utils/demoMode";
 import "../styles/library/LibraryPage.css";
 
 export default function LibraryPage() {
@@ -22,6 +23,7 @@ export default function LibraryPage() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const trackBrowser = useTrackBrowser();
+  const demoModeEnabled = isDemoMode();
   
   const {
     viewMode,
@@ -157,8 +159,12 @@ export default function LibraryPage() {
                 <span className="library-page__label">Music folder</span>
                 <input
                   className="library-page__input"
-                  type="text"
-                  placeholder="Enter music folder path"
+                  type={demoModeEnabled ? "password" : "text"}
+                  placeholder={
+                    demoModeEnabled
+                      ? "Path hidden in demo mode"
+                      : "Enter music folder path"
+                  }
                   value={folderPath}
                   onChange={(e) => setFolderPath(e.target.value)}
                 />

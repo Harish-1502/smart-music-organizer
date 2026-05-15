@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -24,6 +25,7 @@ from app.services.playlist_generator import (
 )
 
 router = APIRouter(prefix="/ai_playlists", tags=["ai_playlists"])
+logger = logging.getLogger(__name__)
 
 @router.post("/generate", response_model=GeneratePlaylistResponse)
 def generate_ai_playlist(
@@ -93,11 +95,12 @@ def generate_ai_playlist(
         db.commit()
         db.refresh(playlist)
 
-    except Exception as error:
+    except Exception:
         db.rollback()
+        logger.exception("Failed to generate AI playlist")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to create AI playlist: {error}",
+            detail="Failed to generate playlist",
         )
 
     total_duration_seconds = sum(

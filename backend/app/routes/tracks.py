@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+import logging
 from math import ceil
 from pathlib import Path
 
@@ -17,13 +18,14 @@ from app.core.path_guard import (
 )
 from app.models.track import Track
 from app.schemas.track import PaginatedTracks, TrackUpdateRequest
-from app.services.art import upload_track_art
+from app.services.art import ArtworkUploadError, upload_track_art
 from app.services.tag_inference import apply_inferred_tags
 from app.services.deep_scan import deep_scan_track
 from app.services.track_audio_analysis import analyze_track_audio
 from app.services.tag_inference import refresh_inferred_tags
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
+logger = logging.getLogger(__name__)
 
 
 def _resolve_track_art_path(track: Track) -> Path:
@@ -153,14 +155,14 @@ def update_track(track_id: int, data: TrackUpdateRequest, db: Session = Depends(
         track.album = data.album
         track.display_album = data.album
 
-    apply_inferred_tags(db, track)
-
     try:
+        apply_inferred_tags(db, track)
         db.commit()
         db.refresh(track)
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update track: {e}")
+        logger.exception("Failed to update track", extra={"track_id": track_id})
+        raise HTTPException(status_code=500, detail="Failed to update track")
     
     return TrackUpdateRequest(
         title=track.title,
@@ -182,6 +184,9 @@ def update_track_art(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except ArtworkUploadError:
+        logger.exception("Failed to upload artwork", extra={"track_id": track_id})
+        raise HTTPException(status_code=500, detail="Failed to upload artwork")
 
 
 @router.get("/{track_id}/art")
@@ -217,11 +222,12 @@ def deep_scan_track_route(
         result = deep_scan_track(db, track)
         db.commit()
 
-    except Exception as error:
+    except Exception:
         db.rollback()
+        logger.exception("Failed to deep scan track", extra={"track_id": track_id})
         raise HTTPException(
             status_code=500,
-            detail=f"Deep scan failed: {error}",
+            detail="Failed to deep scan track",
         )
 
     return {

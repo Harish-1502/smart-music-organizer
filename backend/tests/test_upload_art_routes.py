@@ -140,3 +140,25 @@ def test_upload_track_art_enforces_size_only_when_configured(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Uploaded file is too large."
+
+
+def test_upload_track_art_unexpected_error_hides_raw_exception(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    private_path = tmp_path / "C_Private_Music_song.mp3"
+    private_path.write_bytes(b"not a directory")
+    monkeypatch.setattr("app.services.art.ART_DIR", private_path)
+    track = make_track(db_session, tmp_path)
+
+    response = client.post(
+        f"/tracks/{track.id}/art",
+        files={"file": ("cover.png", b"image-ish", "image/png")},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to upload artwork"
+    assert str(private_path) not in response.text
+    assert "not a directory" not in response.text

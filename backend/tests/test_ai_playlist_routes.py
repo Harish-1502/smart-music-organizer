@@ -181,9 +181,10 @@ def test_generate_ai_playlist_rolls_back_playlist_when_add_tracks_fails(
     monkeypatch,
 ):
     create_tagged_track(db_session, tmp_path, ["chill", "study"])
+    private_path = "C:/Private/Music/song.mp3"
 
     def fail_add_tracks_to_playlist(*_args, **_kwargs):
-        raise RuntimeError("forced add tracks failure")
+        raise RuntimeError(f"forced add tracks failure near {private_path}")
 
     monkeypatch.setattr(
         ai_playlists_route,
@@ -197,4 +198,7 @@ def test_generate_ai_playlist_rolls_back_playlist_when_add_tracks_fails(
     )
 
     assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to generate playlist"
+    assert private_path not in response.text
+    assert "forced add tracks failure" not in response.text
     assert db_session.query(Playlist).count() == 0

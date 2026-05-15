@@ -125,6 +125,29 @@ def test_post_scan_invalid_folder_returns_400(client):
     assert response.status_code == 400
 
 
+def test_post_scan_unexpected_error_hides_raw_exception(
+    client,
+    tmp_path,
+    monkeypatch,
+):
+    private_path = "C:/Private/Music/song.mp3"
+
+    def fail_run_scan_library(_folder_path):
+        raise RuntimeError(f"boom while reading {private_path}")
+
+    monkeypatch.setattr(library_route, "run_scan_library", fail_run_scan_library)
+
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": str(tmp_path)},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to scan library"
+    assert private_path not in response.text
+    assert "boom while reading" not in response.text
+
+
 def test_post_scan_blank_folder_path_returns_422(client):
     response = client.post(
         "/library/scan",

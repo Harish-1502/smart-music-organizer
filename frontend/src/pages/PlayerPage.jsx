@@ -14,6 +14,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { trackArtUrlForTrack } from "../api/apiBase";
 import { usePlayer } from "../context/PlayerContext";
+import { maskTrack, shouldHideDemoArtwork } from "../utils/demoMode";
 import "../styles/PlayerPage.css";
 
 function formatTime(seconds) {
@@ -339,11 +340,12 @@ export default function PlayerPage() {
       : isLoading
         ? "Loading..."
         : "";
-  const displayTitle = getDisplayTitle(currentTrack);
-  const displayArtist = getDisplayArtist(currentTrack);
-  const displayAlbum = getDisplayAlbum(currentTrack);
-  const displayFileName = firstNonEmpty(currentTrack?.file_name, displayTitle);
-  const artUrl = getTrackArtUrl(currentTrack);
+  const displayCurrentTrack = maskTrack(currentTrack, currentIndex);
+  const displayTitle = getDisplayTitle(displayCurrentTrack);
+  const displayArtist = getDisplayArtist(displayCurrentTrack);
+  const displayAlbum = getDisplayAlbum(displayCurrentTrack);
+  const displayFileName = firstNonEmpty(displayCurrentTrack?.file_name, displayTitle);
+  const artUrl = shouldHideDemoArtwork() ? null : getTrackArtUrl(currentTrack);
 
   const playerThemeVars = {
     ...(currentTrack?.accentColor
@@ -895,6 +897,7 @@ export default function PlayerPage() {
                 const isTrackValid = track && typeof track === "object";
                 const isInteractive = canJumpQueue && isTrackValid;
                 const itemKey = `${track?.track_id ?? track?.id ?? "queue"}-${index}`;
+                const displayQueueTrack = maskTrack(track, index);
 
                 if (isInteractive) {
                   return (
@@ -912,10 +915,10 @@ export default function PlayerPage() {
                       </span>
                       <span className="player-page__queue-text">
                         <span className="player-page__queue-title">
-                          {getQueueTrackTitle(track)}
+                          {getQueueTrackTitle(displayQueueTrack)}
                         </span>
                         <span className="player-page__queue-artist">
-                          {getQueueTrackArtist(track)}
+                          {getQueueTrackArtist(displayQueueTrack)}
                         </span>
                       </span>
                     </button>
@@ -936,10 +939,10 @@ export default function PlayerPage() {
                     </span>
                     <span className="player-page__queue-text">
                       <span className="player-page__queue-title">
-                        {getQueueTrackTitle(track)}
+                        {getQueueTrackTitle(displayQueueTrack)}
                       </span>
                       <span className="player-page__queue-artist">
-                        {getQueueTrackArtist(track)}
+                        {getQueueTrackArtist(displayQueueTrack)}
                       </span>
                     </span>
                   </div>

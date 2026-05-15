@@ -1,5 +1,6 @@
 import pytest
 from app.models.track import Track
+from app.routes import tracks as tracks_route
 
 
 def make_track(db_session, **overrides):
@@ -187,3 +188,27 @@ def test_patch_track_with_empty_payload_does_not_crash(client, db_session):
     assert track.title == "Old Title"
     assert track.artist == "Old Artist"
     assert track.album == "Old Album"
+
+
+def test_patch_track_unexpected_error_hides_raw_exception(
+    client,
+    db_session,
+    monkeypatch,
+):
+    private_path = "C:/Private/Music/song.mp3"
+    track = make_track(db_session)
+
+    def fail_apply_inferred_tags(*_args, **_kwargs):
+        raise RuntimeError(f"database failed near {private_path}")
+
+    monkeypatch.setattr(tracks_route, "apply_inferred_tags", fail_apply_inferred_tags)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"title": "New Title"},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to update track"
+    assert private_path not in response.text
+    assert "database failed" not in response.text

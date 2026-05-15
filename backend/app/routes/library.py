@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pathlib import Path
 from fastapi.responses import FileResponse
+import logging
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -19,6 +20,7 @@ from app.models.track_tag import TrackTag
 from app.models.track_tag_suggestion import TrackTagSuggestion
 
 router = APIRouter(prefix="/library", tags=["library"])
+logger = logging.getLogger(__name__)
 
 @router.post("/scan")
 def start_library_scan(payload: LibraryScanRequest):
@@ -39,8 +41,9 @@ def start_library_scan(payload: LibraryScanRequest):
         # return {"message": "Scan completed"}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Scan failed: {exc}")
+    except Exception:
+        logger.exception("Failed to scan library")
+        raise HTTPException(status_code=500, detail="Failed to scan library")
 
 @router.get("/scan_status")
 def get_scan_status():

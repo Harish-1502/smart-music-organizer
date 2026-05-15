@@ -9,6 +9,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { trackArtUrlForTrack } from "../api/apiBase";
 import { usePlayer } from "../context/PlayerContext";
+import { maskTrack, shouldHideDemoArtwork } from "../utils/demoMode";
 
 // Call actions safely from JSX without recreating the wrapper each render.
 function safeInvokeAction(action) {
@@ -45,20 +46,21 @@ export default function MiniPlayer() {
     return null;
   }
 
+  const displayTrack = maskTrack(currentTrack);
   const title =
-    currentTrack?.title ||
-    currentTrack?.display_title ||
-    currentTrack?.scanned_title ||
-    currentTrack?.file_name ||
+    displayTrack?.title ||
+    displayTrack?.display_title ||
+    displayTrack?.scanned_title ||
+    displayTrack?.file_name ||
     "Unknown track";
 
   const artist =
-    currentTrack?.artist ||
-    currentTrack?.display_artist ||
-    currentTrack?.scanned_artist ||
+    displayTrack?.artist ||
+    displayTrack?.display_artist ||
+    displayTrack?.scanned_artist ||
     "Unknown artist";
 
-  const artUrl = getTrackArtUrl(currentTrack);
+  const artUrl = shouldHideDemoArtwork() ? null : getTrackArtUrl(currentTrack);
 
   function handleOpenPlayer() {
     if (!currentTrack) {

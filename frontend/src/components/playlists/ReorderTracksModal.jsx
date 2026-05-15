@@ -14,6 +14,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { maskTrack } from "../../utils/demoMode";
 import "../../styles/playlist/ReorderPlaylistModal.css";
 
 function SortableTrackRow({ track }) {
@@ -31,6 +32,7 @@ function SortableTrackRow({ track }) {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const displayTrack = maskTrack(track, track.position ? track.position - 1 : 0);
 
   return (
     <div
@@ -43,9 +45,9 @@ function SortableTrackRow({ track }) {
       <span className="reorder-track-row__handle" aria-hidden="true"></span>
 
       <div className="reorder-track-row__content">
-        <strong className="reorder-track-row__title">{track.title}</strong>
+        <strong className="reorder-track-row__title">{displayTrack.title}</strong>
         <span className="reorder-track-row__meta">
-          {track.artist || "Unknown Artist"}
+          {displayTrack.artist || "Unknown Artist"}
         </span>
       </div>
     </div>

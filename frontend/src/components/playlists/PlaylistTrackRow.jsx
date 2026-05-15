@@ -1,23 +1,27 @@
+import { maskTrack } from "../../utils/demoMode";
+
 export default function PlaylistTrackRow({ track, onRemove, onPlay }) {
+  const displayTrack = maskTrack(track, track.position ? track.position - 1 : 0);
+
   return (
     <div className="playlist-detail-page__track-card" role="listitem">
       <button
         type="button"
         className="playlist-detail-page__track-trigger"
         onClick={onPlay}
-        aria-label={`Play ${track.title}`}
+        aria-label={`Play ${displayTrack.title}`}
       >
         <span className="playlist-detail-page__track-position">{track.position}</span>
 
         <span className="playlist-detail-page__track-copy">
-          <strong className="playlist-detail-page__track-title">{track.title}</strong>
+          <strong className="playlist-detail-page__track-title">{displayTrack.title}</strong>
 
           <span className="playlist-detail-page__track-meta">
             <span className="playlist-detail-page__track-artist">
-              {track.artist || "Unknown Artist"}
+              {displayTrack.artist || "Unknown Artist"}
             </span>
 
-            {track.album && (
+            {displayTrack.album && (
               <>
                 <span
                   className="playlist-detail-page__track-separator"
@@ -26,7 +30,7 @@ export default function PlaylistTrackRow({ track, onRemove, onPlay }) {
                   |
                 </span>
                 <span className="playlist-detail-page__track-album">
-                  {track.album}
+                  {displayTrack.album}
                 </span>
               </>
             )}
