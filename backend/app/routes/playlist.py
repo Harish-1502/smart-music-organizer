@@ -70,6 +70,7 @@ def get_playlist_detail(playlist_id: int, db: Session = Depends(get_db)):
                 title=track.title,
                 artist=track.artist,
                 album=track.album,
+                art_path=track.art_path,
             )
         )
 
@@ -127,6 +128,7 @@ def add_track_to_playlist(
                     title=track.title,
                     artist=track.artist,
                     album=track.album,
+                    art_path=track.art_path,
                 )
             )
 

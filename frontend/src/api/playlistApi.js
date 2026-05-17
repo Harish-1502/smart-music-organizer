@@ -49,3 +49,10 @@ export async function reorderPlaylist(playlistId, playlistTrackIds) {
   });
   return response.data;
 }
+
+export async function generateAiPlaylist(prompt) {
+  const response = await axios.post(`${API_BASE}/ai_playlists/generate`, {
+    prompt,
+  });
+  return response.data;
+}

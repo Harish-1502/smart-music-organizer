@@ -1,13 +1,25 @@
 from fastapi import HTTPException
 from math import ceil
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.track import Track
 from app.schemas.track import PaginatedTracks, TrackUpdateRequest
+from app.services.art import upload_track_art
+from app.services.tag_inference import apply_inferred_tags
+from app.services.deep_scan import deep_scan_track
+from app.models.track_tag_suggestion import TrackTagSuggestion
+from app.schemas.tags import TrackTagSuggestionResponse
+from app.services.tag_suggestions import (
+    refresh_track_tag_suggestions,
+    accept_tag_suggestion,
+    reject_tag_suggestion,
+)
+from app.services.track_audio_analysis import analyze_track_audio
+from app.services.tag_inference import refresh_inferred_tags
 
 router = APIRouter(prefix="/tracks", tags=["tracks"])
 
@@ -109,6 +121,8 @@ def update_track(track_id: int, data: TrackUpdateRequest, db: Session = Depends(
         track.album = data.album
         track.display_album = data.album
 
+    apply_inferred_tags(db, track)
+
     try:
         db.commit()
         db.refresh(track)
@@ -121,3 +135,224 @@ def update_track(track_id: int, data: TrackUpdateRequest, db: Session = Depends(
         artist=track.artist,
         album=track.album,
     )
+
+@router.post("/{track_id}/art")
+def update_track_art(
+    track_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        return upload_track_art(
+            db=db,
+            track_id=track_id,
+            file=file,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+
+@router.post("/{track_id}/deep-scan")
+def deep_scan_track_route(
+    track_id: int,
+    db: Session = Depends(get_db),
+):
+    track = db.query(Track).filter(Track.id == track_id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    try:
+        result = deep_scan_track(db, track)
+        db.commit()
+
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Deep scan failed: {error}",
+        )
+
+    return {
+        "track_id": result.track_id,
+        "method_used": result.method_used,
+        "musicbrainz_recording_id": result.musicbrainz_recording_id,
+        "warnings": result.warnings,
+        "applied_tags": [
+            {
+                "name": track_tag.tag.name,
+                "category": track_tag.tag.category,
+                "source": track_tag.source,
+                "confidence": track_tag.confidence,
+            }
+            for track_tag in result.applied_tags
+        ],
+    }
+
+
+@router.get("/{track_id}/tag-suggestions", response_model=list[TrackTagSuggestionResponse])
+def get_track_tag_suggestions(
+    track_id: int,
+    db: Session = Depends(get_db),
+):
+    track = db.query(Track).filter(Track.id == track_id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    suggestions = (
+        db.query(TrackTagSuggestion)
+        .filter(
+            TrackTagSuggestion.track_id == track_id,
+            TrackTagSuggestion.status == "pending",
+        )
+        .all()
+    )
+
+    return [
+        TrackTagSuggestionResponse(
+            id=suggestion.id,
+            tag_id=suggestion.tag.id,
+            name=suggestion.tag.name,
+            category=suggestion.tag.category,
+            source=suggestion.source,
+            confidence=suggestion.confidence,
+            status=suggestion.status,
+            reason=suggestion.reason,
+            created_at=suggestion.created_at,
+        )
+        for suggestion in suggestions
+    ]
+
+
+@router.post("/{track_id}/tag-suggestions/refresh", response_model=list[TrackTagSuggestionResponse])
+def refresh_track_suggestions_route(
+    track_id: int,
+    db: Session = Depends(get_db),
+):
+    track = db.query(Track).filter(Track.id == track_id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    try:
+        suggestions = refresh_track_tag_suggestions(db, track)
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to refresh tag suggestions: {error}",
+        )
+
+    return [
+        TrackTagSuggestionResponse(
+            id=suggestion.id,
+            tag_id=suggestion.tag.id,
+            name=suggestion.tag.name,
+            category=suggestion.tag.category,
+            source=suggestion.source,
+            confidence=suggestion.confidence,
+            status=suggestion.status,
+            reason=suggestion.reason,
+            created_at=suggestion.created_at,
+        )
+        for suggestion in suggestions
+        if suggestion.status == "pending"
+    ]
+
+
+@router.post("/{track_id}/tag-suggestions/{suggestion_id}/accept")
+def accept_track_tag_suggestion_route(
+    track_id: int,
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        track_tag = accept_tag_suggestion(
+            db=db,
+            track_id=track_id,
+            suggestion_id=suggestion_id,
+        )
+        db.commit()
+        db.refresh(track_tag)
+
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(error))
+
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to accept suggestion: {error}",
+        )
+
+    return {
+        "message": "Suggestion accepted",
+        "track_tag_id": track_tag.id,
+    }
+
+@router.post("/{track_id}/tag-suggestions/{suggestion_id}/reject")
+def reject_track_tag_suggestion_route(
+    track_id: int,
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        suggestion = reject_tag_suggestion(
+            db=db,
+            track_id=track_id,
+            suggestion_id=suggestion_id,
+        )
+        db.commit()
+
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(error))
+
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reject suggestion: {error}",
+        )
+
+    return {
+        "message": "Suggestion rejected",
+        "suggestion_id": suggestion.id,
+    }
+
+@router.post("/{track_id}/audio-analysis/refresh")
+def refresh_track_audio_analysis_route(
+    track_id: int,
+    db: Session = Depends(get_db),
+):
+    track = db.query(Track).filter(Track.id == track_id).first()
+
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    try:
+        analyze_track_audio(db, track)
+        refresh_inferred_tags(db, track)
+        db.commit()
+        db.refresh(track)
+
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to refresh audio analysis: {error}",
+        )
+
+    return {
+        "track_id": track.id,
+        "bpm": track.bpm,
+        "bpm_confidence": track.bpm_confidence,
+        "energy_score": track.energy_score,
+        "energy_label": track.energy_label,
+        "energy_confidence": track.energy_confidence,
+        "audio_analysis_error": track.audio_analysis_error,
+    }

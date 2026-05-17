@@ -1,0 +1,196 @@
+import {
+  ArrowLeft,
+  ArrowRight,
+  Pause,
+  Play,
+  Repeat,
+  Shuffle,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { usePlayer } from "../context/PlayerContext";
+
+// Call actions safely from JSX without recreating the wrapper each render.
+function safeInvokeAction(action) {
+  if (typeof action !== "function") {
+    return;
+  }
+
+  try {
+    action();
+  } catch (error) {
+    console.error("MiniPlayer control failed:", error);
+  }
+}
+
+function getTrackArtUrl(artPath) {
+  if (typeof artPath !== "string" || !artPath.trim()) {
+    return null;
+  }
+
+  const normalizedPath = artPath.trim();
+
+  if (
+    normalizedPath.startsWith("http://") ||
+    normalizedPath.startsWith("https://")
+  ) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath.startsWith("/static/")) {
+    return `http://localhost:8000${normalizedPath}`;
+  }
+
+  return `http://localhost:8000/library/art?path=${encodeURIComponent(normalizedPath)}`;
+}
+
+export default function MiniPlayer() {
+  const navigate = useNavigate();
+  const {
+    currentTrack,
+    isPlaying,
+    togglePlayPause,
+    nextTrack,
+    previousTrack,
+    shuffleEnabled,
+    repeatMode,
+    toggleShuffle,
+    cycleRepeatMode,
+  } = usePlayer();
+
+  if (!currentTrack) {
+    return null;
+  }
+
+  const title =
+    currentTrack?.title ||
+    currentTrack?.display_title ||
+    currentTrack?.scanned_title ||
+    currentTrack?.file_name ||
+    "Unknown track";
+
+  const artist =
+    currentTrack?.artist ||
+    currentTrack?.display_artist ||
+    currentTrack?.scanned_artist ||
+    "Unknown artist";
+
+  const artUrl = getTrackArtUrl(currentTrack?.art_path);
+
+  function handleOpenPlayer() {
+    if (!currentTrack) {
+      return;
+    }
+
+    navigate("/player");
+  }
+
+  // Note: we keep event.stopPropagation/preventDefault inline in JSX
+  // to avoid recreating helper functions that depend on runtime values.
+
+  return (
+    <div className={`mini-player${isPlaying ? " mini-player--playing" : ""}`}>
+      <button
+        type="button"
+        className="mini-player__info"
+        onClick={handleOpenPlayer}
+        aria-label="Open player"
+      >
+        <div
+          className={`mini-player__art${isPlaying ? " mini-player__art--playing" : ""}`}
+          aria-hidden="true"
+        >
+          {artUrl ? (
+            <img className="mini-player__art-image" src={artUrl} alt="" />
+          ) : (
+            <span className="mini-player__art-fallback">♪</span>
+          )}
+        </div>
+
+        <div className="mini-player__meta">
+          <div className="mini-player__title">{title}</div>
+          <div className="mini-player__artist">{artist}</div>
+        </div>
+      </button>
+
+      <div className="mini-player__controls">
+        <button
+          type="button"
+          className={`mini-player__button${shuffleEnabled ? " mini-player__button--active" : ""}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            safeInvokeAction(toggleShuffle);
+          }}
+          aria-pressed={shuffleEnabled}
+          aria-label="Toggle shuffle"
+        >
+          <Shuffle />
+        </button>
+
+        <button
+          type="button"
+          className="mini-player__button"
+          onClick={(event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            safeInvokeAction(previousTrack);
+          }}
+          aria-label="Previous track"
+        >
+          <ArrowLeft />
+        </button>
+
+        <button
+          type="button"
+          className="mini-player__button mini-player__button--primary"
+          onClick={(event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            safeInvokeAction(togglePlayPause);
+          }}
+          aria-label={isPlaying ? "Pause" : "Play"}
+        >
+          {isPlaying ? <Pause /> : <Play />}
+        </button>
+
+        <button
+          type="button"
+          className="mini-player__button"
+          onClick={(event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            safeInvokeAction(nextTrack);
+          }}
+          aria-label="Next track"
+        >
+          <ArrowRight />
+        </button>
+
+        <button
+          type="button"
+          className={`mini-player__button mini-player__button--repeat${repeatMode === "off" ? "" : " mini-player__button--active"}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            safeInvokeAction(cycleRepeatMode);
+          }}
+          aria-label={
+            repeatMode === "off"
+              ? "Repeat off"
+              : repeatMode === "playlist"
+                ? "Repeat all"
+                : "Repeat one"
+          }
+        >
+          <Repeat />
+          {repeatMode === "track" && (
+            <span className="mini-player__repeat-badge" aria-hidden="true">
+              1
+            </span>
+          )}
+        </button>
+      </div>
+      <div className="mini-player__actions" aria-hidden="true"></div>
+    </div>
+  );
+}

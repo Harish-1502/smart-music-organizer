@@ -1,8 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine
-from app.models.track import Track
-from app.routes import library, tracks, artist, album, playlist, playback
+from fastapi.staticfiles import StaticFiles
+from app.routes import (
+    library, 
+    tracks,
+    artist, 
+    album, 
+    playlist, 
+    playback, 
+    ai_playlists,
+    tags
+)
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -25,9 +43,7 @@ app.add_middleware(
 def root():
     return {"message": "Backend is running"}
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+app.mount("/static", StaticFiles(directory="data"), name="static")
 
 app.include_router(library.router)
 app.include_router(tracks.router)
@@ -35,3 +51,5 @@ app.include_router(artist.router)
 app.include_router(album.router)
 app.include_router(playlist.router)
 app.include_router(playback.router)
+app.include_router(ai_playlists.router)
+app.include_router(tags.router)

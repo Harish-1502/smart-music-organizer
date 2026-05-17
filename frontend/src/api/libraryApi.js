@@ -115,3 +115,15 @@ export async function reorderPlaylist(playlistId, playlistTrackIds) {
   });
   return response.data;
 }
+
+export async function uploadTrackArt(trackId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await axios.post(
+    `${API_BASE}/tracks/${trackId}/art`,
+    formData
+  );
+
+  return response.data;
+}

@@ -1,3 +1,4 @@
+import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,8 +23,10 @@ def stream_track(track_id: int, db: Session = Depends(get_db)):
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Audio file not found")
 
+    guessed_media_type, _ = mimetypes.guess_type(file_path.name)
+
     return FileResponse(
         path=file_path,
-        media_type="audio/mpeg",
+        media_type=guessed_media_type or "application/octet-stream",
         filename=file_path.name,
     )

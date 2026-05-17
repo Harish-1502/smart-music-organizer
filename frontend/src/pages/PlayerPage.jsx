@@ -21,8 +21,15 @@ function formatTime(seconds) {
   }
 
   const wholeSeconds = Math.floor(seconds);
-  const minutes = Math.floor(wholeSeconds / 60);
+  const hours = Math.floor(wholeSeconds / 3600);
+  const minutes = Math.floor((wholeSeconds % 3600) / 60);
   const remainingSeconds = wholeSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${minutes
+      .toString()
+      .padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
+  }
 
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
@@ -33,6 +40,76 @@ function clampVolumePercent(value) {
   }
 
   return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function getPlaybackErrorMessage(error, audioElement) {
+  const errorName =
+    error && typeof error === "object" && "name" in error ? error.name : "";
+
+  if (errorName === "NotAllowedError") {
+    return "Playback was blocked by the browser.";
+  }
+
+  if (errorName === "AbortError") {
+    return "Playback was interrupted before the track was ready.";
+  }
+
+  const mediaErrorCode = audioElement?.error?.code;
+
+  if (mediaErrorCode === 2) {
+    return "A network error interrupted playback.";
+  }
+
+  if (mediaErrorCode === 3) {
+    return "The audio source could not be decoded.";
+  }
+
+  if (mediaErrorCode === 4) {
+    return "The audio source is not supported.";
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.trim()
+  ) {
+    return error.message;
+  }
+
+  return "Playback could not start. Try another track.";
+}
+
+function getTrackArtUrl(artPath) {
+  if (typeof artPath !== "string" || !artPath.trim()) {
+    return null;
+  }
+
+  const normalizedPath = artPath.trim();
+
+  if (
+    normalizedPath.startsWith("http://") ||
+    normalizedPath.startsWith("https://")
+  ) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath.startsWith("/static/")) {
+    return `http://localhost:8000${normalizedPath}`;
+  }
+
+  return `http://localhost:8000/library/art?path=${encodeURIComponent(normalizedPath)}`;
 }
 
 export default function PlayerPage() {
@@ -58,26 +135,73 @@ export default function PlayerPage() {
   const progressBarRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(
-    Number.isFinite(currentTrack?.duration) ? currentTrack.duration : NaN
+    Number.isFinite(currentTrack?.duration) ? currentTrack.duration : NaN,
   );
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubTime, setScrubTime] = useState(null);
   const [volume, setVolume] = useState(100);
   const [isMuted, setIsMuted] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [isAudioReady, setIsAudioReady] = useState(false);
+  const [playbackError, setPlaybackError] = useState("");
 
   useEffect(() => {
-    const audioElement = audioRef.current;
-
-    if (!audioElement || !currentTrack) return;
-
-    if (isPlaying) {
-      const playPromise = audioElement.play();
-      playPromise?.catch(() => {});
+    if (!currentTrack) {
+      setIsLoading(false);
+      setIsBuffering(false);
+      setIsAudioReady(false);
+      setPlaybackError("");
       return;
     }
 
-    audioElement.pause();
+    setIsLoading(true);
+    setIsBuffering(false);
+    setIsAudioReady(false);
+    setPlaybackError("");
+  }, [currentTrack]);
+
+  useEffect(() => {
+    const audioElement = audioRef.current;
+    let cancelled = false;
+
+    if (!audioElement || !currentTrack) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (isPlaying) {
+      try {
+        const playPromise = audioElement.play();
+
+        playPromise?.catch((error) => {
+          if (cancelled) {
+            return;
+          }
+
+          setIsLoading(false);
+          setIsBuffering(false);
+          setIsAudioReady(false);
+          setPlaybackError(getPlaybackErrorMessage(error, audioElement));
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setIsLoading(false);
+          setIsBuffering(false);
+          setIsAudioReady(false);
+          setPlaybackError(getPlaybackErrorMessage(error, audioElement));
+        }
+      }
+    } else {
+      audioElement.pause();
+      setIsBuffering(false);
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [audioRef, currentTrack, isPlaying]);
 
   useEffect(() => {
@@ -88,22 +212,24 @@ export default function PlayerPage() {
 
     function syncProgress() {
       setCurrentTime(
-        Number.isFinite(audioElement?.currentTime) ? audioElement.currentTime : 0
+        Number.isFinite(audioElement?.currentTime)
+          ? audioElement.currentTime
+          : 0,
       );
       setDuration(
         Number.isFinite(audioElement?.duration) && audioElement.duration > 0
           ? audioElement.duration
-          : fallbackDuration
+          : fallbackDuration,
       );
     }
 
     setCurrentTime(
-      Number.isFinite(audioElement?.currentTime) ? audioElement.currentTime : 0
+      Number.isFinite(audioElement?.currentTime) ? audioElement.currentTime : 0,
     );
     setDuration(
       Number.isFinite(audioElement?.duration) && audioElement.duration > 0
         ? audioElement.duration
-        : fallbackDuration
+        : fallbackDuration,
     );
 
     if (!audioElement) {
@@ -135,8 +261,10 @@ export default function PlayerPage() {
 
       setVolume(
         clampVolumePercent(
-          Number.isFinite(audioElement.volume) ? audioElement.volume * 100 : 100
-        )
+          Number.isFinite(audioElement.volume)
+            ? audioElement.volume * 100
+            : 100,
+        ),
       );
       setIsMuted(Boolean(audioElement.muted));
     }
@@ -154,6 +282,53 @@ export default function PlayerPage() {
     };
   }, [audioRef, currentTrack]);
 
+  useEffect(() => {
+    function handleGlobalKeyDown(event) {
+      const activeElement = document.activeElement;
+      const tag = activeElement?.tagName;
+
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        activeElement?.isContentEditable ||
+        activeElement?.getAttribute("role") === "slider"
+      ) {
+        return;
+      }
+
+      try {
+        if (event.code === "Space") {
+          event.preventDefault();
+          togglePlayPause();
+          return;
+        }
+
+        if (event.code === "ArrowRight") {
+          event.preventDefault();
+          nextTrack();
+          return;
+        }
+
+        if (event.code === "ArrowLeft") {
+          event.preventDefault();
+          previousTrack();
+        }
+      } catch (error) {
+        console.error("Player keyboard shortcut failed.", error);
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [togglePlayPause, nextTrack, previousTrack]);
+
   const effectiveCurrentTime =
     isScrubbing && Number.isFinite(scrubTime) ? scrubTime : currentTime;
 
@@ -161,10 +336,25 @@ export default function PlayerPage() {
     duration > 0 ? Math.min(100, (effectiveCurrentTime / duration) * 100) : 0;
 
   const formattedCurrentTime = formatTime(effectiveCurrentTime);
-  const formattedDuration = formatTime(duration);
+  const formattedDuration = duration > 0 ? formatTime(duration) : "--:--";
   const queueItems = Array.isArray(queue) ? queue : [];
   const hasQueueItems = queueItems.length > 0;
   const canJumpQueue = typeof playQueue === "function" && hasQueueItems;
+  const transportDisabled =
+    isLoading || !isAudioReady || Boolean(playbackError);
+  const seekDisabled = transportDisabled || !(duration > 0);
+  const playerStatus = playbackError
+    ? playbackError
+    : isBuffering
+      ? "Buffering..."
+      : isLoading
+        ? "Loading..."
+        : "";
+  const displayTitle = getDisplayTitle(currentTrack);
+  const displayArtist = getDisplayArtist(currentTrack);
+  const displayAlbum = getDisplayAlbum(currentTrack);
+  const displayFileName = firstNonEmpty(currentTrack?.file_name, displayTitle);
+  const artUrl = getTrackArtUrl(currentTrack?.art_path);
 
   const playerThemeVars = {
     ...(currentTrack?.accentColor
@@ -174,6 +364,15 @@ export default function PlayerPage() {
       ? { "--player-accent-2": currentTrack.accentColor2 }
       : {}),
   };
+  const ambientBackground = (
+    <div className="player-page__ambient" aria-hidden="true">
+      <div className="player-page__spotlight"></div>
+      <div className="player-page__orb player-page__orb--one"></div>
+      <div className="player-page__orb player-page__orb--two"></div>
+      <div className="player-page__orb player-page__orb--three"></div>
+      <div className="player-page__grain"></div>
+    </div>
+  );
 
   function handleBackNavigation() {
     if (window.history.state?.idx > 0) {
@@ -185,7 +384,7 @@ export default function PlayerPage() {
   }
 
   function getTimeFromClientX(clientX) {
-    if (!(duration > 0) || !progressBarRef.current) {
+    if (seekDisabled || !progressBarRef.current) {
       return 0;
     }
 
@@ -200,7 +399,7 @@ export default function PlayerPage() {
   }
 
   function commitSeek(nextTime) {
-    if (!audioRef.current || !(duration > 0) || !Number.isFinite(nextTime)) {
+    if (!audioRef.current || seekDisabled || !Number.isFinite(nextTime)) {
       return;
     }
 
@@ -211,10 +410,7 @@ export default function PlayerPage() {
   }
 
   function handleProgressPointerDown(event) {
-    if (
-      !(duration > 0) ||
-      (event.pointerType === "mouse" && event.button !== 0)
-    ) {
+    if (seekDisabled || (event.pointerType === "mouse" && event.button !== 0)) {
       return;
     }
 
@@ -229,7 +425,7 @@ export default function PlayerPage() {
   }
 
   function handleProgressPointerMove(event) {
-    if (!isScrubbing || !(duration > 0)) {
+    if (!isScrubbing || seekDisabled) {
       return;
     }
 
@@ -265,7 +461,7 @@ export default function PlayerPage() {
   }
 
   function handleProgressKeyDown(event) {
-    if (!(duration > 0)) {
+    if (seekDisabled) {
       return;
     }
 
@@ -324,29 +520,51 @@ export default function PlayerPage() {
   }
 
   function getQueueTrackTitle(track) {
-    if (!track || typeof track !== "object") {
-      return "Unknown Track";
-    }
-
     return (
-      track.title ||
-      track.display_title ||
-      track.scanned_title ||
-      track.file_name ||
-      "Unknown Track"
+      firstNonEmpty(
+        track?.title,
+        track?.display_title,
+        track?.scanned_title,
+        track?.file_name,
+      ) || "Untitled track"
     );
   }
 
   function getQueueTrackArtist(track) {
-    if (!track || typeof track !== "object") {
-      return "Unknown Artist";
-    }
-
     return (
-      track.artist ||
-      track.display_artist ||
-      track.scanned_artist ||
-      "Unknown Artist"
+      firstNonEmpty(
+        track?.artist,
+        track?.display_artist,
+        track?.scanned_artist,
+      ) || "Unknown artist"
+    );
+  }
+
+  function getDisplayTitle(track) {
+    return (
+      firstNonEmpty(
+        track?.title,
+        track?.display_title,
+        track?.scanned_title,
+        track?.file_name,
+      ) || "Untitled track"
+    );
+  }
+
+  function getDisplayArtist(track) {
+    return (
+      firstNonEmpty(
+        track?.artist,
+        track?.display_artist,
+        track?.scanned_artist,
+      ) || "Unknown artist"
+    );
+  }
+
+  function getDisplayAlbum(track) {
+    return (
+      firstNonEmpty(track?.album, track?.display_album, track?.scanned_album) ||
+      "Unknown album"
     );
   }
 
@@ -363,9 +581,95 @@ export default function PlayerPage() {
     playQueue(queueItems, index);
   }
 
+  function handleLoadStart() {
+    setIsLoading(true);
+    setIsBuffering(false);
+    setIsAudioReady(false);
+    setPlaybackError("");
+  }
+
+  function handleLoadedMetadata() {
+    setIsLoading(false);
+    setPlaybackError("");
+  }
+
+  function handleCanPlay() {
+    setIsLoading(false);
+    setIsBuffering(false);
+    setIsAudioReady(true);
+    setPlaybackError("");
+  }
+
+  function handleWaiting() {
+    if (!playbackError) {
+      setIsBuffering(true);
+    }
+  }
+
+  function handlePlaying() {
+    setIsLoading(false);
+    setIsBuffering(false);
+    setIsAudioReady(true);
+    setPlaybackError("");
+  }
+
+  function handleAudioError() {
+    const audioElement = audioRef.current;
+
+    setIsLoading(false);
+    setIsBuffering(false);
+    setIsAudioReady(false);
+    setPlaybackError(
+      getPlaybackErrorMessage(
+        audioElement?.error instanceof Error ? audioElement.error : null,
+        audioElement,
+      ),
+    );
+  }
+  useEffect(() => {
+    const audioElement = audioRef.current;
+    if (!audioElement || !currentTrack) {
+      return undefined;
+    }
+
+    audioElement.addEventListener("loadstart", handleLoadStart);
+    audioElement.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audioElement.addEventListener("canplay", handleCanPlay);
+    audioElement.addEventListener("waiting", handleWaiting);
+    audioElement.addEventListener("playing", handlePlaying);
+    audioElement.addEventListener("error", handleAudioError);
+
+    return () => {
+      audioElement.removeEventListener("loadstart", handleLoadStart);
+      audioElement.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audioElement.removeEventListener("canplay", handleCanPlay);
+      audioElement.removeEventListener("waiting", handleWaiting);
+      audioElement.removeEventListener("playing", handlePlaying);
+      audioElement.removeEventListener("error", handleAudioError);
+    };
+  }, [
+    audioRef,
+    currentTrack,
+    handleLoadStart,
+    handleLoadedMetadata,
+    handleCanPlay,
+    handleWaiting,
+    handlePlaying,
+    handleAudioError,
+  ]);
+
+  function handleTogglePlayback() {
+    if (playbackError) {
+      setPlaybackError("");
+    }
+
+    togglePlayPause();
+  }
+
   if (!currentTrack) {
     return (
       <main className="player-page player-page--empty" style={playerThemeVars}>
+        {ambientBackground}
         <section className="player-page__card player-page__card--empty">
           <div className="player-page__topbar">
             <button
@@ -391,7 +695,11 @@ export default function PlayerPage() {
   }
 
   return (
-    <main className="player-page" style={playerThemeVars}>
+    <main
+      className={`player-page${isPlaying ? " player-page--playing" : ""}`}
+      style={playerThemeVars}
+    >
+      {ambientBackground}
       <section className="player-page__card" aria-labelledby="player-title">
         <div className="player-page__topbar">
           <button
@@ -408,36 +716,65 @@ export default function PlayerPage() {
         </div>
         <p className="player-page__eyebrow">Now Playing</p>
 
-        <div className="player-page__art" aria-hidden="true">
-          <div className="player-page__art-disc"></div>
+        <div
+          className={`player-page__art${isPlaying ? " player-page__art--playing" : ""}`}
+          aria-hidden="true"
+        >
+          {artUrl ? (
+            <img
+              className="player-page__art-image"
+              src={artUrl}
+              alt=""
+            />
+          ) : (
+            <div className="player-page__art-disc"></div>
+          )}
         </div>
 
         <div className="player-page__meta">
-          <h1 id="player-title" className="player-page__title">
-            {currentTrack.title}
+          <h1
+            id="player-title"
+            className="player-page__title"
+            title={displayFileName}
+          >
+            {displayTitle}
           </h1>
-          <p className="player-page__artist">
-            {currentTrack.artist || "Unknown Artist"}
+          <p className="player-page__artist">{displayArtist}</p>
+          <p className="player-page__album" title={displayAlbum}>
+            {displayAlbum}
           </p>
           <p className="player-page__queue-meta">
             Track {currentIndex + 1} of {queueItems.length}
           </p>
         </div>
 
+        {playerStatus ? (
+          <p
+            className={`player-page__status${
+              playbackError ? " player-page__status--error" : ""
+            }`}
+            role={playbackError ? "alert" : "status"}
+            aria-atomic="true"
+          >
+            {playerStatus}
+          </p>
+        ) : null}
+
         <div className="player-page__progress">
           <div className="player-page__progress-inner">
             <div
               ref={progressBarRef}
               className={`player-page__progress-track${
-                duration > 0 ? "" : " player-page__progress-track--disabled"
+                seekDisabled ? " player-page__progress-track--disabled" : ""
               }`}
               role="slider"
-              tabIndex={duration > 0 ? 0 : -1}
+              tabIndex={seekDisabled ? -1 : 0}
               aria-label="Playback position"
               aria-valuemin={0}
               aria-valuemax={Math.floor(duration > 0 ? duration : 0)}
               aria-valuenow={Math.floor(effectiveCurrentTime)}
               aria-valuetext={`${formattedCurrentTime} of ${formattedDuration}`}
+              aria-disabled={seekDisabled}
               onPointerDown={handleProgressPointerDown}
               onPointerMove={handleProgressPointerMove}
               onPointerUp={(event) => endScrub(event)}
@@ -472,12 +809,12 @@ export default function PlayerPage() {
         >
           <button
             type="button"
-            className={`player-page__control player-page__control--mode${
-              shuffleEnabled ? " player-page__control--active" : ""
+            className={`player-page__control player-page__control--mode player-page__control--shuffle${
+              shuffleEnabled ? " player-page__control--shuffle-active" : ""
             }`}
             onClick={toggleShuffle}
             aria-pressed={shuffleEnabled}
-            aria-label="Toggle shuffle"
+            aria-label={shuffleEnabled ? "Shuffle on" : "Shuffle off"}
           >
             <Shuffle className="player-page__icon" aria-hidden="true" />
           </button>
@@ -486,14 +823,16 @@ export default function PlayerPage() {
             className="player-page__control player-page__control--secondary"
             onClick={previousTrack}
             aria-label="Previous track"
+            disabled={isLoading}
           >
             <SkipBack className="player-page__icon" aria-hidden="true" />
           </button>
           <button
             type="button"
             className="player-page__control player-page__control--primary"
-            onClick={togglePlayPause}
+            onClick={handleTogglePlayback}
             aria-label={isPlaying ? "Pause" : "Play"}
+            disabled={transportDisabled}
           >
             {isPlaying ? (
               <Pause
@@ -512,14 +851,13 @@ export default function PlayerPage() {
             className="player-page__control player-page__control--secondary"
             onClick={nextTrack}
             aria-label="Next track"
+            disabled={isLoading}
           >
             <SkipForward className="player-page__icon" aria-hidden="true" />
           </button>
           <button
             type="button"
             className={`player-page__control player-page__control--mode player-page__control--repeat${
-              repeatMode !== "off" ? " player-page__control--active" : ""
-            }${
               repeatMode === "track"
                 ? " player-page__control--repeat-one"
                 : repeatMode === "playlist"
@@ -527,7 +865,13 @@ export default function PlayerPage() {
                   : ""
             }`}
             onClick={cycleRepeatMode}
-            aria-label={`Repeat mode: ${repeatMode}`}
+            aria-label={
+              repeatMode === "track"
+                ? "Repeat one"
+                : repeatMode === "playlist"
+                  ? "Repeat all"
+                  : "Repeat off"
+            }
           >
             <span className="player-page__repeat-icon-wrap" aria-hidden="true">
               <Repeat className="player-page__icon" />
@@ -661,14 +1005,6 @@ export default function PlayerPage() {
             />
           </button>
         </div>
-
-        <audio
-          ref={audioRef}
-          src={getStreamUrl(currentTrack)}
-          autoPlay
-          onEnded={handleEnded}
-          preload="metadata"
-        />
       </section>
     </main>
   );

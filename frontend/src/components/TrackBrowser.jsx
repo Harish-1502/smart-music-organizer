@@ -44,8 +44,26 @@ export default function TrackBrowser({
   const {
     showModal,
     editForm,
+    artPreviewUrl,
+    allTags,
+    trackTags,
+    tagSuggestions,
+    tagsLoading,
+    tagsError,
+    selectedTagId,
+    tagActionLoading,
+    newTagForm,
+    categoryOptions,
     handleEditTrack,
     handleFormChange,
+    handleArtFileChange,
+    handleSelectedTagChange,
+    handleNewTagChange,
+    handleAddTag,
+    handleRemoveTag,
+    handleCreateTag,
+    handleAcceptSuggestion,
+    handleRejectSuggestion,
     handleCancelEdit,
     handleSaveEdit,
   } = useTrackEdit({ loadTracks, setMessage: () => {} });
@@ -104,7 +122,25 @@ export default function TrackBrowser({
             <EditTrackModal
               isOpen={showModal}
               formData={editForm}
+              artPreviewUrl={artPreviewUrl}
+              allTags={allTags}
+              trackTags={trackTags}
+              tagSuggestions={tagSuggestions}
+              tagsLoading={tagsLoading}
+              tagsError={tagsError}
+              selectedTagId={selectedTagId}
+              tagActionLoading={tagActionLoading}
+              newTagForm={newTagForm}
+              categoryOptions={categoryOptions}
               onChange={handleFormChange}
+              onArtFileChange={handleArtFileChange}
+              onSelectedTagChange={handleSelectedTagChange}
+              onNewTagChange={handleNewTagChange}
+              onAddTag={handleAddTag}
+              onRemoveTag={handleRemoveTag}
+              onCreateTag={handleCreateTag}
+              onAcceptSuggestion={handleAcceptSuggestion}
+              onRejectSuggestion={handleRejectSuggestion}
               onSave={handleSaveEdit}
               onCancel={handleCancelEdit}
             />
