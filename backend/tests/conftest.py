@@ -14,7 +14,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 
 @pytest.fixture(scope="function")
-def db_session():
+def db_session(request):
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
     try:

@@ -1,104 +1,162 @@
-import {
-  displayValue,
-  formatDuration,
-  formatMetadataSource,
-} from "../utils/trackFormatters";
-
-export default function TrackTable({ tracks, onEdit }) {
-  if (!tracks || tracks.length === 0) {
-    return <p>No tracks found.</p>;
-  }
-
+export default function TrackTable({
+  tracks,
+  onEdit,
+  mode = "library",
+  selectedTrackIds = [],
+  onToggleTrack,
+  onPlayTrack,
+}) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          marginTop: "12px",
-        }}
-      >
-        <thead>
-          <tr>
-            <th style={thStyle}>Art</th>
-            <th style={thStyle}>Title</th>
-            <th style={thStyle}>Artist</th>
-            <th style={thStyle}>Album</th>
-            <th style={thStyle}>Duration</th>
-            <th style={thStyle}>Source</th>
-            <th style={thStyle}>File Name</th>
-            <th style={thStyle}>Actions</th>
-          </tr>
-        </thead>
+    <table className={`track-table track-table--${mode}`}>
+      <thead className="track-table__head">
+        <tr className="track-table__head-row">
+          {mode === "picker" && (
+            <th
+              scope="col"
+              className="track-table__head-cell track-table__head-cell--select"
+            >
+              Select
+            </th>
+          )}
+          <th scope="col" className="track-table__head-cell">
+            Title
+          </th>
+          <th scope="col" className="track-table__head-cell">
+            Artist
+          </th>
+          <th scope="col" className="track-table__head-cell">
+            Album
+          </th>
+          <th
+            scope="col"
+            className="track-table__head-cell track-table__head-cell--duration"
+          >
+            Duration
+          </th>
+          <th scope="col" className="track-table__head-cell">
+            File Name
+          </th>
+          {mode === "library" && (
+            <th
+              scope="col"
+              className="track-table__head-cell track-table__head-cell--actions"
+            >
+              Actions
+            </th>
+          )}
+        </tr>
+      </thead>
 
-        <tbody>
-          {tracks.map((track) => (
-            <tr key={track.id}>
-              <td style={tdStyle}>
-                {track.art_path ? (
-                  <img
-                    src={toImageUrl(track.art_path)}
-                    alt={track.title || track.file_name}
-                    style={imageStyle}
+      <tbody className="track-table__body">
+        {tracks.map((track, index) => {
+          const isPlayable = typeof onPlayTrack === "function";
+
+          function handlePlay() {
+            onPlayTrack(track, index);
+          }
+
+          return (
+            <tr
+              key={track.id}
+              className={`track-table__row${
+                isPlayable ? " track-table__row--interactive" : ""
+              }`}
+              onClick={isPlayable ? handlePlay : undefined}
+              onKeyDown={
+                isPlayable
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        handlePlay();
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={isPlayable ? 0 : undefined}
+              role={isPlayable ? "button" : undefined}
+              aria-label={isPlayable ? `Play ${track.title}` : undefined}
+            >
+              {mode === "picker" && (
+                <td
+                  className="track-table__cell track-table__cell--select"
+                  data-label="Select"
+                >
+                  <input
+                    className="track-table__checkbox"
+                    type="checkbox"
+                    checked={selectedTrackIds.includes(track.id)}
+                    onChange={() => onToggleTrack(track.id)}
                   />
-                ) : (
-                  <div style={placeholderStyle}>—</div>
-                )}
+                </td>
+              )}
+
+              <td
+                className="track-table__cell track-table__cell--title"
+                data-label="Title"
+              >
+                <span className="track-table__text track-table__text--primary">
+                  {track.title}
+                </span>
               </td>
 
-              <td style={tdStyle}>{displayValue(track.display_title)}</td>
-              <td style={tdStyle}>{displayValue(track.display_artist)}</td>
-              <td style={tdStyle}>{displayValue(track.display_album)}</td>
-              <td style={tdStyle}>{formatDuration(track.duration)}</td>
-              <td style={tdStyle}>
-                {formatMetadataSource(track.metadata_source)}
+              <td
+                className="track-table__cell track-table__cell--artist"
+                data-label="Artist"
+              >
+                <span className="track-table__text track-table__text--secondary">
+                  {track.artist || "-"}
+                </span>
               </td>
-              <td style={tdStyle}>{displayValue(track.file_name)}</td>
-              <td style={tdStyle}>
-                <button onClick={() => onEdit(track)}>Edit</button>
+
+              <td
+                className="track-table__cell track-table__cell--album"
+                data-label="Album"
+              >
+                <span className="track-table__text track-table__text--secondary">
+                  {track.album || "-"}
+                </span>
               </td>
+
+              <td
+                className="track-table__cell track-table__cell--duration"
+                data-label="Duration"
+              >
+                <span className="track-table__text track-table__text--duration">
+                  {track.duration || "-"}
+                </span>
+              </td>
+
+              <td
+                className="track-table__cell track-table__cell--filename"
+                data-label="File Name"
+              >
+                <span className="track-table__text track-table__text--secondary">
+                  {track.file_name}
+                </span>
+              </td>
+
+              {mode === "library" && (
+                <td
+                  className="track-table__cell track-table__cell--actions"
+                  data-label="Actions"
+                >
+                  <button
+                    type="button"
+                    className="track-table__action"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onEdit(track);
+                    }}
+                    aria-label={`Edit ${track.title}`}
+                  >
+                    Edit
+                  </button>
+                </td>
+              )}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          );
+        })}
+      </tbody>
+    </table>
   );
-}
-
-const thStyle = {
-  textAlign: "left",
-  padding: "10px",
-  borderBottom: "2px solid #ccc",
-};
-
-const tdStyle = {
-  padding: "10px",
-  borderBottom: "1px solid #eee",
-};
-
-const imageStyle = {
-  width: "48px",
-  height: "48px",
-  objectFit: "cover",
-  borderRadius: "6px",
-  border: "1px solid #ddd",
-};
-
-const placeholderStyle = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "6px",
-  backgroundColor: "#eee",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "12px",
-  color: "#666",
-  border: "1px solid #ddd",
-};
-
-function toImageUrl(artPath) {
-  return `http://127.0.0.1:8000/library/art?path=${encodeURIComponent(
-    artPath
-  )}`;
 }

@@ -1,0 +1,209 @@
+.reorder-modal-overlay {
+  --reorder-surface-strong: linear-gradient(
+    180deg,
+    rgba(20, 26, 36, 0.96),
+    rgba(13, 18, 27, 0.98)
+  );
+  --reorder-panel-soft: rgba(12, 17, 25, 0.92);
+  --reorder-border: rgba(90, 110, 138, 0.3);
+  --reorder-border-accent: rgba(125, 211, 252, 0.18);
+  --reorder-action-border: rgba(95, 112, 136, 0.48);
+  --reorder-text-strong: #ffffff;
+  --reorder-text-muted: #a7b1c2;
+  --reorder-text-subtle: #7f8da3;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  background: rgba(6, 10, 18, 0.74);
+  backdrop-filter: blur(10px);
+}
+
+.reorder-modal {
+  width: min(100%, 680px);
+  max-height: min(88vh, 760px);
+  display: grid;
+  gap: 16px;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid var(--reorder-border-accent);
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(125, 211, 252, 0.07), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    var(--reorder-surface-strong);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+}
+
+.reorder-modal__header {
+  display: grid;
+  gap: 8px;
+}
+
+.reorder-modal__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  color: var(--reorder-text-strong);
+}
+
+.reorder-modal__subtitle {
+  margin: 0;
+  max-width: 34rem;
+  line-height: 1.45;
+  color: var(--reorder-text-muted);
+}
+
+.reorder-modal__list-shell {
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid rgba(125, 211, 252, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.reorder-modal__track-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reorder-track-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 211, 252, 0.14);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(125, 211, 252, 0.04), rgba(255, 255, 255, 0)),
+    var(--reorder-panel-soft);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
+  cursor: grab;
+  user-select: none;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.reorder-track-row:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.28);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
+}
+
+.reorder-track-row:active {
+  cursor: grabbing;
+}
+
+.reorder-track-row__handle {
+  width: 16px;
+  height: 24px;
+  border-radius: 999px;
+  opacity: 0.72;
+  background-image: radial-gradient(circle, rgba(167, 177, 194, 0.92) 1.2px, transparent 1.6px);
+  background-size: 8px 8px;
+}
+
+.reorder-track-row__content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.reorder-track-row__title {
+  color: var(--reorder-text-strong);
+  font-size: 15px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.reorder-track-row__meta {
+  color: var(--reorder-text-muted);
+  font-size: 12px;
+}
+
+.reorder-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reorder-modal__button {
+  min-height: 48px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    filter 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.reorder-modal__button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.reorder-modal__button--secondary {
+  border: 1px solid var(--reorder-action-border);
+  background: transparent;
+  color: #dbe4f0;
+}
+
+.reorder-modal__button--secondary:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.reorder-modal__button--primary {
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: linear-gradient(135deg, #34d399 0%, #0ea5e9 100%);
+  color: var(--reorder-text-strong);
+  box-shadow: 0 16px 36px rgba(14, 165, 233, 0.28);
+}
+
+.reorder-modal__button--primary:hover {
+  filter: brightness(1.05);
+}
+
+.reorder-modal__button:focus-visible,
+.reorder-track-row:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.reorder-modal-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 12px;
+  background: rgba(127, 29, 29, 0.18);
+  color: #fda4af;
+}
+
+@media (max-width: 640px) {
+  .reorder-modal {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .reorder-modal__list-shell {
+    max-height: min(50vh, 360px);
+  }
+
+  .reorder-track-row {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .reorder-modal-actions {
+    grid-template-columns: 1fr;
+  }
+}
