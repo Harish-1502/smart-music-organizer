@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getApiErrorMessage } from "../../api/apiErrors";
 
 export default function GenerateAiPlaylistModal({ onClose, onGenerate }) {
   const [prompt, setPrompt] = useState("");
@@ -27,8 +28,7 @@ export default function GenerateAiPlaylistModal({ onClose, onGenerate }) {
       await onGenerate(trimmedPrompt);
       setPrompt("");
     } catch (submitError) {
-      const detail = submitError.response?.data?.detail;
-      setError(detail || "Failed to generate playlist.");
+      setError(getApiErrorMessage(submitError, "Failed to generate playlist."));
     } finally {
       setSaving(false);
     }
