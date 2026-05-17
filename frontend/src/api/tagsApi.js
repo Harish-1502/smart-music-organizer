@@ -1,9 +1,4 @@
-import axios from "axios";
-import { API_BASE } from "./apiBase";
-
-const api = axios.create({
-  baseURL: API_BASE,
-});
+import { api } from "./apiBase";
 
 export async function getTags() {
   const response = await api.get("/tags");

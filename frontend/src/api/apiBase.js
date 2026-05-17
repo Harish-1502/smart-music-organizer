@@ -1,9 +1,15 @@
+import axios from "axios";
+
 const DEFAULT_DEV_API_BASE = "http://127.0.0.1:8000";
 
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
 
 export const API_BASE =
   configuredApiBase || (import.meta.env.DEV ? DEFAULT_DEV_API_BASE : "");
+
+export const api = axios.create({
+  baseURL: API_BASE,
+});
 
 function isAbsoluteUrl(value) {
   return /^https?:\/\//i.test(value);
