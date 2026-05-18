@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { reorderPlaylist } from '../../api/playlistApi';
+import { reorderPlaylist } from '../../../api/playlistApi';
 import {
   DndContext,
   closestCenter,
@@ -14,8 +14,8 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { maskTrack } from "../../utils/demoMode";
-import "../../styles/playlist/ReorderPlaylistModal.css";
+import { maskTrack } from "../../../utils/demoMode";
+import "../../../styles/playlist/ReorderPlaylistModal.css";
 
 function SortableTrackRow({ track }) {
   const {

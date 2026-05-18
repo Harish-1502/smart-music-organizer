@@ -7,8 +7,8 @@ import {
   renamePlaylist,
   generateAiPlaylist,
 } from "../api/playlistApi";
-import CreatePlaylistModal from "../components/playlists/CreatePlaylistModal";
-import GenerateAiPlaylistModal from "../components/playlists/GenerateAiPlaylistModal";
+import CreatePlaylistModal from "../features/playlists/components/CreatePlaylistModal";
+import GenerateAiPlaylistModal from "../features/playlists/components/GenerateAiPlaylistModal";
 import { featureFlags } from "../config/featureFlags";
 import "../styles/PlaylistsPage.css";
 

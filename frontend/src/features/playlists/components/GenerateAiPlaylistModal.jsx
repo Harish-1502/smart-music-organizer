@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getApiErrorMessage } from "../../api/apiErrors";
+import { getApiErrorMessage } from "../../../api/apiErrors";
 
 export default function GenerateAiPlaylistModal({ onClose, onGenerate }) {
   const [prompt, setPrompt] = useState("");

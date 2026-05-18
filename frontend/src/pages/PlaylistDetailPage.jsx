@@ -4,9 +4,9 @@ import {
   getPlaylistDetail,
   removeTrackFromPlaylist,
 } from "../api/playlistApi";
-import PlaylistTrackRow from "../components/playlists/PlaylistTrackRow";
-import AddTracksModal from "../components/playlists/AddTracksModal";
-import ReorderTracksModal from "../components/playlists/ReorderTracksModal";
+import PlaylistTrackRow from "../features/playlists/components/PlaylistTrackRow";
+import AddTracksModal from "../features/playlists/components/AddTracksModal";
+import ReorderTracksModal from "../features/playlists/components/ReorderTracksModal";
 import { usePlayer } from "../context/PlayerContext";
 import "../styles/PlaylistDetailPage.css";
 
