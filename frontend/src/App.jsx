@@ -1,7 +1,7 @@
 import { Link, Routes, Route, Navigate } from "react-router-dom";
 import LibraryPage from "./pages/LibraryPage";
-import PlaylistsPage from "./pages/PlaylistsPage";
-import PlaylistDetailPage from "./pages/PlaylistDetailPage";
+import PlaylistsPage from "./features/playlists/pages/PlaylistsPage";
+import PlaylistDetailPage from "./features/playlists/pages/PlaylistDetailPage";
 import PlayerPage from "./pages/PlayerPage.jsx";
 import MiniPlayer from "./components/MiniPlayer";
 import { usePlayer } from "./context/PlayerContext";

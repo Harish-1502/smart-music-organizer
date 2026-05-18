@@ -3,12 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   getPlaylistDetail,
   removeTrackFromPlaylist,
-} from "../api/playlistApi";
-import PlaylistTrackRow from "../features/playlists/components/PlaylistTrackRow";
-import AddTracksModal from "../features/playlists/components/AddTracksModal";
-import ReorderTracksModal from "../features/playlists/components/ReorderTracksModal";
-import { usePlayer } from "../context/PlayerContext";
-import "../styles/PlaylistDetailPage.css";
+} from "../../../api/playlistApi";
+import PlaylistTrackRow from "../components/PlaylistTrackRow";
+import AddTracksModal from "../components/AddTracksModal";
+import ReorderTracksModal from "../components/ReorderTracksModal";
+import { usePlayer } from "../../../context/PlayerContext";
+import "../../../styles/PlaylistDetailPage.css";
 
 export default function PlaylistDetailPage() {
   const { playlistId } = useParams();
