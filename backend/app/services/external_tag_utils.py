@@ -14,6 +14,10 @@ from app.utils.tag_rules import TAG_RULES
 from app.models.tag import Tag
 from app.models.track import Track
 from app.models.track_tag import TrackTag
+from app.services.tag_persistence import (
+    ensure_controlled_tag_exists,
+    get_tag_by_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,32 +134,21 @@ def ensure_tag_exists(db: Session, tag_name: str) -> Tag | None:
     Only tags that exist in TAG_RULES are allowed. This keeps the app's tag
     vocabulary controlled and predictable.
     """
-    rule = TAG_RULES.get(tag_name)
+    existing_tag = get_tag_by_name(db, tag_name)
+    tag = ensure_controlled_tag_exists(db, tag_name)
 
-    if not rule:
+    if not tag:
         logger.warning(
             "Skipping unknown internal tag",
             extra={"tag_name": tag_name},
         )
         return None
 
-    tag = db.query(Tag).filter(Tag.name == tag_name).first()
-
-    if tag:
-        return tag
-
-    tag = Tag(
-        name=tag_name,
-        category=rule["category"],
-    )
-
-    db.add(tag)
-    db.flush()
-
-    logger.info(
-        "Created missing internal tag",
-        extra={"tag_name": tag.name, "category": tag.category},
-    )
+    if not existing_tag:
+        logger.info(
+            "Created missing internal tag",
+            extra={"tag_name": tag.name, "category": tag.category},
+        )
 
     return tag
 

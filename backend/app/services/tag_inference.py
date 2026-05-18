@@ -6,6 +6,7 @@ from app.utils.tag_rules import TAG_RULES
 from app.models.tag import Tag
 from app.models.track import Track
 from app.models.track_tag import TrackTag
+from app.services.tag_persistence import ensure_controlled_tag_exists
 
 
 def normalize_text(value: str) -> str:
@@ -270,29 +271,7 @@ def ensure_tag_exists(db: Session, tag_name: str) -> Tag | None:
         "hig_energy"
         ""
     """
-    rule = TAG_RULES.get(tag_name)
-
-    if not rule:
-        return None
-
-    category = rule["category"]
-
-    tag = db.query(Tag).filter(Tag.name == tag_name).first()
-
-    if tag:
-        return tag
-
-    tag = Tag(
-        name=tag_name,
-        category=category,
-    )
-
-    # flush() writes the row enough for tag.id to exist in this transaction,
-    # but does not commit yet. The caller should control the final commit.
-    db.add(tag)
-    db.flush()
-
-    return tag
+    return ensure_controlled_tag_exists(db, tag_name)
 
 
 def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
