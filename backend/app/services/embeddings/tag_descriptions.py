@@ -1,0 +1,17 @@
+TAG_EMBEDDING_DESCRIPTIONS: dict[str, str] = {
+    "anime": "anime music, anime openings, anime endings, AMV music, Japanese animation soundtrack",
+    "jpop": "Japanese pop music, J-pop songs, Japanese artists, upbeat Japanese pop",
+    "kpop": "Korean pop music, K-pop idols, Korean artists, upbeat pop from Korea",
+    "nightcore": "nightcore version, sped up high pitched remix, fast energetic edit",
+    "sped_up": "sped up version, faster remix, increased tempo edit",
+    "slowed": "slowed version, slower remix, slowed and reverb edit",
+    "remix": "remix version, alternate mix, edited version, dance remix",
+    "cover": "cover song, performed by another artist, alternate vocal performance",
+    "edm": "electronic dance music, club music, dance beats, electronic festival music",
+    "phonk": "phonk music, drift phonk, aggressive bass, dark trap-inspired music",
+    "high_energy": "high energy music, intense, fast, loud, exciting, energetic songs",
+    "low_energy": "low energy music, calm, soft, relaxed, slow, background listening",
+    "chill": "chill music, relaxed music, calm vibe, laid back listening",
+    "study": "study music, focus music, concentration, calm background music",
+    "workout": "workout music, gym music, intense training music, motivational high energy songs",
+}
