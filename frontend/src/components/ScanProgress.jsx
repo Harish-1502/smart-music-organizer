@@ -1,5 +1,11 @@
+import { hiddenPathValue, isDemoMode } from "../utils/demoMode";
+
 export default function ScanProgress({ status }) {
   if (!status) return null;
+
+  const currentFile = isDemoMode()
+    ? hiddenPathValue()
+    : status.current_file || "None";
 
   return (
     <section
@@ -15,9 +21,9 @@ export default function ScanProgress({ status }) {
           </h2>
           <p
             className="scan-progress__current-file"
-            title={status.current_file || "None"}
+            title={currentFile}
           >
-            {status.current_file || "None"}
+            {currentFile}
           </p>
         </div>
 

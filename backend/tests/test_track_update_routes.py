@@ -1,5 +1,6 @@
 import pytest
 from app.models.track import Track
+from app.routes import tracks as tracks_route
 
 
 def make_track(db_session, **overrides):
@@ -93,6 +94,63 @@ def test_patch_track_updates_display_fields_too(client, db_session):
     assert track.user_edited is True
 
 
+def test_patch_track_trims_metadata_fields(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={
+            "title": "  Trimmed Title  ",
+            "artist": "  Trimmed Artist  ",
+            "album": "  Trimmed Album  ",
+        },
+    )
+
+    assert response.status_code == 200
+
+    db_session.refresh(track)
+    assert track.title == "Trimmed Title"
+    assert track.artist == "Trimmed Artist"
+    assert track.album == "Trimmed Album"
+
+
+def test_patch_track_rejects_empty_title_after_trimming(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"title": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_track_rejects_too_long_metadata_field(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"title": "a" * 256},
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_track_allows_clearing_artist_and_album(client, db_session):
+    track = make_track(db_session)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"artist": "   ", "album": ""},
+    )
+
+    assert response.status_code == 200
+
+    db_session.refresh(track)
+    assert track.artist == ""
+    assert track.album == ""
+
+
 def test_patch_track_returns_404_for_missing_track(client):
     """
     Test:
@@ -130,3 +188,27 @@ def test_patch_track_with_empty_payload_does_not_crash(client, db_session):
     assert track.title == "Old Title"
     assert track.artist == "Old Artist"
     assert track.album == "Old Album"
+
+
+def test_patch_track_unexpected_error_hides_raw_exception(
+    client,
+    db_session,
+    monkeypatch,
+):
+    private_path = "C:/Private/Music/song.mp3"
+    track = make_track(db_session)
+
+    def fail_apply_inferred_tags(*_args, **_kwargs):
+        raise RuntimeError(f"database failed near {private_path}")
+
+    monkeypatch.setattr(tracks_route, "apply_inferred_tags", fail_apply_inferred_tags)
+
+    response = client.patch(
+        f"/tracks/{track.id}",
+        json={"title": "New Title"},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to update track"
+    assert private_path not in response.text
+    assert "database failed" not in response.text

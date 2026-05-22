@@ -1,8 +1,16 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, field_validator
+
+from app.schemas.public_paths import expose_art_path
+from app.schemas.validators import strip_string
 
 
 class ParsePromptRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(min_length=8, max_length=500)
+
+    @field_validator("prompt", mode="before")
+    @classmethod
+    def strip_prompt(cls, value):
+        return strip_string(value)
 
 
 class ParsePromptResponse(BaseModel):
@@ -10,9 +18,14 @@ class ParsePromptResponse(BaseModel):
     parsed_rules: dict
 
 class GeneratePlaylistRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(min_length=8, max_length=500)
     limit: int = Field(default=25, ge=1, le=100)
-    playlist_name: str | None = None
+    playlist_name: str | None = Field(default=None, max_length=120)
+
+    @field_validator("prompt", "playlist_name", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value):
+        return strip_string(value)
 
 
 class GeneratedTrackResponse(BaseModel):
@@ -27,6 +40,10 @@ class GeneratedTrackResponse(BaseModel):
     display_album: str | None
     duration: float | None
     art_path: str | None
+
+    @field_serializer("art_path")
+    def serialize_art_path(self, value):
+        return expose_art_path(value)
 
 
 class GeneratePlaylistResponse(BaseModel):

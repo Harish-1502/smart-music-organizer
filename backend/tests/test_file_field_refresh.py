@@ -55,8 +55,8 @@ def test_rescan_updates_file_owned_fields_even_when_user_edited(tmp_path, monkey
     def fake_detect_album_art(_path):
         return "new.jpg"
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(str(music_dir), db_session)
 

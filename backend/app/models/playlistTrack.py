@@ -7,7 +7,7 @@ class PlaylistTrack(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     playlist_id = Column(Integer, ForeignKey("playlists.id"), nullable=False)
-    track_id = Column(Integer, ForeignKey("tracks.id"), nullable=False)
+    track_id = Column(Integer, ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False)
     position = Column(Integer, nullable=False)
     added_at = Column(DateTime(timezone=True), server_default=func.now())
 

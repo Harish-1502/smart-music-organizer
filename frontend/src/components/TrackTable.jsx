@@ -1,3 +1,5 @@
+import { maskTrack } from "../utils/demoMode";
+
 export default function TrackTable({
   tracks,
   onEdit,
@@ -50,6 +52,7 @@ export default function TrackTable({
       <tbody className="track-table__body">
         {tracks.map((track, index) => {
           const isPlayable = typeof onPlayTrack === "function";
+          const displayTrack = maskTrack(track, index);
 
           function handlePlay() {
             onPlayTrack(track, index);
@@ -74,7 +77,7 @@ export default function TrackTable({
               }
               tabIndex={isPlayable ? 0 : undefined}
               role={isPlayable ? "button" : undefined}
-              aria-label={isPlayable ? `Play ${track.title}` : undefined}
+              aria-label={isPlayable ? `Play ${displayTrack.title}` : undefined}
             >
               {mode === "picker" && (
                 <td
@@ -95,7 +98,7 @@ export default function TrackTable({
                 data-label="Title"
               >
                 <span className="track-table__text track-table__text--primary">
-                  {track.title}
+                  {displayTrack.title}
                 </span>
               </td>
 
@@ -104,7 +107,7 @@ export default function TrackTable({
                 data-label="Artist"
               >
                 <span className="track-table__text track-table__text--secondary">
-                  {track.artist || "-"}
+                  {displayTrack.artist || "-"}
                 </span>
               </td>
 
@@ -113,7 +116,7 @@ export default function TrackTable({
                 data-label="Album"
               >
                 <span className="track-table__text track-table__text--secondary">
-                  {track.album || "-"}
+                  {displayTrack.album || "-"}
                 </span>
               </td>
 
@@ -131,7 +134,7 @@ export default function TrackTable({
                 data-label="File Name"
               >
                 <span className="track-table__text track-table__text--secondary">
-                  {track.file_name}
+                  {displayTrack.file_name}
                 </span>
               </td>
 
@@ -147,7 +150,7 @@ export default function TrackTable({
                       event.stopPropagation();
                       onEdit(track);
                     }}
-                    aria-label={`Edit ${track.title}`}
+                    aria-label={`Edit ${displayTrack.title}`}
                   >
                     Edit
                   </button>

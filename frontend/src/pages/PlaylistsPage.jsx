@@ -9,6 +9,7 @@ import {
 } from "../api/playlistApi";
 import CreatePlaylistModal from "../components/playlists/CreatePlaylistModal";
 import GenerateAiPlaylistModal from "../components/playlists/GenerateAiPlaylistModal";
+import { featureFlags } from "../config/featureFlags";
 import "../styles/PlaylistsPage.css";
 
 export default function PlaylistsPage() {
@@ -117,13 +118,15 @@ export default function PlaylistsPage() {
               </div>
 
               <div className="playlist-page__header-actions">
-                <button
-                  type="button"
-                  className="playlist-page__create playlist-page__create--secondary"
-                  onClick={() => setShowAiModal(true)}
-                >
-                  Generate with AI
-                </button>
+                {featureFlags.enableAiPlaylists && (
+                  <button
+                    type="button"
+                    className="playlist-page__create playlist-page__create--secondary"
+                    onClick={() => setShowAiModal(true)}
+                  >
+                    Generate with AI
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -329,7 +332,7 @@ export default function PlaylistsPage() {
         />
       )}
 
-      {showAiModal && (
+      {featureFlags.enableAiPlaylists && showAiModal && (
         <GenerateAiPlaylistModal
           onClose={() => setShowAiModal(false)}
           onGenerate={handleGenerateAiPlaylist}

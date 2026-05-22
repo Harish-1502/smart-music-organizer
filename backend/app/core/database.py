@@ -1,9 +1,10 @@
 from sqlalchemy import create_engine, MetaData, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.engine import Engine
+from app.core.config import settings
 
 
-DATABASE_URL = "sqlite:///./data/app.db"
+DATABASE_URL = settings.database_url
 
 convention = {
     "ix": "ix_%(column_0_label)s",

@@ -1,3 +1,5 @@
+import { isDemoMode } from "../utils/demoMode";
+
 export default function TrackFilterControls({ 
   artistFilter, 
   albumFilter,
@@ -8,11 +10,14 @@ export default function TrackFilterControls({
   setExtensionFilter,
   clearAllFilters 
 }) {
+  const demoModeEnabled = isDemoMode();
+
   return (
     <div className="track-browser__filter-row">
       <input
         className="track-browser__input"
-        placeholder="Filter by artist"
+        type={demoModeEnabled ? "password" : "text"}
+        placeholder={demoModeEnabled ? "Artist filter hidden" : "Filter by artist"}
         value={artistFilter}
         aria-label="Filter tracks by artist"
         onChange={(e) => {
@@ -23,7 +28,8 @@ export default function TrackFilterControls({
 
       <input
         className="track-browser__input"
-        placeholder="Filter by album"
+        type={demoModeEnabled ? "password" : "text"}
+        placeholder={demoModeEnabled ? "Album filter hidden" : "Filter by album"}
         value={albumFilter}
         aria-label="Filter tracks by album"
         onChange={(e) => {

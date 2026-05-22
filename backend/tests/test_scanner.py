@@ -5,6 +5,8 @@ from sqlalchemy.orm import sessionmaker
 from app.core.database import Base
 from app.models.track import Track
 from app.services.scanner import scan_library, scan_state, reset_scan_state
+from app.services import scanner as scanner_service
+from app.services import scan_state as scan_state_service
 import pytest
 
 TEST_DB_URL = "sqlite:///./test_scanner.db"
@@ -16,7 +18,9 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 def setup_test_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    reset_scan_state()
     yield
+    reset_scan_state()
     Base.metadata.drop_all(bind=engine)
 
 
@@ -33,7 +37,6 @@ def test_scan_library_inserts_supported_files(tmp_path):
 
     try:
         scan_library(str(music_dir),db)
-        print(scan_state)
         tracks = db.query(Track).all()
         assert len(tracks) == 2
         assert scan_state["supported_found"] == 2
@@ -99,3 +102,22 @@ def test_reset_scan_state_resets_all_fields():
     assert scan_state["failed"] == 0
     assert scan_state["user_edited"] == 0
     assert scan_state["last_error"] is None
+
+
+def test_scanner_reexports_shared_scan_state_object():
+    """
+    Test:
+    - scanner.py continues to expose scan_state/reset_scan_state
+    - the extracted scan_state module owns the same dict object
+
+    Expected result:
+    - existing imports from app.services.scanner stay compatible
+    """
+    scanner_service.scan_state["status"] = "scanning"
+
+    assert scanner_service.scan_state is scan_state_service.scan_state
+    assert scan_state_service.scan_state["status"] == "scanning"
+
+    scan_state_service.reset_scan_state()
+
+    assert scanner_service.scan_state["status"] == "idle"

@@ -24,8 +24,8 @@ def test_scan_library_saves_metadata_and_art(tmp_path, monkeypatch, db_session):
     def fake_detect_album_art(path):
         return str(cover_file)
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(str(music_dir), db_session)
 
@@ -54,8 +54,8 @@ def test_scan_library_uses_unknown_metadata_when_extraction_fails(tmp_path, monk
     def fake_detect_album_art(path):
         return None
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(str(music_dir), db_session)
 
@@ -90,8 +90,8 @@ def test_scan_library_skips_duplicate_and_keeps_metadata_fields(tmp_path, monkey
     def fake_detect_album_art(path):
         return None
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(str(music_dir), db_session)
     scan_library(str(music_dir), db_session)

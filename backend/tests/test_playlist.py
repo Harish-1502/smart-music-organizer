@@ -32,6 +32,8 @@ def create_track(db_session, title="Song", artist="Artist", album="Album"):
 
 def test_add_playlist_with_valid_name(db_session):
     playlist = add_playlist(db_session, "Gym Mix")
+    db_session.commit()
+    db_session.refresh(playlist)
 
     assert playlist.id is not None
     assert playlist.name == "Gym Mix"
@@ -44,6 +46,7 @@ def test_add_playlist_with_empty_name_fails(db_session):
 
 def test_add_playlist_with_duplicate_name_fails(db_session):
     add_playlist(db_session, "Gym Mix")
+    db_session.commit()
 
     with pytest.raises(ValueError, match="Playlist with this name already exists"):
         add_playlist(db_session, "gym mix")
@@ -51,8 +54,12 @@ def test_add_playlist_with_duplicate_name_fails(db_session):
 
 def test_rename_playlist(db_session):
     playlist = add_playlist(db_session, "Old Name")
+    db_session.commit()
+    db_session.refresh(playlist)
 
     renamed = rename_playlist(db_session, playlist.id, "New Name")
+    db_session.commit()
+    db_session.refresh(renamed)
 
     assert renamed.name == "New Name"
 
@@ -60,6 +67,7 @@ def test_rename_playlist(db_session):
 def test_rename_playlist_to_duplicate_name_fails(db_session):
     playlist_1 = add_playlist(db_session, "Gym")
     playlist_2 = add_playlist(db_session, "Chill")
+    db_session.commit()
 
     with pytest.raises(ValueError, match="Playlist with this name already exists"):
         rename_playlist(db_session, playlist_2.id, "Gym")
@@ -67,8 +75,11 @@ def test_rename_playlist_to_duplicate_name_fails(db_session):
 
 def test_delete_playlist(db_session):
     playlist = add_playlist(db_session, "Delete Me")
+    db_session.commit()
+    db_session.refresh(playlist)
 
     remove_playlist(db_session, playlist.id)
+    db_session.commit()
 
     deleted = db_session.query(Playlist).filter(Playlist.id == playlist.id).first()
     assert deleted is None
@@ -76,9 +87,12 @@ def test_delete_playlist(db_session):
 
 def test_add_one_track_to_playlist(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track = create_track(db_session, title="Song A")
 
     playlist_tracks = add_tracks_to_playlist(db_session, [track.id], playlist.id)
+    db_session.commit()
 
     assert len(playlist_tracks) == 1
     assert playlist_tracks[0].track_id == track.id
@@ -87,6 +101,8 @@ def test_add_one_track_to_playlist(db_session):
 
 def test_add_many_tracks_to_playlist(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track_1 = create_track(db_session, title="Song A")
     track_2 = create_track(db_session, title="Song B")
     track_3 = create_track(db_session, title="Song C")
@@ -96,6 +112,7 @@ def test_add_many_tracks_to_playlist(db_session):
         [track_1.id, track_2.id, track_3.id],
         playlist.id,
     )
+    db_session.commit()
 
     assert len(playlist_tracks) == 3
     assert [pt.position for pt in playlist_tracks] == [1, 2, 3]
@@ -103,9 +120,12 @@ def test_add_many_tracks_to_playlist(db_session):
 
 def test_add_duplicate_tracks_is_allowed(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track = create_track(db_session, title="Song A")
 
     playlist_tracks = add_tracks_to_playlist(db_session, [track.id, track.id], playlist.id)
+    db_session.commit()
 
     assert len(playlist_tracks) == 2
     assert playlist_tracks[0].track_id == track.id
@@ -115,6 +135,8 @@ def test_add_duplicate_tracks_is_allowed(db_session):
 
 def test_add_tracks_with_empty_list_fails(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
 
     with pytest.raises(ValueError, match="No tracks provided"):
         add_tracks_to_playlist(db_session, [], playlist.id)
@@ -122,6 +144,8 @@ def test_add_tracks_with_empty_list_fails(db_session):
 
 def test_add_missing_track_fails(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
 
     with pytest.raises(ValueError, match="Tracks not found"):
         add_tracks_to_playlist(db_session, [999], playlist.id)
@@ -129,6 +153,8 @@ def test_add_missing_track_fails(db_session):
 
 def test_remove_one_track_renumbers_positions(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track_1 = create_track(db_session, title="Song A")
     track_2 = create_track(db_session, title="Song B")
     track_3 = create_track(db_session, title="Song C")
@@ -138,8 +164,10 @@ def test_remove_one_track_renumbers_positions(db_session):
         [track_1.id, track_2.id, track_3.id],
         playlist.id,
     )
+    db_session.commit()
 
     remove_tracks_from_playlist(db_session, [playlist_tracks[1].id], playlist.id)
+    db_session.commit()
 
     remaining = (
         db_session.query(PlaylistTrack)
@@ -155,6 +183,8 @@ def test_remove_one_track_renumbers_positions(db_session):
 
 def test_remove_many_tracks_renumbers_positions(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track_1 = create_track(db_session, title="Song A")
     track_2 = create_track(db_session, title="Song B")
     track_3 = create_track(db_session, title="Song C")
@@ -164,12 +194,14 @@ def test_remove_many_tracks_renumbers_positions(db_session):
         [track_1.id, track_2.id, track_3.id],
         playlist.id,
     )
+    db_session.commit()
 
     remove_tracks_from_playlist(
         db_session,
         [playlist_tracks[0].id, playlist_tracks[2].id],
         playlist.id,
     )
+    db_session.commit()
 
     remaining = (
         db_session.query(PlaylistTrack)
@@ -185,6 +217,8 @@ def test_remove_many_tracks_renumbers_positions(db_session):
 
 def test_remove_invalid_playlist_track_fails(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
 
     with pytest.raises(ValueError, match="Playlist tracks not found"):
         remove_tracks_from_playlist(db_session, [999], playlist.id)
@@ -192,6 +226,8 @@ def test_remove_invalid_playlist_track_fails(db_session):
 
 def test_reorder_playlist_tracks(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track_1 = create_track(db_session, title="Song A")
     track_2 = create_track(db_session, title="Song B")
     track_3 = create_track(db_session, title="Song C")
@@ -201,6 +237,7 @@ def test_reorder_playlist_tracks(db_session):
         [track_1.id, track_2.id, track_3.id],
         playlist.id,
     )
+    db_session.commit()
 
     new_order = [
         playlist_tracks[2].id,
@@ -209,6 +246,7 @@ def test_reorder_playlist_tracks(db_session):
     ]
 
     reorder_playlist_tracks(db_session, playlist.id, new_order)
+    db_session.commit()
 
     reordered = (
         db_session.query(PlaylistTrack)
@@ -223,10 +261,13 @@ def test_reorder_playlist_tracks(db_session):
 
 def test_reorder_with_duplicate_ids_fails(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track_1 = create_track(db_session, title="Song A")
     track_2 = create_track(db_session, title="Song B")
 
     playlist_tracks = add_tracks_to_playlist(db_session, [track_1.id, track_2.id], playlist.id)
+    db_session.commit()
 
     bad_order = [playlist_tracks[0].id, playlist_tracks[0].id]
 
@@ -236,12 +277,43 @@ def test_reorder_with_duplicate_ids_fails(db_session):
 
 def test_reorder_with_missing_id_fails(db_session):
     playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
     track_1 = create_track(db_session, title="Song A")
     track_2 = create_track(db_session, title="Song B")
 
     playlist_tracks = add_tracks_to_playlist(db_session, [track_1.id, track_2.id], playlist.id)
+    db_session.commit()
 
     bad_order = [playlist_tracks[0].id]
 
     with pytest.raises(ValueError, match="Invalid reorder list"):
         reorder_playlist_tracks(db_session, playlist.id, bad_order)
+
+
+def test_bulk_delete_track_cascades_to_playlist_tracks(db_session):
+    playlist = add_playlist(db_session, "Gym")
+    db_session.commit()
+    db_session.refresh(playlist)
+    track = create_track(db_session, title="Song A")
+
+    playlist_tracks = add_tracks_to_playlist(db_session, [track.id], playlist.id)
+    db_session.commit()
+    track_id = track.id
+    playlist_track_id = playlist_tracks[0].id
+
+    deleted = (
+        db_session.query(Track)
+        .filter(Track.id == track_id)
+        .delete(synchronize_session=False)
+    )
+    db_session.commit()
+
+    assert deleted == 1
+    assert db_session.query(Track).filter(Track.id == track_id).first() is None
+    assert (
+        db_session.query(PlaylistTrack)
+        .filter(PlaylistTrack.id == playlist_track_id)
+        .first()
+        is None
+    )

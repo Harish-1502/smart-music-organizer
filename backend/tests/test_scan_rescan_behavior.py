@@ -43,8 +43,8 @@ def test_scan_inserts_new_track(tmp_path, monkeypatch, db_session):
     def fake_detect_album_art(_path):
         return "cover.jpg"
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
     
     scan_library(tmp_path, db_session)
     track = db_session.query(Track).filter(Track.file_path == str(music_file.resolve())).first()
@@ -113,8 +113,8 @@ def test_rescan_updates_existing_unedited_track(tmp_path, monkeypatch, db_sessio
     def fake_detect_album_art(_path):
         return "new_cover.jpg"
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(tmp_path,db_session)
     updated = db_session.query(Track).filter(Track.file_path == str(music_file.resolve())).first()
@@ -183,8 +183,8 @@ def test_rescan_preserves_existing_user_edited_track(tmp_path, monkeypatch, db_s
     def fake_detect_album_art(_path):
         return "new_cover.jpg"
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(tmp_path,db_session)
 
@@ -254,8 +254,8 @@ def test_rescan_with_same_metadata_keeps_values_stable(tmp_path, monkeypatch, db
     def fake_detect_album_art(_path):
         return "cover.jpg"
 
-    monkeypatch.setattr("app.services.scanner.extract_metadata", fake_extract_metadata)
-    monkeypatch.setattr("app.services.scanner.detect_album_art", fake_detect_album_art)
+    monkeypatch.setattr("app.services.scan_track_metadata.extract_metadata", fake_extract_metadata)
+    monkeypatch.setattr("app.services.scan_track_metadata.detect_album_art", fake_detect_album_art)
 
     scan_library(tmp_path,db_session)
 

@@ -1,6 +1,12 @@
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models.track import Track
+from app.models.playlist import Playlist
+from app.models.playlistTrack import PlaylistTrack
+from app.models.tag import Tag
+from app.models.track_tag import TrackTag
+from app.models.track_tag_suggestion import TrackTagSuggestion
+from app.routes import library as library_route
 from app.services.scanner import reset_scan_state, scan_state
 
 client = TestClient(app)
@@ -119,6 +125,47 @@ def test_post_scan_invalid_folder_returns_400(client):
     assert response.status_code == 400
 
 
+def test_post_scan_unexpected_error_hides_raw_exception(
+    client,
+    tmp_path,
+    monkeypatch,
+):
+    private_path = "C:/Private/Music/song.mp3"
+
+    def fail_run_scan_library(_folder_path):
+        raise RuntimeError(f"boom while reading {private_path}")
+
+    monkeypatch.setattr(library_route, "run_scan_library", fail_run_scan_library)
+
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": str(tmp_path)},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to scan library"
+    assert private_path not in response.text
+    assert "boom while reading" not in response.text
+
+
+def test_post_scan_blank_folder_path_returns_422(client):
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": "   "},
+    )
+
+    assert response.status_code == 422
+
+
+def test_post_scan_too_long_folder_path_returns_422(client):
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": "C:/" + ("a" * 1025)},
+    )
+
+    assert response.status_code == 422
+
+
 def test_get_scan_status_returns_expected_keys(client):
     """
     Test:
@@ -142,6 +189,67 @@ def test_get_scan_status_returns_expected_keys(client):
     assert "failed" in body
     assert "user_edited" in body
     assert "last_error" in body
+
+
+def test_scan_status_exposes_paths_by_default(client, monkeypatch):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", True)
+    reset_scan_state()
+    scan_state["current_file"] = "C:/Music/private/song.mp3"
+    scan_state["last_error"] = "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["current_file"] == "C:/Music/private/song.mp3"
+    assert body["last_error"] == "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+
+def test_scan_status_hides_current_file_when_local_paths_are_hidden(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", False)
+    reset_scan_state()
+    scan_state["current_file"] = "C:/Music/private/song.mp3"
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    assert response.json()["current_file"] is None
+    assert scan_state["current_file"] == "C:/Music/private/song.mp3"
+
+
+def test_scan_status_hides_last_error_when_local_paths_are_hidden(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", False)
+    reset_scan_state()
+    scan_state["last_error"] = "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    assert response.json()["last_error"] == "Scan error details hidden."
+    assert scan_state["last_error"] == "Insert failed for C:/Music/private/song.mp3: bad metadata"
+
+
+def test_scan_status_preserves_empty_last_error_when_local_paths_are_hidden(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setattr(library_route.settings, "expose_local_paths", False)
+    reset_scan_state()
+    scan_state["current_file"] = "C:/Music/private/song.mp3"
+    scan_state["last_error"] = None
+
+    response = client.get("/library/scan_status")
+
+    assert response.status_code == 200
+    assert response.json()["current_file"] is None
+    assert response.json()["last_error"] is None
+    assert scan_state["last_error"] is None
 
 
 def test_clear_library_deletes_tracks_and_resets_scan_state(client, db_session):
@@ -185,3 +293,106 @@ def test_clear_library_deletes_tracks_and_resets_scan_state(client, db_session):
 
     remaining = db_session.query(Track).count()
     assert remaining == 0
+
+
+def test_clear_library_deletes_tracks_but_preserves_unlinked_playlists_and_tags(
+    client,
+    db_session,
+):
+    """
+    Current behavior:
+    - /library/clear deletes rows from tracks
+    - playlists and tags are preserved when they are not linked to tracks
+    """
+    track = Track(
+        file_path="C:/music/song.mp3",
+        file_name="song.mp3",
+        extension=".mp3",
+        folder_path="C:/music",
+        title="Title",
+        artist="Artist",
+        album="Album",
+        display_title="Title",
+        display_artist="Artist",
+        display_album="Album",
+        metadata_source="test",
+        user_edited=False,
+    )
+    playlist = Playlist(name="Keep Me")
+    tag = Tag(name="keep-tag", category="test")
+
+    db_session.add_all([track, playlist, tag])
+    db_session.commit()
+
+    response = client.delete("/library/clear")
+
+    assert response.status_code == 200
+    assert response.json()["deleted_tracks"] == 1
+    assert db_session.query(Track).count() == 0
+    assert db_session.query(Playlist).count() == 1
+    assert db_session.query(Tag).count() == 1
+
+
+def test_clear_library_with_dependent_rows_deletes_tracks_and_links_only(
+    client,
+    db_session,
+):
+    """
+    Expected behavior:
+    - /library/clear deletes dependent track links before deleting tracks
+    - playlists and tags are preserved
+    """
+    track = Track(
+        file_path="C:/music/linked-song.mp3",
+        file_name="linked-song.mp3",
+        extension=".mp3",
+        folder_path="C:/music",
+        title="Linked Song",
+        artist="Artist",
+        album="Album",
+        display_title="Linked Song",
+        display_artist="Artist",
+        display_album="Album",
+        metadata_source="test",
+        user_edited=False,
+    )
+    playlist = Playlist(name="Linked Playlist")
+    tag = Tag(name="linked-tag", category="test")
+    db_session.add_all([track, playlist, tag])
+    db_session.commit()
+    db_session.refresh(track)
+    db_session.refresh(playlist)
+    db_session.refresh(tag)
+
+    playlist_track = PlaylistTrack(
+        playlist_id=playlist.id,
+        track_id=track.id,
+        position=1,
+    )
+    track_tag = TrackTag(
+        track_id=track.id,
+        tag_id=tag.id,
+        source="manual",
+        confidence=1.0,
+    )
+    tag_suggestion = TrackTagSuggestion(
+        track_id=track.id,
+        tag_id=tag.id,
+        source="rule",
+        confidence=0.5,
+        status="pending",
+    )
+    db_session.add_all([playlist_track, track_tag, tag_suggestion])
+    db_session.commit()
+
+    response = client.delete("/library/clear")
+
+    assert response.status_code == 200
+    assert response.json()["deleted_tracks"] == 1
+
+    assert db_session.query(Track).count() == 0
+    assert db_session.query(PlaylistTrack).count() == 0
+    assert db_session.query(TrackTag).count() == 0
+    assert db_session.query(TrackTagSuggestion).count() == 0
+    assert db_session.query(Playlist).count() == 1
+    assert db_session.query(Tag).count() == 1

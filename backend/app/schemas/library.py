@@ -1,19 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.validators import strip_string
 
 class LibraryScanRequest(BaseModel):
-    folder_path: str
+    folder_path: str = Field(min_length=1, max_length=1024)
 
-class ScanStatusResponse(BaseModel):
-    status: str
-    current_file: str | None = None
-    files_seen: int
-    supported_found: int
-    inserted: int
-    duplicates: int
-    failed: int
-    last_error: str | None = None
-
-class TrackUpdateRequest(BaseModel):
-    title: str | None = None
-    artist: str | None = None
-    album: str | None = None
+    @field_validator("folder_path", mode="before")
+    @classmethod
+    def strip_folder_path(cls, value):
+        return strip_string(value)

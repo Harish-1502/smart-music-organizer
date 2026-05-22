@@ -12,7 +12,9 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { trackArtUrlForTrack } from "../api/apiBase";
 import { usePlayer } from "../context/PlayerContext";
+import { maskTrack, shouldHideDemoArtwork } from "../utils/demoMode";
 import "../styles/PlayerPage.css";
 
 function formatTime(seconds) {
@@ -91,25 +93,8 @@ function getPlaybackErrorMessage(error, audioElement) {
   return "Playback could not start. Try another track.";
 }
 
-function getTrackArtUrl(artPath) {
-  if (typeof artPath !== "string" || !artPath.trim()) {
-    return null;
-  }
-
-  const normalizedPath = artPath.trim();
-
-  if (
-    normalizedPath.startsWith("http://") ||
-    normalizedPath.startsWith("https://")
-  ) {
-    return normalizedPath;
-  }
-
-  if (normalizedPath.startsWith("/static/")) {
-    return `http://localhost:8000${normalizedPath}`;
-  }
-
-  return `http://localhost:8000/library/art?path=${encodeURIComponent(normalizedPath)}`;
+function getTrackArtUrl(track) {
+  return trackArtUrlForTrack(track);
 }
 
 export default function PlayerPage() {
@@ -156,11 +141,16 @@ export default function PlayerPage() {
       return;
     }
 
-    setIsLoading(true);
+    const audioElement = audioRef.current;
+    const hasPlaybackData = audioElement?.readyState >= 2;
+
+    setIsLoading(!hasPlaybackData);
     setIsBuffering(false);
-    setIsAudioReady(false);
-    setPlaybackError("");
-  }, [currentTrack]);
+    setIsAudioReady(hasPlaybackData);
+    setPlaybackError(
+      audioElement?.error ? getPlaybackErrorMessage(null, audioElement) : "",
+    );
+  }, [audioRef, currentTrack]);
 
   useEffect(() => {
     const audioElement = audioRef.current;
@@ -350,11 +340,12 @@ export default function PlayerPage() {
       : isLoading
         ? "Loading..."
         : "";
-  const displayTitle = getDisplayTitle(currentTrack);
-  const displayArtist = getDisplayArtist(currentTrack);
-  const displayAlbum = getDisplayAlbum(currentTrack);
-  const displayFileName = firstNonEmpty(currentTrack?.file_name, displayTitle);
-  const artUrl = getTrackArtUrl(currentTrack?.art_path);
+  const displayCurrentTrack = maskTrack(currentTrack, currentIndex);
+  const displayTitle = getDisplayTitle(displayCurrentTrack);
+  const displayArtist = getDisplayArtist(displayCurrentTrack);
+  const displayAlbum = getDisplayAlbum(displayCurrentTrack);
+  const displayFileName = firstNonEmpty(displayCurrentTrack?.file_name, displayTitle);
+  const artUrl = shouldHideDemoArtwork() ? null : getTrackArtUrl(currentTrack);
 
   const playerThemeVars = {
     ...(currentTrack?.accentColor
@@ -906,6 +897,7 @@ export default function PlayerPage() {
                 const isTrackValid = track && typeof track === "object";
                 const isInteractive = canJumpQueue && isTrackValid;
                 const itemKey = `${track?.track_id ?? track?.id ?? "queue"}-${index}`;
+                const displayQueueTrack = maskTrack(track, index);
 
                 if (isInteractive) {
                   return (
@@ -923,10 +915,10 @@ export default function PlayerPage() {
                       </span>
                       <span className="player-page__queue-text">
                         <span className="player-page__queue-title">
-                          {getQueueTrackTitle(track)}
+                          {getQueueTrackTitle(displayQueueTrack)}
                         </span>
                         <span className="player-page__queue-artist">
-                          {getQueueTrackArtist(track)}
+                          {getQueueTrackArtist(displayQueueTrack)}
                         </span>
                       </span>
                     </button>
@@ -947,10 +939,10 @@ export default function PlayerPage() {
                     </span>
                     <span className="player-page__queue-text">
                       <span className="player-page__queue-title">
-                        {getQueueTrackTitle(track)}
+                        {getQueueTrackTitle(displayQueueTrack)}
                       </span>
                       <span className="player-page__queue-artist">
-                        {getQueueTrackArtist(track)}
+                        {getQueueTrackArtist(displayQueueTrack)}
                       </span>
                     </span>
                   </div>

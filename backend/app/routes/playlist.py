@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -23,11 +24,14 @@ from app.services.playlist import (
 )
 
 router = APIRouter(prefix="/playlists", tags=["playlist"])
+logger = logging.getLogger(__name__)
 
 @router.post("", response_model=PlaylistResponse)
 def create_playlist(request: PlaylistCreateRequest, db: Session = Depends(get_db)):
     try:
         playlist = add_playlist(db, request.name)
+        db.commit()
+        db.refresh(playlist)
         return PlaylistResponse(
             id=playlist.id,
             name=playlist.name,
@@ -35,7 +39,12 @@ def create_playlist(request: PlaylistCreateRequest, db: Session = Depends(get_db
             updated_at=playlist.updated_at,
         )
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create playlist")
+        raise HTTPException(status_code=500, detail="Failed to create playlist")
     
 @router.get("", response_model=list[PlaylistResponse])
 def get_playlists(db: Session = Depends(get_db)):
@@ -86,9 +95,15 @@ def get_playlist_detail(playlist_id: int, db: Session = Depends(get_db)):
 def delete_playlist(playlist_id: int, db: Session = Depends(get_db)):
     try:
         remove_playlist(db, playlist_id)
+        db.commit()
         return {"result": "Playlist deleted successfully"}
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to delete playlist", extra={"playlist_id": playlist_id})
+        raise HTTPException(status_code=500, detail="Failed to delete playlist")
 
 @router.patch("/{playlist_id}", response_model=PlaylistResponse)
 def update_playlist_name(
@@ -97,9 +112,17 @@ def update_playlist_name(
     db: Session = Depends(get_db),
 ):
     try:
-        return rename_playlist(db, playlist_id, request.name)
+        playlist = rename_playlist(db, playlist_id, request.name)
+        db.commit()
+        db.refresh(playlist)
+        return playlist
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to rename playlist", extra={"playlist_id": playlist_id})
+        raise HTTPException(status_code=500, detail="Failed to rename playlist")
     
 @router.post("/{playlist_id}/tracks", response_model=list[PlaylistTrackResponse])
 def add_track_to_playlist(
@@ -113,6 +136,11 @@ def add_track_to_playlist(
             track_ids=[request.track_id],
             playlist_id=playlist_id,
         )
+
+        db.commit()
+
+        for playlist_track in playlist_tracks:
+            db.refresh(playlist_track)
 
         response = []
 
@@ -135,7 +163,15 @@ def add_track_to_playlist(
         return response
 
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Failed to add track to playlist",
+            extra={"playlist_id": playlist_id},
+        )
+        raise HTTPException(status_code=500, detail="Failed to add track to playlist")
     
 @router.delete("/{playlist_id}/tracks/{playlist_track_id}")
 def delete_track_from_playlist(
@@ -150,10 +186,23 @@ def delete_track_from_playlist(
             playlist_id=playlist_id,
         )
 
+        db.commit()
+
         return {"result": "Track removed from playlist successfully"}
 
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Failed to remove track from playlist",
+            extra={"playlist_id": playlist_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to remove track from playlist",
+        )
 
 
 @router.patch("/{playlist_id}/reorder")
@@ -169,7 +218,14 @@ def reorder_playlist(
             playlist_track_ids=request.playlist_track_ids,
         )
 
+        db.commit()
+
         return {"result": "Playlist reordered successfully"}
 
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to reorder playlist", extra={"playlist_id": playlist_id})
+        raise HTTPException(status_code=500, detail="Failed to reorder playlist")

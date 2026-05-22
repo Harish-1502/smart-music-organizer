@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getApiErrorMessage } from "../../api/apiErrors";
 
 export default function CreatePlaylistModal({ onClose, onCreate }) {
   const [name, setName] = useState("");
@@ -15,8 +16,7 @@ export default function CreatePlaylistModal({ onClose, onCreate }) {
       await onCreate(name);
       setName("");
     } catch (error) {
-      const detail = error.response?.data?.detail;
-      setError(detail || "Failed to create playlist.");
+      setError(getApiErrorMessage(error, "Failed to create playlist."));
     } finally {
       setSaving(false);
     }

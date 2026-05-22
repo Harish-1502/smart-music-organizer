@@ -7,7 +7,9 @@ import {
   Shuffle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { trackArtUrlForTrack } from "../api/apiBase";
 import { usePlayer } from "../context/PlayerContext";
+import { maskTrack, shouldHideDemoArtwork } from "../utils/demoMode";
 
 // Call actions safely from JSX without recreating the wrapper each render.
 function safeInvokeAction(action) {
@@ -22,25 +24,8 @@ function safeInvokeAction(action) {
   }
 }
 
-function getTrackArtUrl(artPath) {
-  if (typeof artPath !== "string" || !artPath.trim()) {
-    return null;
-  }
-
-  const normalizedPath = artPath.trim();
-
-  if (
-    normalizedPath.startsWith("http://") ||
-    normalizedPath.startsWith("https://")
-  ) {
-    return normalizedPath;
-  }
-
-  if (normalizedPath.startsWith("/static/")) {
-    return `http://localhost:8000${normalizedPath}`;
-  }
-
-  return `http://localhost:8000/library/art?path=${encodeURIComponent(normalizedPath)}`;
+function getTrackArtUrl(track) {
+  return trackArtUrlForTrack(track);
 }
 
 export default function MiniPlayer() {
@@ -61,20 +46,21 @@ export default function MiniPlayer() {
     return null;
   }
 
+  const displayTrack = maskTrack(currentTrack);
   const title =
-    currentTrack?.title ||
-    currentTrack?.display_title ||
-    currentTrack?.scanned_title ||
-    currentTrack?.file_name ||
+    displayTrack?.title ||
+    displayTrack?.display_title ||
+    displayTrack?.scanned_title ||
+    displayTrack?.file_name ||
     "Unknown track";
 
   const artist =
-    currentTrack?.artist ||
-    currentTrack?.display_artist ||
-    currentTrack?.scanned_artist ||
+    displayTrack?.artist ||
+    displayTrack?.display_artist ||
+    displayTrack?.scanned_artist ||
     "Unknown artist";
 
-  const artUrl = getTrackArtUrl(currentTrack?.art_path);
+  const artUrl = shouldHideDemoArtwork() ? null : getTrackArtUrl(currentTrack);
 
   function handleOpenPlayer() {
     if (!currentTrack) {

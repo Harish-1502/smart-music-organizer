@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.ai_playlists import (
     GeneratePlaylistResponse,
@@ -23,26 +25,19 @@ from app.services.playlist_generator import (
 )
 
 router = APIRouter(prefix="/ai_playlists", tags=["ai_playlists"])
-
-
-@router.post("/parse-prompt", response_model=ParsePromptResponse)
-def parse_ai_prompt(request: ParsePromptRequest):
-    try:
-        parsed_rules = parse_prompt(request.prompt)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-
-    return {
-        "prompt": request.prompt,
-        "parsed_rules": parsed_rules,
-    }
-
+logger = logging.getLogger(__name__)
 
 @router.post("/generate", response_model=GeneratePlaylistResponse)
 def generate_ai_playlist(
     request: GeneratePlaylistRequest,
     db: Session = Depends(get_db),
 ):
+    if not settings.enable_ai_playlists:
+        raise HTTPException(
+            status_code=403,
+            detail="AI playlist generation is disabled.",
+        )
+
     try:
         parsed_rules = parse_prompt(request.prompt)
     except ValueError as error:
@@ -100,11 +95,12 @@ def generate_ai_playlist(
         db.commit()
         db.refresh(playlist)
 
-    except Exception as error:
+    except Exception:
         db.rollback()
+        logger.exception("Failed to generate AI playlist")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to create AI playlist: {error}",
+            detail="Failed to generate playlist",
         )
 
     total_duration_seconds = sum(

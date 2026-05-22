@@ -1,9 +1,13 @@
-from pydantic import BaseModel
 from typing import Optional, List
+
+from pydantic import BaseModel, Field, field_serializer, field_validator
+
+from app.schemas.public_paths import expose_art_path, expose_local_path
+from app.schemas.validators import strip_string
 
 class TrackOut(BaseModel):
     id: int
-    file_path: str
+    file_path: Optional[str] = None
     file_name: str
     extension: Optional[str] = None
     folder_path: Optional[str] = None
@@ -28,6 +32,14 @@ class TrackOut(BaseModel):
     class Config:
         from_attributes = True
 
+    @field_serializer("file_path", "folder_path")
+    def serialize_local_path(self, value):
+        return expose_local_path(value)
+
+    @field_serializer("art_path")
+    def serialize_art_path(self, value):
+        return expose_art_path(value)
+
 
 class PaginatedTracks(BaseModel):
     items: List[TrackOut]
@@ -37,9 +49,18 @@ class PaginatedTracks(BaseModel):
     total_pages: int
 
 class TrackUpdateRequest(BaseModel):
-    title: str | None = None
-    artist: str | None = None
-    album: str | None = None
+    title: str | None = Field(default=None, max_length=255)
+    artist: str | None = Field(default=None, max_length=255)
+    album: str | None = Field(default=None, max_length=255)
 
-class TrackUpdateArtRequest(BaseModel):
-    art_path: str | None = None
+    @field_validator("title", "artist", "album", mode="before")
+    @classmethod
+    def strip_metadata_field(cls, value):
+        return strip_string(value)
+
+    @field_validator("title")
+    @classmethod
+    def reject_empty_title(cls, value):
+        if value == "":
+            raise ValueError("Title cannot be empty")
+        return value
