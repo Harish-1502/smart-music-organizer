@@ -87,6 +87,8 @@ class MatchedReferenceRead(BaseModel):
     file_name: str | None = None
     label: Literal["positive", "negative"]
     similarity: float
+    audio_similarity: float | None = None
+    embedding_similarity: float | None = None
 
 
 class ReferenceTagSuggestionRead(BaseModel):
@@ -95,6 +97,10 @@ class ReferenceTagSuggestionRead(BaseModel):
     title: str | None = None
     artist: str | None = None
     file_name: str | None = None
+    match_score: float
+    conflict_score: float
+    ranking_score: float
+    status: Literal["strong", "review", "conflict", "weak"]
     final_score: float
     positive_score: float
     negative_score: float

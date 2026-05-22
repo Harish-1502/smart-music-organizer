@@ -14,6 +14,7 @@ class ReferenceScoringProfile:
     audio_weight: float
     embedding_weight: float
     negative_weight: float
+    conflict_ranking_weight: float
     top_k: int
     feature_scales: dict[str, float]
     feature_weights: dict[str, float]
@@ -23,6 +24,7 @@ DEFAULT_REFERENCE_SCORING_PROFILE = ReferenceScoringProfile(
     audio_weight=0.60,
     embedding_weight=0.40,
     negative_weight=0.60,
+    conflict_ranking_weight=0.25,
     top_k=2,
     feature_scales=DEFAULT_FEATURE_SCALES,
     feature_weights={
@@ -39,6 +41,7 @@ REFERENCE_SCORING_PROFILES = {
         audio_weight=0.45,
         embedding_weight=0.55,
         negative_weight=0.75,
+        conflict_ranking_weight=0.30,
         top_k=2,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights={
@@ -52,6 +55,7 @@ REFERENCE_SCORING_PROFILES = {
         audio_weight=0.75,
         embedding_weight=0.25,
         negative_weight=0.80,
+        conflict_ranking_weight=0.30,
         top_k=2,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights={
@@ -65,6 +69,7 @@ REFERENCE_SCORING_PROFILES = {
         audio_weight=0.70,
         embedding_weight=0.30,
         negative_weight=0.75,
+        conflict_ranking_weight=0.30,
         top_k=2,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights={
@@ -78,6 +83,7 @@ REFERENCE_SCORING_PROFILES = {
         audio_weight=0.50,
         embedding_weight=0.50,
         negative_weight=0.65,
+        conflict_ranking_weight=0.25,
         top_k=2,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights={
@@ -91,6 +97,7 @@ REFERENCE_SCORING_PROFILES = {
         audio_weight=0.90,
         embedding_weight=0.10,
         negative_weight=0.50,
+        conflict_ranking_weight=0.15,
         top_k=2,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights={
@@ -104,6 +111,7 @@ REFERENCE_SCORING_PROFILES = {
         audio_weight=0.90,
         embedding_weight=0.10,
         negative_weight=0.60,
+        conflict_ranking_weight=0.20,
         top_k=2,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights={
@@ -117,6 +125,7 @@ REFERENCE_SCORING_PROFILES = {
         audio_weight=0.55,
         embedding_weight=0.45,
         negative_weight=0.65,
+        conflict_ranking_weight=0.30,
         top_k=2,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights={

@@ -24,6 +24,10 @@ from app.services.tagging.reference_scoring_profiles import (
 class ReferenceTagScore:
     track_id: int
     tag_id: int
+    match_score: float
+    conflict_score: float
+    ranking_score: float
+    status: str
     positive_score: float
     negative_score: float
     final_score: float
@@ -34,6 +38,22 @@ class ReferenceTagScore:
 
 def _clamp_score(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+def classify_reference_suggestion(
+    match_score: float,
+    conflict_score: float,
+) -> str:
+    if match_score < 0.50:
+        return "weak"
+
+    if conflict_score > match_score + 0.10:
+        return "conflict"
+
+    if match_score >= 0.75 and conflict_score < 0.45:
+        return "strong"
+
+    return "review"
 
 
 def _numeric_value(track: Track, field_name: str) -> float | None:
@@ -113,6 +133,9 @@ def _track_artist(track: Track) -> str | None:
 def _matched_reference(
     reference: TagReferenceTrack,
     similarity: float,
+    *,
+    audio_similarity: float | None = None,
+    embedding_similarity: float | None = None,
 ) -> MatchedReference:
     track = reference.track
 
@@ -123,6 +146,16 @@ def _matched_reference(
         file_name=getattr(track, "file_name", None) if track else None,
         label=reference.label,
         similarity=round(_clamp_score(similarity), 3),
+        audio_similarity=(
+            round(_clamp_score(audio_similarity), 3)
+            if audio_similarity is not None
+            else None
+        ),
+        embedding_similarity=(
+            round(_clamp_score(embedding_similarity), 3)
+            if embedding_similarity is not None
+            else None
+        ),
     )
 
 
@@ -146,11 +179,12 @@ def _dot_similarity(first_embedding, second_embedding) -> float:
     )
 
 
-def _embedding_reference_similarities_by_label(
+def _embedding_reference_similarities_by_track_id(
     candidate_track: Track,
     references: list[TagReferenceTrack],
+    tag_name: str,
     embedding_cache: TrackEmbeddingRequestCache | None = None,
-) -> dict[str, list[float]]:
+) -> dict[int, float]:
     cache = embedding_cache or TrackEmbeddingRequestCache(
         encoder=_encode_embedding_texts,
     )
@@ -160,20 +194,20 @@ def _embedding_reference_similarities_by_label(
         for reference in references
         if reference.track_id != candidate_track.id and reference.track is not None
     ]
-    cache.preload([candidate_track, *reference_tracks])
+    cache.preload([candidate_track, *reference_tracks], exclude_tag_name=tag_name)
 
     candidate_embedding = cache.get(candidate_track)
 
     if candidate_embedding is None:
-        return {"positive": [], "negative": []}
+        return {}
 
-    similarities_by_label = {"positive": [], "negative": []}
+    similarities_by_track_id = {}
 
     for reference in references:
         if reference.track_id == candidate_track.id:
             continue
 
-        if reference.label not in similarities_by_label or reference.track is None:
+        if reference.track is None:
             continue
 
         reference_embedding = cache.get(reference.track)
@@ -181,11 +215,12 @@ def _embedding_reference_similarities_by_label(
         if reference_embedding is None:
             continue
 
-        similarities_by_label[reference.label].append(
-            _dot_similarity(candidate_embedding, reference_embedding)
+        similarities_by_track_id[reference.track_id] = _dot_similarity(
+            candidate_embedding,
+            reference_embedding,
         )
 
-    return similarities_by_label
+    return similarities_by_track_id
 
 
 def _top_k_matches(
@@ -211,14 +246,19 @@ def _average_matches(matches: list[MatchedReference]) -> float:
     )
 
 
-def _average_top_k(similarities: list[float], top_k: int) -> float:
-    if not similarities:
+def _average_embedding_similarity(matches: list[MatchedReference]) -> float:
+    embedding_similarities = [
+        match.embedding_similarity
+        for match in matches
+        if match.embedding_similarity is not None
+    ]
+
+    if not embedding_similarities:
         return 0.0
 
-    usable_top_k = max(1, top_k)
-    top_similarities = sorted(similarities, reverse=True)[:usable_top_k]
-
-    return _clamp_score(sum(top_similarities) / len(top_similarities))
+    return _clamp_score(
+        sum(embedding_similarities) / len(embedding_similarities)
+    )
 
 
 def _reference_matches(
@@ -226,15 +266,42 @@ def _reference_matches(
     references: list[TagReferenceTrack],
     label: str,
     profile: ReferenceScoringProfile,
+    embedding_similarities_by_track_id: dict[int, float] | None = None,
 ) -> list[MatchedReference]:
-    return [
-        _matched_reference(
-            reference,
-            _track_audio_similarity(candidate_track, reference.track, profile),
+    matches = []
+    embedding_similarities_by_track_id = embedding_similarities_by_track_id or {}
+
+    for reference in references:
+        if reference.label != label or reference.track_id == candidate_track.id:
+            continue
+
+        audio_similarity = _track_audio_similarity(
+            candidate_track,
+            reference.track,
+            profile,
         )
-        for reference in references
-        if reference.label == label and reference.track_id != candidate_track.id
-    ]
+        embedding_similarity = embedding_similarities_by_track_id.get(
+            reference.track_id,
+        )
+
+        if embedding_similarity is None:
+            blended_similarity = audio_similarity
+        else:
+            blended_similarity = (
+                profile.audio_weight * audio_similarity
+                + profile.embedding_weight * embedding_similarity
+            )
+
+        matches.append(
+            _matched_reference(
+                reference,
+                _clamp_score(blended_similarity),
+                audio_similarity=audio_similarity,
+                embedding_similarity=embedding_similarity,
+            )
+        )
+
+    return matches
 
 
 def _format_reference_match(prefix: str, match: MatchedReference) -> str:
@@ -243,18 +310,21 @@ def _format_reference_match(prefix: str, match: MatchedReference) -> str:
 
     return (
         f'{prefix}: "{title}" by {artist}, '
-        f"similarity {match.similarity:.2f}"
+        f"blended similarity {match.similarity:.2f}"
     )
 
 
-def _score_explanation(final_score: float) -> str:
-    if final_score >= 0.75:
-        return "Final score is high because positive references strongly outweighed negative references"
+def _status_explanation(status: str) -> str:
+    if status == "strong":
+        return "Marked strong because it has high match and low conflict"
 
-    if final_score >= 0.5:
-        return "Final score is moderate because positive references only partially outweighed negative references"
+    if status == "conflict":
+        return "Marked conflict because it is closer to negative references than positive references"
 
-    return "Final score is low because positive reference similarity was weak or offset by negative references"
+    if status == "review":
+        return "Marked review because it matches positives but is also close to negatives"
+
+    return "Marked weak because it is not close enough to positive references"
 
 
 def score_track_against_tag_references(
@@ -286,24 +356,7 @@ def score_track_against_tag_references(
 
     profile = get_reference_scoring_profile(tag.name)
     effective_top_k = top_k if top_k is not None else profile.top_k
-
-    positive_matches = _reference_matches(
-        candidate_track=candidate_track,
-        references=references,
-        label="positive",
-        profile=profile,
-    )
-    negative_matches = _reference_matches(
-        candidate_track=candidate_track,
-        references=references,
-        label="negative",
-        profile=profile,
-    )
-    positive_top_matches = _top_k_matches(positive_matches, effective_top_k)
-    negative_top_matches = _top_k_matches(negative_matches, effective_top_k)
-
-    positive_score = _average_matches(positive_top_matches)
-    negative_score = _average_matches(negative_top_matches)
+    embedding_similarities_by_track_id: dict[int, float] = {}
     embedding_positive_score = 0.0
     embedding_negative_score = 0.0
     embeddings_contributed = False
@@ -311,38 +364,50 @@ def score_track_against_tag_references(
 
     if include_embeddings:
         try:
-            embedding_similarities = _embedding_reference_similarities_by_label(
-                candidate_track=candidate_track,
-                references=references,
-                embedding_cache=embedding_cache,
+            embedding_similarities_by_track_id = (
+                _embedding_reference_similarities_by_track_id(
+                    candidate_track=candidate_track,
+                    references=references,
+                    tag_name=tag.name,
+                    embedding_cache=embedding_cache,
+                )
             )
-            positive_embedding_similarities = embedding_similarities["positive"]
-            negative_embedding_similarities = embedding_similarities["negative"]
-
-            if positive_embedding_similarities or negative_embedding_similarities:
-                embeddings_contributed = True
-                embedding_positive_score = _average_top_k(
-                    positive_embedding_similarities,
-                    effective_top_k,
-                )
-                embedding_negative_score = _average_top_k(
-                    negative_embedding_similarities,
-                    effective_top_k,
-                )
-                positive_score = _clamp_score(
-                    (profile.audio_weight * positive_score)
-                    + (profile.embedding_weight * embedding_positive_score)
-                )
-                negative_score = _clamp_score(
-                    (profile.audio_weight * negative_score)
-                    + (profile.embedding_weight * embedding_negative_score)
-                )
+            embeddings_contributed = bool(embedding_similarities_by_track_id)
         except Exception:
             reasons.append("Embedding similarity unavailable; used audio-only scoring")
 
+    positive_matches = _reference_matches(
+        candidate_track=candidate_track,
+        references=references,
+        label="positive",
+        profile=profile,
+        embedding_similarities_by_track_id=embedding_similarities_by_track_id,
+    )
+    negative_matches = _reference_matches(
+        candidate_track=candidate_track,
+        references=references,
+        label="negative",
+        profile=profile,
+        embedding_similarities_by_track_id=embedding_similarities_by_track_id,
+    )
+    positive_top_matches = _top_k_matches(positive_matches, effective_top_k)
+    negative_top_matches = _top_k_matches(negative_matches, effective_top_k)
+
+    match_score = _average_matches(positive_top_matches)
+    conflict_score = _average_matches(negative_top_matches)
+
+    if embeddings_contributed:
+        embedding_positive_score = _average_embedding_similarity(
+            positive_top_matches,
+        )
+        embedding_negative_score = _average_embedding_similarity(
+            negative_top_matches,
+        )
+
     if not positive_matches:
         reasons.append("No positive references found")
-        final_score = 0.0
+        match_score = 0.0
+        ranking_score = 0.0
     else:
         reasons.append(f"Using {tag.name} scoring profile")
         reasons.append(f"Suggested tag: {tag.name}")
@@ -355,8 +420,9 @@ def score_track_against_tag_references(
                 positive_top_matches[0],
             )
         )
-        final_score = positive_score - (profile.negative_weight * negative_score)
-        reasons.append(_score_explanation(_clamp_score(final_score)))
+        ranking_score = match_score - (
+            profile.conflict_ranking_weight * conflict_score
+        )
 
     if negative_matches:
         reasons.append(
@@ -371,6 +437,18 @@ def score_track_against_tag_references(
     else:
         reasons.append("No negative references found")
 
+    ranking_score = _clamp_score(ranking_score)
+    match_score = _clamp_score(match_score)
+    conflict_score = _clamp_score(conflict_score)
+    status = classify_reference_suggestion(match_score, conflict_score)
+    reasons.append(
+        f"Match score {match_score:.2f} from closest positive references."
+    )
+    reasons.append(
+        f"Conflict score {conflict_score:.2f} from closest negative references."
+    )
+    reasons.append(_status_explanation(status))
+
     if embeddings_contributed:
         reasons.append(
             f"Embedding positive similarity contributed: {embedding_positive_score:.2f}"
@@ -382,9 +460,13 @@ def score_track_against_tag_references(
     return ReferenceTagScore(
         track_id=track_id,
         tag_id=tag_id,
-        positive_score=round(_clamp_score(positive_score), 3),
-        negative_score=round(_clamp_score(negative_score), 3),
-        final_score=round(_clamp_score(final_score), 3),
+        match_score=round(match_score, 3),
+        conflict_score=round(conflict_score, 3),
+        ranking_score=round(ranking_score, 3),
+        status=status,
+        positive_score=round(match_score, 3),
+        negative_score=round(conflict_score, 3),
+        final_score=round(ranking_score, 3),
         reasons=reasons,
         positive_matches=positive_top_matches,
         negative_matches=negative_top_matches,
@@ -398,6 +480,7 @@ def suggest_tracks_for_tag_from_references(
     limit: int = 25,
     min_score: float = 0.65,
     include_embeddings: bool = True,
+    embedding_cache: TrackEmbeddingRequestCache | None = None,
 ) -> list[ReferenceTagSuggestion]:
     tag = db.get(Tag, tag_id)
     if tag is None:
@@ -432,11 +515,14 @@ def suggest_tracks_for_tag_from_references(
         query = query.filter(~Track.id.in_(excluded_track_ids))
 
     tracks = query.all()
-    embedding_cache = None
+    active_embedding_cache = embedding_cache
     use_embeddings_for_scores = include_embeddings
 
     if include_embeddings:
-        embedding_cache = TrackEmbeddingRequestCache(encoder=_encode_embedding_texts)
+        if active_embedding_cache is None:
+            active_embedding_cache = TrackEmbeddingRequestCache(
+                encoder=_encode_embedding_texts,
+            )
 
         try:
             reference_tracks = [
@@ -444,9 +530,12 @@ def suggest_tracks_for_tag_from_references(
                 for reference in references
                 if reference.track is not None
             ]
-            embedding_cache.preload([*tracks, *reference_tracks])
+            active_embedding_cache.preload(
+                [*tracks, *reference_tracks],
+                exclude_tag_name=tag.name,
+            )
         except Exception:
-            embedding_cache = None
+            active_embedding_cache = None
             use_embeddings_for_scores = False
 
     suggestions: list[ReferenceTagSuggestion] = []
@@ -458,10 +547,10 @@ def suggest_tracks_for_tag_from_references(
             tag_id=tag_id,
             include_embeddings=use_embeddings_for_scores,
             references=references,
-            embedding_cache=embedding_cache,
+            embedding_cache=active_embedding_cache,
         )
 
-        if score.final_score < min_score:
+        if score.match_score < min_score:
             continue
 
         suggestions.append(
@@ -475,6 +564,10 @@ def suggest_tracks_for_tag_from_references(
                 or getattr(track, "artist", None)
                 or getattr(track, "scanned_artist", None),
                 file_name=getattr(track, "file_name", None),
+                match_score=score.match_score,
+                conflict_score=score.conflict_score,
+                ranking_score=score.ranking_score,
+                status=score.status,
                 final_score=score.final_score,
                 positive_score=score.positive_score,
                 negative_score=score.negative_score,
@@ -484,7 +577,10 @@ def suggest_tracks_for_tag_from_references(
             )
         )
 
-    suggestions.sort(key=lambda item: item.final_score, reverse=True)
+    suggestions.sort(
+        key=lambda item: (item.ranking_score, item.match_score),
+        reverse=True,
+    )
 
     return suggestions[:limit]
 
@@ -505,6 +601,11 @@ def suggest_tracks_for_all_reference_tags(
     )
 
     suggestions: list[GlobalReferenceTagSuggestion] = []
+    embedding_cache = (
+        TrackEmbeddingRequestCache(encoder=_encode_embedding_texts)
+        if include_embeddings
+        else None
+    )
 
     for tag in eligible_tags:
         tag_suggestions = suggest_tracks_for_tag_from_references(
@@ -513,6 +614,7 @@ def suggest_tracks_for_all_reference_tags(
             limit=limit,
             min_score=min_score,
             include_embeddings=include_embeddings,
+            embedding_cache=embedding_cache,
         )
 
         suggestions.extend(
@@ -523,6 +625,10 @@ def suggest_tracks_for_all_reference_tags(
                 title=suggestion.title,
                 artist=suggestion.artist,
                 file_name=suggestion.file_name,
+                match_score=suggestion.match_score,
+                conflict_score=suggestion.conflict_score,
+                ranking_score=suggestion.ranking_score,
+                status=suggestion.status,
                 final_score=suggestion.final_score,
                 positive_score=suggestion.positive_score,
                 negative_score=suggestion.negative_score,
@@ -533,6 +639,9 @@ def suggest_tracks_for_all_reference_tags(
             for suggestion in tag_suggestions
         )
 
-    suggestions.sort(key=lambda item: item.final_score, reverse=True)
+    suggestions.sort(
+        key=lambda item: (item.ranking_score, item.match_score),
+        reverse=True,
+    )
 
     return suggestions[:limit]

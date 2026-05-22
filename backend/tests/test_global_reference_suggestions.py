@@ -1,6 +1,10 @@
 from app.models.tag import Tag
 from app.models.tag_reference_track import TagReferenceTrack
 from app.models.track import Track
+from app.services.tagging import reference_tag_scorer
+from app.services.tagging.reference_tag_scorer import (
+    suggest_tracks_for_all_reference_tags,
+)
 
 
 def create_tag(db_session, name, category="activity"):
@@ -252,7 +256,40 @@ def test_global_reference_suggestions_preserve_per_tag_suggestion_response(
 
     assert data
     assert "tag_name" not in data[0]
+    assert "match_score" in data[0]
+    assert "conflict_score" in data[0]
+    assert "ranking_score" in data[0]
+    assert "status" in data[0]
+    assert data[0]["final_score"] == data[0]["ranking_score"]
     assert any(
         suggestion["track_id"] == setup["workout_candidate"].id
         for suggestion in data
     )
+
+
+def test_global_reference_suggestions_reuse_embedding_cache_across_tags(
+    monkeypatch,
+    db_session,
+):
+    calls = []
+
+    def fake_encode_texts(texts):
+        calls.append(list(texts))
+        return [[1.0, 0.0] for _text in texts]
+
+    monkeypatch.setattr(
+        reference_tag_scorer,
+        "_encode_embedding_texts",
+        fake_encode_texts,
+    )
+
+    create_global_suggestion_setup(db_session)
+
+    suggestions = suggest_tracks_for_all_reference_tags(
+        db_session,
+        min_score=0.0,
+        include_embeddings=True,
+    )
+
+    assert suggestions
+    assert len(calls) == 1

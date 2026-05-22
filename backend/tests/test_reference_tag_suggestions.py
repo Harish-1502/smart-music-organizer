@@ -84,7 +84,7 @@ def create_reference_setup(db_session):
     return tag, positive
 
 
-def test_suggestions_are_sorted_by_final_score_descending(db_session):
+def test_suggestions_are_sorted_by_ranking_score_descending(db_session):
     tag, _positive = create_reference_setup(db_session)
     high = create_track(db_session, "high", bpm=120, energy_score=0.8, duration=200)
     medium = create_track(db_session, "medium", bpm=130, energy_score=0.75, duration=210)
@@ -101,8 +101,8 @@ def test_suggestions_are_sorted_by_final_score_descending(db_session):
         medium.id,
         low.id,
     ]
-    assert suggestions[0].final_score >= suggestions[1].final_score
-    assert suggestions[1].final_score >= suggestions[2].final_score
+    assert suggestions[0].ranking_score >= suggestions[1].ranking_score
+    assert suggestions[1].ranking_score >= suggestions[2].ranking_score
 
 
 def test_suggestions_respect_limit(db_session):
@@ -132,6 +132,75 @@ def test_suggestions_respect_min_score(db_session):
     )
 
     assert [suggestion.track_id for suggestion in suggestions] == [high.id]
+
+
+def test_suggestions_filter_min_score_by_match_not_ranking(db_session):
+    tag, _positive = create_reference_setup(db_session)
+    negative = create_track(
+        db_session,
+        "negative",
+        bpm=120,
+        energy_score=0.8,
+        duration=200,
+    )
+    candidate = create_track(
+        db_session,
+        "candidate",
+        bpm=120,
+        energy_score=0.8,
+        duration=200,
+    )
+    add_reference(db_session, tag, negative, "negative")
+
+    suggestions = suggest_tracks_for_tag_from_references(
+        db_session,
+        tag.id,
+        min_score=0.95,
+        include_embeddings=False,
+    )
+
+    assert [suggestion.track_id for suggestion in suggestions] == [candidate.id]
+    assert suggestions[0].match_score == 1.0
+    assert suggestions[0].ranking_score < suggestions[0].match_score
+
+
+def test_suggestions_sort_by_ranking_score_before_match_score(db_session):
+    tag, _positive = create_reference_setup(db_session)
+    negative = create_track(
+        db_session,
+        "negative",
+        bpm=130,
+        energy_score=0.8,
+        duration=200,
+    )
+    clean = create_track(
+        db_session,
+        "clean",
+        bpm=120,
+        energy_score=0.8,
+        duration=200,
+    )
+    ambiguous = create_track(
+        db_session,
+        "ambiguous",
+        bpm=130,
+        energy_score=0.8,
+        duration=200,
+    )
+    add_reference(db_session, tag, negative, "negative")
+
+    suggestions = suggest_tracks_for_tag_from_references(
+        db_session,
+        tag.id,
+        min_score=0.0,
+        include_embeddings=False,
+    )
+
+    assert [suggestion.track_id for suggestion in suggestions] == [
+        clean.id,
+        ambiguous.id,
+    ]
+    assert suggestions[0].ranking_score > suggestions[1].ranking_score
 
 
 def test_suggestions_exclude_tracks_already_tagged_with_tag(db_session):
@@ -203,6 +272,10 @@ def test_suggestions_include_reasons_and_score_fields(db_session):
     assert suggestion.track_id == candidate.id
     assert suggestion.tag_id == tag.id
     assert suggestion.final_score == 1.0
+    assert suggestion.match_score == 1.0
+    assert suggestion.conflict_score == 0.0
+    assert suggestion.ranking_score == suggestion.final_score
+    assert suggestion.status == "strong"
     assert suggestion.positive_score == 1.0
     assert suggestion.negative_score == 0.0
     assert suggestion.reasons

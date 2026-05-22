@@ -213,7 +213,7 @@ def add_tag_reference_track(
         tag_id=tag_id,
         track_id=request.track_id,
         label=request.label,
-        source=request.source,
+        source="manual_reference",
     )
 
     db.commit()

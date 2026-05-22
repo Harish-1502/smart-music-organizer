@@ -16,6 +16,7 @@ from app.services.tagging.reference_scoring_profiles import (
 )
 from app.services.tagging.reference_tag_scorer import (
     _track_audio_similarity,
+    classify_reference_suggestion,
     score_track_against_tag_references,
 )
 
@@ -225,6 +226,81 @@ def test_embedding_similarity_can_increase_score_for_close_positive_reference(
         db.close()
 
 
+def test_closest_positive_match_uses_blended_similarity(monkeypatch):
+    TestingSessionLocal = make_test_db()
+    db = TestingSessionLocal()
+
+    def fake_blended_encoder(texts):
+        vectors = []
+
+        for text in texts:
+            normalized_text = text.lower()
+
+            if "candidate" in normalized_text:
+                vectors.append([1.0, 0.0])
+            elif "semantic-positive" in normalized_text:
+                vectors.append([1.0, 0.0])
+            else:
+                vectors.append([0.0, 1.0])
+
+        return vectors
+
+    monkeypatch.setattr(
+        reference_tag_scorer,
+        "_encode_embedding_texts",
+        fake_blended_encoder,
+    )
+
+    try:
+        tag = create_tag(db, name="workout")
+        candidate = create_track(
+            db,
+            "candidate",
+            bpm=100,
+            energy_score=0.5,
+            duration=200,
+        )
+        audio_positive = create_track(
+            db,
+            "audio-positive",
+            bpm=100,
+            energy_score=0.5,
+            duration=200,
+        )
+        semantic_positive = create_track(
+            db,
+            "semantic-positive",
+            bpm=180,
+            energy_score=0.0,
+            duration=600,
+        )
+        add_reference(db, tag, audio_positive, "positive")
+        add_reference(db, tag, semantic_positive, "positive")
+
+        score = score_track_against_tag_references(
+            db,
+            candidate.id,
+            tag.id,
+            top_k=1,
+            include_embeddings=True,
+        )
+
+        closest_positive = score.positive_matches[0]
+
+        assert closest_positive.track_id == semantic_positive.id
+        assert closest_positive.title == "semantic-positive"
+        assert closest_positive.similarity > closest_positive.audio_similarity
+        assert closest_positive.embedding_similarity == 1.0
+        assert any(
+            reason.startswith(
+                'Closest positive reference: "semantic-positive"'
+            )
+            for reason in score.reasons
+        )
+    finally:
+        db.close()
+
+
 def test_close_negative_reference_lowers_final_score():
     TestingSessionLocal = make_test_db()
     db = TestingSessionLocal()
@@ -371,7 +447,35 @@ def test_weighted_audio_similarity_respects_feature_weights():
     assert score == 0.45
 
 
-def test_profile_negative_weight_is_used_in_final_score():
+def test_audio_similarity_uses_bpm_energy_loudness_and_duration():
+    profile = get_reference_scoring_profile("unknown")
+    candidate = Track(
+        file_path="S:/Music/candidate.mp3",
+        file_name="candidate.mp3",
+        extension=".mp3",
+        folder_path="S:/Music",
+        bpm=120,
+        energy_score=1.0,
+        duration=180,
+    )
+    candidate.loudness_db = -10.0
+    reference = Track(
+        file_path="S:/Music/reference.mp3",
+        file_name="reference.mp3",
+        extension=".mp3",
+        folder_path="S:/Music",
+        bpm=160,
+        energy_score=0.0,
+        duration=360,
+    )
+    reference.loudness_db = -40.0
+
+    score = _track_audio_similarity(candidate, reference, profile)
+
+    assert score == 0.0
+
+
+def test_match_conflict_and_ranking_scores_are_reported():
     TestingSessionLocal = make_test_db()
     db = TestingSessionLocal()
 
@@ -390,11 +494,22 @@ def test_profile_negative_weight_is_used_in_final_score():
             include_embeddings=False,
         )
 
+        assert score.match_score == 1.0
+        assert score.conflict_score == 1.0
+        assert score.ranking_score == 0.7
+        assert score.status == "review"
         assert score.positive_score == 1.0
         assert score.negative_score == 1.0
-        assert score.final_score == 0.2
+        assert score.final_score == score.ranking_score
     finally:
         db.close()
+
+
+def test_classify_reference_suggestion_statuses():
+    assert classify_reference_suggestion(0.80, 0.20) == "strong"
+    assert classify_reference_suggestion(0.80, 0.70) == "review"
+    assert classify_reference_suggestion(0.60, 0.80) == "conflict"
+    assert classify_reference_suggestion(0.40, 0.0) == "weak"
 
 
 def test_profile_top_k_is_used_when_top_k_is_not_explicit(monkeypatch):
@@ -405,6 +520,9 @@ def test_profile_top_k_is_used_when_top_k_is_not_explicit(monkeypatch):
         audio_weight=DEFAULT_REFERENCE_SCORING_PROFILE.audio_weight,
         embedding_weight=DEFAULT_REFERENCE_SCORING_PROFILE.embedding_weight,
         negative_weight=DEFAULT_REFERENCE_SCORING_PROFILE.negative_weight,
+        conflict_ranking_weight=(
+            DEFAULT_REFERENCE_SCORING_PROFILE.conflict_ranking_weight
+        ),
         top_k=1,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights=DEFAULT_REFERENCE_SCORING_PROFILE.feature_weights,
@@ -440,6 +558,9 @@ def test_explicit_top_k_overrides_profile_top_k(monkeypatch):
         audio_weight=DEFAULT_REFERENCE_SCORING_PROFILE.audio_weight,
         embedding_weight=DEFAULT_REFERENCE_SCORING_PROFILE.embedding_weight,
         negative_weight=DEFAULT_REFERENCE_SCORING_PROFILE.negative_weight,
+        conflict_ranking_weight=(
+            DEFAULT_REFERENCE_SCORING_PROFILE.conflict_ranking_weight
+        ),
         top_k=1,
         feature_scales=DEFAULT_FEATURE_SCALES,
         feature_weights=DEFAULT_REFERENCE_SCORING_PROFILE.feature_weights,

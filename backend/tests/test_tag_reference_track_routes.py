@@ -172,8 +172,30 @@ def test_post_same_track_and_tag_updates_existing_reference(client, db_session):
 
     assert first_data["id"] == second_data["id"]
     assert second_data["label"] == "negative"
-    assert second_data["source"] == "changed_mind"
+    assert second_data["source"] == "manual_reference"
     assert db_session.query(TagReferenceTrack).count() == 1
+
+
+def test_post_ignores_arbitrary_manual_reference_source(client, db_session):
+    tag = create_tag(db_session)
+    track = create_track(db_session)
+
+    response = client.post(
+        f"/tags/{tag.id}/reference-tracks",
+        json={
+            "track_id": track.id,
+            "label": "positive",
+            "source": "not_a_controlled_source",
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    saved_reference = db_session.query(TagReferenceTrack).one()
+
+    assert data["source"] == "manual_reference"
+    assert saved_reference.source == "manual_reference"
 
 
 def test_delete_removes_reference(client, db_session):
