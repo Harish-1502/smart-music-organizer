@@ -1,13 +1,21 @@
 import numpy as np
 
 from app.services.embeddings.embedding_models import TrackEmbeddingInput
-from app.services.embeddings.embedding_service import encode_texts
-from app.services.embeddings.tag_descriptions import TAG_EMBEDDING_DESCRIPTIONS
+from app.services.embeddings.tag_descriptions import (
+    EMBEDDING_ENABLED_TAGS,
+    TAG_EMBEDDING_DESCRIPTIONS,
+)
 from app.services.tagging.tag_candidates import TagCandidate
 
 
-MIN_EMBEDDING_CONFIDENCE = 0.50
+MIN_EMBEDDING_CONFIDENCE = 0.60
 MAX_EMBEDDING_CANDIDATES = 5
+
+
+def encode_texts(texts: list[str]):
+    from app.services.embeddings.embedding_service import encode_texts as service_encode_texts
+
+    return service_encode_texts(texts)
 
 
 def build_track_embedding_text(track: TrackEmbeddingInput) -> str:
@@ -19,8 +27,11 @@ def build_track_embedding_text(track: TrackEmbeddingInput) -> str:
         parts.append(f"Artist: {track.artist}")
     if track.album:
         parts.append(f"Album: {track.album}")
-    if track.filename:
-        parts.append(f"Filename: {track.filename}")
+
+    filename = track.filename or track.file_name
+
+    if filename:
+        parts.append(f"Filename: {filename}")
     if track.folder_path:
         parts.append(f"Folder path: {track.folder_path}")
     if track.existing_tags:
@@ -54,8 +65,15 @@ def generate_embedding_tag_candidates(
     if not track_text.strip():
         return []
 
-    tag_names = list(TAG_EMBEDDING_DESCRIPTIONS.keys())
+    tag_names = [
+        tag_name
+        for tag_name in TAG_EMBEDDING_DESCRIPTIONS
+        if tag_name in EMBEDDING_ENABLED_TAGS
+    ]
     tag_texts = [TAG_EMBEDDING_DESCRIPTIONS[name] for name in tag_names]
+
+    if not tag_texts:
+        return []
 
     embeddings = encode_texts([track_text, *tag_texts])
 

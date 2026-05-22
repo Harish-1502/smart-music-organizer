@@ -12,6 +12,9 @@ from app.services.tagging.candidate_merge import merge_tag_candidates
 from app.services.tagging.tag_candidates import TagCandidate
 
 
+TRUSTED_INFERRED_TAG_SOURCES = {"rule"}
+
+
 def normalize_text(value: str) -> str:
     """
     Normalize text before keyword matching.
@@ -292,7 +295,11 @@ def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
     Manual tags are treated as stronger than inferred tags because the user is
     correcting the system. Auto-tagging should assist the user, not fight them.
     """
-    inferred_tags = get_auto_apply_candidates(infer_track_tag_candidates(track))
+    inferred_tags = [
+        candidate
+        for candidate in get_auto_apply_candidates(infer_track_tag_candidates(track))
+        if candidate.source in TRUSTED_INFERRED_TAG_SOURCES
+    ]
     applied_track_tags = []
 
     for candidate in inferred_tags:
@@ -321,7 +328,7 @@ def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
                 existing_track_tag.confidence,
                 candidate.confidence,
             )
-            existing_track_tag.source = "rule"
+            existing_track_tag.source = candidate.source
 
             applied_track_tags.append(existing_track_tag)
             continue
@@ -329,7 +336,7 @@ def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
         track_tag = TrackTag(
             track_id=track.id,
             tag_id=tag.id,
-            source="rule",
+            source=candidate.source,
             confidence=candidate.confidence,
         )
 

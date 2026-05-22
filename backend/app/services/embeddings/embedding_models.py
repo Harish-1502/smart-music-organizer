@@ -7,6 +7,7 @@ class TrackEmbeddingInput:
     artist: str | None = None
     album: str | None = None
     filename: str | None = None
+    file_name: str | None = None
     folder_path: str | None = None
     existing_tags: list[str] | None = None
     bpm: float | None = None

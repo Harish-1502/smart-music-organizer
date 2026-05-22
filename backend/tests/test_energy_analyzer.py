@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from app.services.energy_analyzer import analyze_energy
+from app.services.energy_analyzer import analyze_energy, classify_loudness
 
 
 def _write_sine_wave(
@@ -47,6 +47,7 @@ def test_analyze_energy_returns_file_not_found_for_missing_file(tmp_path):
     assert result.rms_energy is None
     assert result.energy_score == 0.0
     assert result.energy_label is None
+    assert result.loudness_label is None
     assert result.confidence == 0.0
     assert result.error is not None
 
@@ -68,6 +69,7 @@ def test_analyze_energy_handles_silent_audio(tmp_path):
     assert result.peak_amplitude == 0.0
     assert result.energy_score == 0.0
     assert result.energy_label == "low"
+    assert result.loudness_label == "very_quiet"
     assert result.error is not None
 
 
@@ -96,6 +98,10 @@ def test_high_amplitude_audio_has_higher_energy_than_low_amplitude_audio(tmp_pat
     assert high_result.rms_energy > low_result.rms_energy
     assert high_result.peak_amplitude > low_result.peak_amplitude
     assert high_result.energy_score > low_result.energy_score
+    assert low_result.loudness_db is not None
+    assert high_result.loudness_db is not None
+    assert high_result.loudness_db > low_result.loudness_db
+    assert high_result.loudness_label is not None
 
 
 def test_energy_label_for_quiet_audio_is_low(tmp_path):
@@ -127,3 +133,11 @@ def test_energy_label_for_loud_audio_is_high_or_medium(tmp_path):
     assert result.energy_label in {"medium", "high"}
     assert result.energy_score >= 0.35
     assert result.confidence > 0.0
+
+
+def test_classify_loudness_thresholds():
+    assert classify_loudness(-31.0) == "very_quiet"
+    assert classify_loudness(-25.0) == "quiet"
+    assert classify_loudness(-18.0) == "balanced"
+    assert classify_loudness(-10.0) == "loud"
+    assert classify_loudness(-7.0) == "very_loud"

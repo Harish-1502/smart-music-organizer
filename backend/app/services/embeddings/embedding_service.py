@@ -14,5 +14,9 @@ def get_embedding_model() -> SentenceTransformer:
 
 def encode_texts(texts: list[str]) -> np.ndarray:
     model = get_embedding_model()
-    embeddings = model.encode(texts, normalize_embeddings=True)
+    embeddings = model.encode(
+        texts,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+    )
     return np.asarray(embeddings)

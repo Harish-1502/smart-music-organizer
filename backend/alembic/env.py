@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from app.core.database import Base
+from app.models.tag_reference_track import TagReferenceTrack
 from app.models.track import Track
 
 config = context.config

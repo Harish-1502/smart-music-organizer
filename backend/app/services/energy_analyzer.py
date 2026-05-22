@@ -74,6 +74,7 @@ def analyze_energy(
             peak_amplitude=None,
             dynamic_range=None,
             loudness_db=None,
+            loudness_label=None,
             energy_score=0.0,
             energy_label=None,
             confidence=0.0,
@@ -101,6 +102,7 @@ def analyze_energy(
                 peak_amplitude=None,
                 dynamic_range=None,
                 loudness_db=None,
+                loudness_label=None,
                 energy_score=0.0,
                 energy_label=None,
                 confidence=0.0,
@@ -119,6 +121,7 @@ def analyze_energy(
                 peak_amplitude=0.0,
                 dynamic_range=0.0,
                 loudness_db=None,
+                loudness_label="very_quiet",
                 energy_score=0.0,
                 energy_label="low",
                 confidence=0.0,
@@ -133,6 +136,7 @@ def analyze_energy(
         peak_amplitude = _calculate_peak_amplitude(y)
         dynamic_range = _calculate_dynamic_range(y)
         loudness_db = _calculate_loudness_db(rms_energy)
+        loudness_label = classify_loudness(loudness_db)
 
         energy_score = _calculate_energy_score(
             rms_energy=rms_energy,
@@ -153,6 +157,7 @@ def analyze_energy(
             peak_amplitude=round(float(peak_amplitude), 6),
             dynamic_range=round(float(dynamic_range), 6),
             loudness_db=round(float(loudness_db), 2),
+            loudness_label=loudness_label,
             energy_score=round(float(energy_score), 3),
             energy_label=energy_label,
             confidence=round(float(confidence), 3),
@@ -170,6 +175,7 @@ def analyze_energy(
             peak_amplitude=None,
             dynamic_range=None,
             loudness_db=None,
+            loudness_label=None,
             energy_score=0.0,
             energy_label=None,
             confidence=0.0,
@@ -252,6 +258,26 @@ def _calculate_loudness_db(rms_energy: float) -> float:
     """
 
     return float(20.0 * np.log10(max(rms_energy, EPSILON)))
+
+
+def classify_loudness(loudness_db: float) -> str:
+    """
+    Convert approximate dBFS loudness into a simple label.
+    """
+
+    if loudness_db <= -30:
+        return "very_quiet"
+
+    if loudness_db <= -22:
+        return "quiet"
+
+    if loudness_db <= -14:
+        return "balanced"
+
+    if loudness_db <= -8:
+        return "loud"
+
+    return "very_loud"
 
 
 def _calculate_energy_score(

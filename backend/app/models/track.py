@@ -42,6 +42,9 @@ class Track(Base):
     energy_label = Column(String, nullable=True)
     energy_confidence = Column(Float, nullable=True)
 
+    loudness_db = Column(Float, nullable=True)
+    loudness_label = Column(String, nullable=True)
+
     audio_analyzed_at = Column(DateTime(timezone=True), nullable=True)
     audio_analysis_error = Column(Text, nullable=True)
 

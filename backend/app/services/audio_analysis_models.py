@@ -66,6 +66,9 @@ class EnergyAnalysisResult:
             Approximate loudness in decibels relative to full scale.
             This is useful for comparison, not professional mastering.
 
+        loudness_label:
+            Simple label derived from loudness_db.
+
         energy_score:
             Practical 0.0 to 1.0 score for playlist/tagging decisions.
 
@@ -100,6 +103,7 @@ class EnergyAnalysisResult:
     confidence: float
     source: str
     reason: str
+    loudness_label: str | None = None
     duration_seconds: float | None = None
     analyzed_seconds: float | None = None
     error: str | None = None
