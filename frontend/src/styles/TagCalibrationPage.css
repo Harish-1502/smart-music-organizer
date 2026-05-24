@@ -143,6 +143,26 @@
   font-size: 13px;
 }
 
+.tag-calibration__score-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-subtle);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.tag-calibration__score-guide span {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.06);
+  white-space: nowrap;
+}
+
 .tag-calibration__search,
 .tag-calibration__actions,
 .tag-calibration__filters,
@@ -211,12 +231,13 @@
 
 .tag-calibration__table-wrap {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .tag-calibration__suggestion-table-scroll {
   max-height: clamp(280px, 42vh, 420px);
   min-height: 0;
+  padding-right: 6px;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
@@ -254,7 +275,7 @@
 }
 
 .tag-calibration__table--review {
-  min-width: 1040px;
+  min-width: 0;
 }
 
 .tag-calibration__suggestion-table-scroll .tag-calibration__table {
@@ -277,31 +298,38 @@
 }
 
 .tag-calibration__table--review th:first-child {
-  width: 48px;
+  width: 38px;
 }
 
-.tag-calibration__table--review th:nth-child(2) {
-  width: 28%;
+.tag-calibration__table--review th:nth-child(2),
+.tag-calibration__table--review td:nth-child(2) {
+  min-width: 240px;
 }
 
 .tag-calibration__table--review th:nth-child(3) {
-  width: 16%;
+  width: 90px;
 }
 
 .tag-calibration__table--review th:nth-child(4) {
-  width: 110px;
+  width: 72px;
 }
 
 .tag-calibration__table--review th:nth-child(5) {
-  width: 84px;
+  width: 92px;
 }
 
 .tag-calibration__table--review th:nth-child(6) {
-  width: 280px;
+  width: 260px;
 }
 
 .tag-calibration__table--review th:nth-child(7) {
-  width: 154px;
+  width: 184px;
+}
+
+.tag-calibration__table--review td:nth-child(7) {
+  width: 184px;
+  min-width: 184px;
+  box-sizing: border-box;
 }
 
 .tag-calibration__table td {
@@ -328,7 +356,7 @@
 
 .tag-calibration__table--review td {
   padding: 8px 10px;
-  vertical-align: middle;
+  vertical-align: top;
   word-break: normal;
 }
 
@@ -339,6 +367,7 @@
 }
 
 .tag-calibration__table--review td:first-child,
+.tag-calibration__table--review td:nth-child(4),
 .tag-calibration__table--review td:nth-child(5),
 .tag-calibration__table--review td:nth-child(7) {
   text-align: center;
@@ -351,6 +380,7 @@
 }
 
 .tag-calibration__track-title,
+.tag-calibration__track-artist,
 .tag-calibration__track-file,
 .tag-calibration__artist-text {
   display: block;
@@ -370,6 +400,13 @@
   color: var(--text-subtle);
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.25;
+}
+
+.tag-calibration__track-artist {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.25;
 }
 
@@ -396,34 +433,103 @@
   white-space: nowrap;
 }
 
-.tag-calibration__suggestion-reason-scroll {
+.tag-calibration__compact-reason {
   display: grid;
   gap: 4px;
-  max-height: 72px;
-  padding-right: 8px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  position: static;
+  overflow: visible;
   color: var(--text-muted);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.3;
   text-align: left;
+}
+
+.tag-calibration__compact-reason-status {
+  color: var(--text-strong);
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.tag-calibration__compact-reason-line,
+.tag-calibration__compact-reason-scores {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.tag-calibration__compact-reason-line span:last-child,
+.tag-calibration__compact-reason-scores {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-calibration__compact-reason-line--positive {
+  color: #a7f3d0;
+}
+
+.tag-calibration__compact-reason-line--negative {
+  color: #fecdd3;
+}
+
+.tag-calibration__compact-reason-scores {
+  color: var(--text-subtle);
+  font-weight: 700;
+}
+
+.tag-calibration__details-button {
+  justify-self: start;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #bfdbfe;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tag-calibration__details-button:hover {
+  color: var(--text-strong);
+}
+
+.tag-calibration__reason-details {
+  position: static;
+  display: grid;
+  gap: 5px;
+  max-height: 120px;
+  margin-top: 4px;
+  padding: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--text-subtle);
   word-break: break-word;
   scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
   scrollbar-width: thin;
 }
 
-.tag-calibration__reason-line {
-  color: var(--text-strong);
-  font-weight: 700;
-}
-
-.tag-calibration__reason-detail {
-  color: var(--text-subtle);
-}
-
 .tag-calibration__table--review .tag-calibration__row-actions {
+  display: flex;
   flex-wrap: nowrap;
-  justify-content: center;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 152px;
+  width: 100%;
+}
+
+.tag-calibration__table--review .tag-calibration__row-actions .tag-calibration__button {
+  min-width: 68px;
+  padding: 0 10px;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .tag-calibration__pagination {
@@ -603,6 +709,56 @@
   text-align: center;
 }
 
+.tag-calibration__score--conflict {
+  background: rgba(251, 113, 133, 0.12);
+  color: #fecdd3;
+}
+
+.tag-calibration__score--ranking {
+  background: rgba(125, 211, 252, 0.12);
+  color: #bfdbfe;
+}
+
+.tag-calibration__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.tag-calibration__status--strong {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: rgba(52, 211, 153, 0.12);
+  color: #a7f3d0;
+}
+
+.tag-calibration__status--review {
+  border-color: rgba(125, 211, 252, 0.28);
+  background: rgba(125, 211, 252, 0.12);
+  color: #bfdbfe;
+}
+
+.tag-calibration__status--conflict {
+  border-color: rgba(251, 113, 133, 0.28);
+  background: rgba(251, 113, 133, 0.12);
+  color: #fecdd3;
+}
+
+.tag-calibration__status--weak {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-subtle);
+}
+
 .tag-calibration__select:focus-visible,
 .tag-calibration__input:focus-visible,
 .tag-calibration__button:focus-visible,
@@ -636,14 +792,59 @@
   }
 }
 
+@media (min-width: 641px) and (max-width: 1100px) {
+  .tag-calibration__table--review th:first-child {
+    width: 34px;
+  }
+
+  .tag-calibration__table--review th:nth-child(2),
+  .tag-calibration__table--review td:nth-child(2) {
+    min-width: 260px;
+  }
+
+  .tag-calibration__table--review th:nth-child(3) {
+    width: 78px;
+  }
+
+  .tag-calibration__table--review th:nth-child(4) {
+    width: 66px;
+  }
+
+  .tag-calibration__table--review th:nth-child(5) {
+    width: 86px;
+  }
+
+  .tag-calibration__table--review th:nth-child(6),
+  .tag-calibration__table--review td:nth-child(6) {
+    display: none;
+  }
+
+  .tag-calibration__table--review th:nth-child(7),
+  .tag-calibration__table--review td:nth-child(7) {
+    width: 184px;
+    min-width: 184px;
+  }
+
+  .tag-calibration__table--review .tag-calibration__track-file {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .tag-calibration__search,
   .tag-calibration__actions,
   .tag-calibration__filters,
+  .tag-calibration__score-guide,
   .tag-calibration__row-actions,
   .tag-calibration__header-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .tag-calibration__score-guide span {
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
   }
 
   .tag-calibration__table,
@@ -735,6 +936,7 @@
   .tag-calibration__table--review .tag-calibration__row-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
   }
 
   .tag-calibration__pagination {

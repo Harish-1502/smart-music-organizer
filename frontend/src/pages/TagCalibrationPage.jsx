@@ -42,6 +42,39 @@ function scoreLabel(value) {
   return value.toFixed(2);
 }
 
+function formatScore(value) {
+  return scoreLabel(value);
+}
+
+function formatShortTrackTitle(title, maxLength = 30) {
+  const text = title || "Unknown track";
+
+  if (text.length <= maxLength) return text;
+
+  return `${text.slice(0, maxLength - 1)}...`;
+}
+
+function statusLabel(status) {
+  if (!status) return "Review";
+  return status.replace("_", " ");
+}
+
+function statusDescription(status) {
+  if (status === "strong") {
+    return "Strong: high match with low conflict.";
+  }
+
+  if (status === "conflict") {
+    return "Conflict: closer to negative examples than positive examples.";
+  }
+
+  if (status === "weak") {
+    return "Weak: not close enough to positive examples.";
+  }
+
+  return "Review: matches positives but also has some conflict.";
+}
+
 function suggestionKey(suggestion) {
   return `${suggestion.tag_id}:${suggestion.track_id}`;
 }
@@ -55,30 +88,72 @@ function groupTrackIdsByTag(suggestions) {
   }, new Map());
 }
 
-function matchedReferenceLabel(match) {
-  if (!match) return "";
+function parseClosestMatchFromReasons(suggestion, label) {
+  const pattern = new RegExp(
+    `closest ${label}(?: reference)?:\\s*"?(.+?)"?(?: by .*?)?, similarity ([0-9.]+)`,
+    "i"
+  );
 
-  const title = trackTitle(match);
-  const score =
-    typeof match.similarity === "number" ? ` (${match.similarity.toFixed(2)})` : "";
+  for (const reason of suggestion.reasons || []) {
+    const match = reason.match(pattern);
 
-  return `${title}${score}`;
+    if (match) {
+      return {
+        title: match[1],
+        similarity: Number.parseFloat(match[2]),
+      };
+    }
+  }
+
+  return null;
 }
 
-function suggestionReasonLines(suggestion) {
-  const closestPositive = suggestion.positive_matches?.[0];
-  const closestNegative = suggestion.negative_matches?.[0];
-  const lines = [];
-
-  if (closestPositive) {
-    lines.push(`Closest positive: ${matchedReferenceLabel(closestPositive)}`);
+function getClosestPositiveMatch(suggestion) {
+  if (suggestion.positive_matches?.[0]) {
+    return suggestion.positive_matches[0];
   }
 
-  if (closestNegative) {
-    lines.push(`Closest negative: ${matchedReferenceLabel(closestNegative)}`);
+  // Compatibility fallback for older responses. Structured matches are better
+  // because they avoid parsing display text from backend reason strings.
+  return parseClosestMatchFromReasons(suggestion, "positive");
+}
+
+function getClosestNegativeMatch(suggestion) {
+  if (suggestion.negative_matches?.[0]) {
+    return suggestion.negative_matches[0];
   }
 
-  return lines.length ? lines : suggestion.reasons || [];
+  // Compatibility fallback for older responses. Structured matches are better
+  // because they avoid parsing display text from backend reason strings.
+  return parseClosestMatchFromReasons(suggestion, "negative");
+}
+
+function compactMatchLine(match) {
+  if (!match) return null;
+
+  const title = trackTitle(match);
+  const similarity =
+    typeof match.similarity === "number"
+      ? ` (${formatScore(match.similarity)})`
+      : "";
+
+  return {
+    title,
+    shortTitle: formatShortTrackTitle(title),
+    text: `${formatShortTrackTitle(title)}${similarity}`,
+  };
+}
+
+function formatCompactReason(suggestion) {
+  return {
+    status: statusLabel(suggestion.status),
+    positive: compactMatchLine(getClosestPositiveMatch(suggestion)),
+    negative: compactMatchLine(getClosestNegativeMatch(suggestion)),
+    matchScore: formatScore(suggestion.match_score ?? suggestion.positive_score),
+    conflictScore: formatScore(
+      suggestion.conflict_score ?? suggestion.negative_score
+    ),
+  };
 }
 
 export default function TagCalibrationPage() {
@@ -90,6 +165,7 @@ export default function TagCalibrationPage() {
   const [references, setReferences] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [selectedSuggestionKeys, setSelectedSuggestionKeys] = useState([]);
+  const [expandedReasonKeys, setExpandedReasonKeys] = useState([]);
   const [reviewSearch, setReviewSearch] = useState("");
   const [trackSearch, setTrackSearch] = useState("");
   const [appliedTrackSearch, setAppliedTrackSearch] = useState("");
@@ -210,6 +286,7 @@ export default function TagCalibrationPage() {
   async function refreshSuggestions() {
     setSuggestionsLoading(true);
     setSelectedSuggestionKeys([]);
+    setExpandedReasonKeys([]);
 
     try {
       const parsedMinScore = Number.parseFloat(minScore);
@@ -269,6 +346,14 @@ export default function TagCalibrationPage() {
 
     setSelectedSuggestionKeys((current) =>
       Array.from(new Set([...current, ...visibleSuggestionKeys]))
+    );
+  }
+
+  function toggleReasonDetails(key) {
+    setExpandedReasonKeys((current) =>
+      current.includes(key)
+        ? current.filter((expandedKey) => expandedKey !== key)
+        : [...current, key]
     );
   }
 
@@ -372,7 +457,7 @@ export default function TagCalibrationPage() {
 
           <div className="tag-calibration__header-actions">
             <label className="tag-calibration__field tag-calibration__field--inline">
-              <span className="tag-calibration__label">Min score</span>
+              <span className="tag-calibration__label">Min match</span>
               <input
                 className="tag-calibration__input tag-calibration__input--score"
                 type="number"
@@ -443,6 +528,15 @@ export default function TagCalibrationPage() {
             </div>
           </div>
 
+          <div
+            className="tag-calibration__score-guide"
+            aria-label="Suggestion score guide"
+          >
+            <span>Match: similar to positive examples</span>
+            <span>Conflict: similar to negative examples</span>
+            <span>Ranking: sort order for suggestions</span>
+          </div>
+
           <div className="tag-calibration__actions">
             <button
               type="button"
@@ -480,9 +574,9 @@ export default function TagCalibrationPage() {
                       />
                     </th>
                     <th>Track</th>
-                    <th>Artist</th>
                     <th>Tag</th>
                     <th>Score</th>
+                    <th>Status</th>
                     <th>Reasons</th>
                     <th>Actions</th>
                   </tr>
@@ -494,12 +588,9 @@ export default function TagCalibrationPage() {
                     const title = trackTitle(suggestion);
                     const artist = trackArtist(suggestion);
                     const fileName = trackFileName(suggestion);
-                    const reasonsText = (suggestion.reasons || []).join(" - ");
-                    const reasonLines = suggestionReasonLines(suggestion);
-                    const reasonTooltip = [
-                      ...reasonLines,
-                      ...(suggestion.reasons || []),
-                    ].join(" - ");
+                    const compactReason = formatCompactReason(suggestion);
+                    const isReasonExpanded = expandedReasonKeys.includes(key);
+                    const reasonTooltip = (suggestion.reasons || []).join(" - ");
 
                     return (
                       <tr key={key}>
@@ -521,6 +612,12 @@ export default function TagCalibrationPage() {
                             >
                               {title}
                             </span>
+                            <span
+                              className="tag-calibration__track-artist"
+                              title={artist}
+                            >
+                              {artist}
+                            </span>
                             {fileName ? (
                               <span
                                 className="tag-calibration__track-file"
@@ -531,41 +628,73 @@ export default function TagCalibrationPage() {
                             ) : null}
                           </div>
                         </td>
-                        <td data-label="Artist">
-                          <span
-                            className="tag-calibration__artist-text"
-                            title={artist}
-                          >
-                            {artist}
-                          </span>
-                        </td>
                         <td data-label="Tag">
                           <span className="tag-calibration__tag-pill">
                             {suggestion.tag_name}
                           </span>
                         </td>
                         <td data-label="Score">
-                          <span className="tag-calibration__score">
-                            {scoreLabel(suggestion.final_score)}
+                          <span className="tag-calibration__score tag-calibration__score--ranking">
+                            {scoreLabel(
+                              suggestion.ranking_score ??
+                                suggestion.final_score
+                            )}
+                          </span>
+                        </td>
+                        <td data-label="Status">
+                          <span
+                            className={`tag-calibration__status tag-calibration__status--${
+                              suggestion.status || "review"
+                            }`}
+                            title={statusDescription(suggestion.status)}
+                          >
+                            {statusLabel(suggestion.status)}
                           </span>
                         </td>
                         <td data-label="Reasons">
                           <div
-                            className="tag-calibration__suggestion-reason-scroll"
+                            className="tag-calibration__compact-reason"
                             title={reasonTooltip}
                           >
-                            {reasonLines.map((line) => (
-                              <span
-                                key={line}
-                                className="tag-calibration__reason-line"
+                            <span className="tag-calibration__compact-reason-status">
+                              {compactReason.status}
+                            </span>
+                            {compactReason.positive ? (
+                              <span className="tag-calibration__compact-reason-line tag-calibration__compact-reason-line--positive">
+                                <span aria-hidden="true">+</span>
+                                <span title={compactReason.positive.title}>
+                                  {compactReason.positive.text}
+                                </span>
+                              </span>
+                            ) : null}
+                            {compactReason.negative ? (
+                              <span className="tag-calibration__compact-reason-line tag-calibration__compact-reason-line--negative">
+                                <span aria-hidden="true">-</span>
+                                <span title={compactReason.negative.title}>
+                                  {compactReason.negative.text}
+                                </span>
+                              </span>
+                            ) : null}
+                            <span className="tag-calibration__compact-reason-scores">
+                              Match {compactReason.matchScore} {"\u00b7"} Conflict{" "}
+                              {compactReason.conflictScore}
+                            </span>
+                            {suggestion.reasons?.length ? (
+                              <button
+                                type="button"
+                                className="tag-calibration__details-button"
+                                onClick={() => toggleReasonDetails(key)}
+                                aria-expanded={isReasonExpanded}
                               >
-                                {line}
-                              </span>
-                            ))}
-                            {reasonsText ? (
-                              <span className="tag-calibration__reason-detail">
-                                {reasonsText}
-                              </span>
+                                {isReasonExpanded ? "Hide details" : "Details"}
+                              </button>
+                            ) : null}
+                            {isReasonExpanded ? (
+                              <div className="tag-calibration__reason-details">
+                                {suggestion.reasons.map((reason) => (
+                                  <span key={reason}>{reason}</span>
+                                ))}
+                              </div>
                             ) : null}
                           </div>
                         </td>
