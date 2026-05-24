@@ -72,6 +72,7 @@ def test_repeated_preload_for_same_track_uses_cache():
 
 def test_reference_embedding_text_excludes_audio_descriptors():
     track = make_track(1, "Fast Loud Song")
+    track.display_album = "Fast Album"
     track.bpm = 128
     track.energy_label = "high_energy"
     track.energy_score = 0.95
@@ -80,6 +81,8 @@ def test_reference_embedding_text_excludes_audio_descriptors():
     text = build_reference_embedding_text(track)
 
     assert "Title: Fast Loud Song" in text
+    assert "Artist: Artist" in text
+    assert "Album: Fast Album" in text
     assert "Filename: Fast Loud Song.mp3" in text
     assert "BPM" not in text
     assert "128" not in text
@@ -88,6 +91,22 @@ def test_reference_embedding_text_excludes_audio_descriptors():
     assert "Loudness" not in text
     assert "-7.5" not in text
     assert "energy_score" not in text
+
+
+def test_reference_embedding_text_excludes_folder_path():
+    track = make_track(1, "Private Folder Song")
+    track.folder_path = r"C:\Users\Harish\Private Music\Secret Folder"
+
+    text = build_reference_embedding_text(track)
+
+    assert "Title: Private Folder Song" in text
+    assert "Artist: Artist" in text
+    assert "Filename: Private Folder Song.mp3" in text
+    assert "Folder path" not in text
+    assert "C:" not in text
+    assert "Users" not in text
+    assert "Private Music" not in text
+    assert "Secret Folder" not in text
 
 
 def test_reference_embedding_text_excludes_target_and_subjective_tags():

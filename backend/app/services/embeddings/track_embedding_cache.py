@@ -119,8 +119,6 @@ def build_reference_embedding_text(
 
     if filename:
         parts.append(f"Filename: {filename}")
-    if embedding_input.folder_path:
-        parts.append(f"Folder path: {embedding_input.folder_path}")
     if embedding_input.existing_tags:
         parts.append(f"Existing tags: {', '.join(embedding_input.existing_tags)}")
 
