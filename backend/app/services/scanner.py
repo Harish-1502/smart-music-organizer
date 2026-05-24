@@ -54,7 +54,11 @@ def scan_library(root: Path | str, db: Session):
             scan_state["current_file"] = str(path)
 
         # All supported audio files from this folder and its subfolders
-        for path in discover_audio_files(root, on_file_seen=mark_file_seen):
+        for path in discover_audio_files(
+            root,
+            on_file_seen=mark_file_seen,
+            allowed_roots=settings.allowed_scan_roots,
+        ):
             scan_state["supported_found"] += 1
 
             # Gets the paths from route to cur directory

@@ -98,6 +98,46 @@ def test_cleanup_stale_tracks_preserves_tracks_outside_root(tmp_path, db_session
     assert db_session.query(Track).count() == 1
 
 
+def test_cleanup_stale_tracks_preserves_sibling_prefix_paths(
+    tmp_path,
+    db_session,
+):
+    root = tmp_path / "Music"
+    sibling = tmp_path / "Music2"
+    root.mkdir()
+    sibling.mkdir()
+
+    keep_file = root / "keep.mp3"
+    stale_file = root / "stale.mp3"
+    sibling_file = sibling / "sibling.mp3"
+    keep_file.write_bytes(b"keep")
+    sibling_file.write_bytes(b"sibling")
+
+    db_session.add_all([
+        make_track(keep_file, title="Keep"),
+        make_track(stale_file, title="Stale"),
+        make_track(sibling_file, title="Sibling"),
+    ])
+    db_session.commit()
+
+    deleted, error = cleanup_stale_tracks(
+        db_session,
+        root.resolve(),
+        str(root.resolve()),
+        {str(keep_file.resolve())},
+        supported_found=1,
+    )
+
+    assert error is None
+    assert deleted == 1
+    assert db_session.query(Track).filter(
+        Track.file_path == str(stale_file.resolve())
+    ).first() is None
+    assert db_session.query(Track).filter(
+        Track.file_path == str(sibling_file.resolve())
+    ).first() is not None
+
+
 def test_cleanup_stale_tracks_skips_cleanup_when_seen_paths_empty(
     tmp_path,
     db_session,
@@ -139,29 +179,16 @@ def test_cleanup_stale_tracks_rolls_back_on_delete_error(
     db_session.add(make_track(stale_file, title="Stale"))
     db_session.commit()
 
-    original_query = db_session.query
+    original_delete = db_session.delete
     delete_error = RuntimeError("delete boom")
 
-    class FailingDeleteQuery:
-        def __init__(self, query):
-            self._query = query
-
-        def filter(self, *args, **kwargs):
-            return FailingDeleteQuery(self._query.filter(*args, **kwargs))
-
-        def all(self):
-            return self._query.all()
-
-        def delete(self, *args, **kwargs):
+    def fake_delete(obj):
+        if isinstance(obj, Track):
             raise delete_error
 
-    def fake_query(*args, **kwargs):
-        query = original_query(*args, **kwargs)
-        if args and args[0] is Track:
-            return FailingDeleteQuery(query)
-        return query
+        return original_delete(obj)
 
-    monkeypatch.setattr(db_session, "query", fake_query)
+    monkeypatch.setattr(db_session, "delete", fake_delete)
 
     deleted, error = cleanup_stale_tracks(
         db_session,
@@ -174,6 +201,6 @@ def test_cleanup_stale_tracks_rolls_back_on_delete_error(
     assert deleted is None
     assert error is delete_error
 
-    monkeypatch.setattr(db_session, "query", original_query)
+    monkeypatch.setattr(db_session, "delete", original_delete)
 
     assert db_session.query(Track).count() == 1
