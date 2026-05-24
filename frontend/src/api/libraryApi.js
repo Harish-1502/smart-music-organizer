@@ -14,9 +14,17 @@ export async function getScanStatus() {
   return res.data;
 }
 
-export async function clearLibrary() {
+export const CLEAR_LIBRARY_CONFIRMATION = "CLEAR LIBRARY";
+
+export async function clearLibrary(confirm) {
+  if (confirm !== CLEAR_LIBRARY_CONFIRMATION) {
+    throw new Error("Confirmation is required to clear the library.");
+  }
+
   console.log("API CALL: clearLibrary");
-  const res = await api.delete("/library/clear");
+  const res = await api.delete("/library/clear", {
+    data: { confirm },
+  });
   return res.data;
 }
 

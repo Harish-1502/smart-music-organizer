@@ -9,3 +9,7 @@ class LibraryScanRequest(BaseModel):
     @classmethod
     def strip_folder_path(cls, value):
         return strip_string(value)
+
+
+class ClearLibraryRequest(BaseModel):
+    confirm: str = Field(min_length=1)

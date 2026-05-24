@@ -12,7 +12,7 @@ from app.core.path_guard import (
     is_within_any_directory,
     safe_resolve_path,
 )
-from app.schemas.library import LibraryScanRequest
+from app.schemas.library import ClearLibraryRequest, LibraryScanRequest
 from app.services.scanner import run_scan_library, scan_state, reset_scan_state, validate_folder
 from app.models.playlistTrack import PlaylistTrack
 from app.models.track import Track
@@ -58,7 +58,13 @@ def get_scan_status():
     return public_scan_state
 
 @router.delete("/clear")
-def clear_library(db: Session = Depends(get_db)):
+def clear_library(payload: ClearLibraryRequest, db: Session = Depends(get_db)):
+    if payload.confirm != "CLEAR LIBRARY":
+        raise HTTPException(
+            status_code=400,
+            detail='Confirmation must exactly match "CLEAR LIBRARY".',
+        )
+
     before = db.query(Track).count()
     logger.debug("Clearing library with tracks_before=%s", before)
 
