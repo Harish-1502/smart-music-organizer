@@ -3,9 +3,25 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from app.core.path_guard import PathSecurityError, is_within_directory, safe_resolve_path
 from app.models.track import Track
 
 logger = logging.getLogger(__name__)
+
+
+def _track_is_inside_root(track: Track, root: Path) -> bool:
+    try:
+        return is_within_directory(track.file_path, root)
+    except (OSError, RuntimeError, PathSecurityError):
+        return False
+
+
+def _tracks_inside_root(db: Session, root: Path) -> list[Track]:
+    return [
+        track
+        for track in db.query(Track).all()
+        if _track_is_inside_root(track, root)
+    ]
 
 
 def cleanup_stale_tracks(
@@ -26,34 +42,33 @@ def cleanup_stale_tracks(
         )
         return 0, None
 
-    stale_tracks = db.query(Track).filter(Track.file_path.startswith(root_str))
-    if seen_paths:
-        stale_tracks = stale_tracks.filter(~Track.file_path.in_(seen_paths))
-
-    stale_list = stale_tracks.all()
+    resolved_root = safe_resolve_path(root, reject_parent_refs=False)
+    tracks_inside_root = _tracks_inside_root(db, resolved_root)
+    stale_list = [
+        track
+        for track in tracks_inside_root
+        if track.file_path not in seen_paths
+    ]
 
     logger.debug("Stale cleanup candidate count: %s", len(stale_list))
     for track in stale_list[:10]:
-        candidate = Path(track.file_path)
-        real_inside_root = candidate == root or root in candidate.parents
         logger.debug(
             "Stale cleanup candidate=%s real_inside_root=%s",
             track.file_path,
-            real_inside_root,
+            True,
         )
 
     try:
-        stale_query = db.query(Track).filter(Track.file_path.startswith(root_str))
+        deleted = 0
+        for track in stale_list:
+            db.delete(track)
+            deleted += 1
 
-        if seen_paths:
-            stale_query = stale_query.filter(~Track.file_path.in_(seen_paths))
-
-        deleted = stale_query.delete(synchronize_session=False)
         logger.debug("Stale cleanup delete returned: %s", deleted)
         db.commit()
         logger.debug(
             "Tracks under scan root after stale cleanup: %s",
-            db.query(Track).filter(Track.file_path.startswith(root_str)).count(),
+            len(_tracks_inside_root(db, resolved_root)),
         )
         return deleted, None
     except Exception as exc:

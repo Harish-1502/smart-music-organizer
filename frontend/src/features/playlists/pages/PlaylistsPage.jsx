@@ -6,11 +6,11 @@ import {
   deletePlaylist,
   renamePlaylist,
   generateAiPlaylist,
-} from "../api/playlistApi";
-import CreatePlaylistModal from "../components/playlists/CreatePlaylistModal";
-import GenerateAiPlaylistModal from "../components/playlists/GenerateAiPlaylistModal";
-import { featureFlags } from "../config/featureFlags";
-import "../styles/PlaylistsPage.css";
+} from "../../../api/playlistApi";
+import CreatePlaylistModal from "../components/CreatePlaylistModal";
+import GenerateAiPlaylistModal from "../components/GenerateAiPlaylistModal";
+import { featureFlags } from "../../../config/featureFlags";
+import "../../../styles/PlaylistsPage.css";
 
 export default function PlaylistsPage() {
   const navigate = useNavigate();

@@ -57,7 +57,7 @@ class Settings(BaseSettings):
         validation_alias="ALLOWED_SCAN_ROOTS",
     )
     upload_max_bytes: int | None = Field(
-        default=None,
+        default=5 * 1024 * 1024,
         validation_alias="UPLOAD_MAX_BYTES",
     )
 
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
         validation_alias="ENABLE_DEEP_SCAN",
     )
     enable_legacy_art_path_route: bool = Field(
-        default=True,
+        default=False,
         validation_alias="ENABLE_LEGACY_ART_PATH_ROUTE",
     )
     expose_local_paths: bool = Field(

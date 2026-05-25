@@ -1,6 +1,11 @@
 from app.models.track import Track
 
 
+PNG_BYTES = b"\x89PNG\r\n\x1a\n"
+JPEG_BYTES = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00"
+WEBP_BYTES = b"RIFF\x0c\x00\x00\x00WEBPVP8 "
+
+
 def make_track(db_session, tmp_path):
     audio_path = tmp_path / "song.mp3"
     audio_path.write_bytes(b"fake audio")
@@ -31,18 +36,13 @@ def test_upload_track_art_accepts_image_mime_type(
     tmp_path,
     monkeypatch,
 ):
-    """
-    Current behavior:
-    - upload validation accepts files based on UploadFile.content_type
-    - accepted artwork is written to ART_DIR and track.art_path is updated
-    """
     art_dir = tmp_path / "track_art"
     monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
     track = make_track(db_session, tmp_path)
 
     response = client.post(
         f"/tracks/{track.id}/art",
-        files={"file": ("cover.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        files={"file": ("cover.png", PNG_BYTES, "image/png")},
     )
 
     assert response.status_code == 200
@@ -51,6 +51,50 @@ def test_upload_track_art_accepts_image_mime_type(
 
     db_session.refresh(track)
     assert track.art_path == str(art_dir / f"track_{track.id}.png")
+
+    art_response = client.get(f"/tracks/{track.id}/art")
+    assert art_response.status_code == 200
+    assert art_response.content == PNG_BYTES
+
+
+def test_upload_track_art_accepts_jpeg_bytes(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    art_dir = tmp_path / "track_art"
+    monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
+    track = make_track(db_session, tmp_path)
+
+    response = client.post(
+        f"/tracks/{track.id}/art",
+        files={"file": ("cover.jpg", JPEG_BYTES, "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["art_path"] == f"/static/track_art/track_{track.id}.jpg"
+    assert (art_dir / f"track_{track.id}.jpg").read_bytes() == JPEG_BYTES
+
+
+def test_upload_track_art_accepts_webp_bytes(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    art_dir = tmp_path / "track_art"
+    monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
+    track = make_track(db_session, tmp_path)
+
+    response = client.post(
+        f"/tracks/{track.id}/art",
+        files={"file": ("cover.webp", WEBP_BYTES, "image/webp")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["art_path"] == f"/static/track_art/track_{track.id}.webp"
+    assert (art_dir / f"track_{track.id}.webp").read_bytes() == WEBP_BYTES
 
 
 def test_upload_track_art_rejects_non_image_mime_type(
@@ -75,16 +119,12 @@ def test_upload_track_art_rejects_non_image_mime_type(
     assert response.json()["detail"] == "Invalid image type. Use JPG, PNG, or WebP."
 
 
-def test_upload_track_art_accepts_non_image_bytes_with_image_mime_current_security_risk(
+def test_upload_track_art_rejects_fake_png_with_image_mime_type(
     client,
     db_session,
     tmp_path,
     monkeypatch,
 ):
-    """
-    Security-risk characterization:
-    - current validation trusts MIME type and does not verify image bytes
-    """
     art_dir = tmp_path / "track_art"
     monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
     track = make_track(db_session, tmp_path)
@@ -94,8 +134,29 @@ def test_upload_track_art_accepts_non_image_bytes_with_image_mime_current_securi
         files={"file": ("fake.png", b"not actually image data", "image/png")},
     )
 
-    assert response.status_code == 200
-    assert (art_dir / f"track_{track.id}.png").read_bytes() == b"not actually image data"
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid image content. Use JPG, PNG, or WebP."
+    assert not (art_dir / f"track_{track.id}.png").exists()
+
+
+def test_upload_track_art_rejects_mismatched_content_type(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    art_dir = tmp_path / "track_art"
+    monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
+    track = make_track(db_session, tmp_path)
+
+    response = client.post(
+        f"/tracks/{track.id}/art",
+        files={"file": ("cover.png", JPEG_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Image content does not match the declared type."
+    assert not (art_dir / f"track_{track.id}.png").exists()
 
 
 def test_upload_track_art_ignores_filename_path_traversal(
@@ -114,7 +175,7 @@ def test_upload_track_art_ignores_filename_path_traversal(
 
     response = client.post(
         f"/tracks/{track.id}/art",
-        files={"file": ("../../evil.png", b"image-ish", "image/png")},
+        files={"file": ("../../evil.png", PNG_BYTES, "image/png")},
     )
 
     assert response.status_code == 200
@@ -122,7 +183,7 @@ def test_upload_track_art_ignores_filename_path_traversal(
     assert not (tmp_path / "evil.png").exists()
 
 
-def test_upload_track_art_enforces_size_only_when_configured(
+def test_upload_track_art_enforces_size_limit(
     client,
     db_session,
     tmp_path,
@@ -142,6 +203,32 @@ def test_upload_track_art_enforces_size_only_when_configured(
     assert response.json()["detail"] == "Uploaded file is too large."
 
 
+def test_upload_track_art_enforces_default_size_limit(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    art_dir = tmp_path / "track_art"
+    monkeypatch.setattr("app.services.art.ART_DIR", art_dir)
+    track = make_track(db_session, tmp_path)
+
+    response = client.post(
+        f"/tracks/{track.id}/art",
+        files={
+            "file": (
+                "cover.png",
+                PNG_BYTES + b"0" * (5 * 1024 * 1024),
+                "image/png",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded file is too large."
+    assert str(art_dir) not in response.text
+
+
 def test_upload_track_art_unexpected_error_hides_raw_exception(
     client,
     db_session,
@@ -155,7 +242,7 @@ def test_upload_track_art_unexpected_error_hides_raw_exception(
 
     response = client.post(
         f"/tracks/{track.id}/art",
-        files={"file": ("cover.png", b"image-ish", "image/png")},
+        files={"file": ("cover.png", PNG_BYTES, "image/png")},
     )
 
     assert response.status_code == 500

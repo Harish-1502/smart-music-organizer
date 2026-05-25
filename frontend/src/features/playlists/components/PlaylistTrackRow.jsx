@@ -1,4 +1,4 @@
-import { maskTrack } from "../../utils/demoMode";
+import { maskTrack } from "../../../utils/demoMode";
 
 export default function PlaylistTrackRow({ track, onRemove, onPlay }) {
   const displayTrack = maskTrack(track, track.position ? track.position - 1 : 0);

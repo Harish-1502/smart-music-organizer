@@ -27,12 +27,32 @@ def make_track_with_art(db_session, tmp_path, art_path):
     return track
 
 
-def test_library_art_returns_existing_stored_track_art_path(client, db_session, tmp_path):
+def test_library_art_default_disables_raw_path_route(client, tmp_path):
+    image_path = tmp_path / "cover-disabled-by-default.jpg"
+    image_path.write_bytes(b"should not be returned")
+
+    response = client.get("/library/art", params={"path": str(image_path)})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Legacy artwork path access is disabled."
+
+
+def test_library_art_returns_existing_stored_track_art_path(
+    client,
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
     """
     Current behavior:
     - scanned artwork can live beside an audio file outside managed artwork dirs
     - compatibility is preserved when the path is stored as Track.art_path
     """
+    monkeypatch.setattr(
+        library_route.settings,
+        "enable_legacy_art_path_route",
+        True,
+    )
     image_path = tmp_path / "cover.jpg"
     image_bytes = b"fake image bytes"
     image_path.write_bytes(image_bytes)
@@ -44,17 +64,22 @@ def test_library_art_returns_existing_stored_track_art_path(client, db_session, 
     assert response.content == image_bytes
 
 
-def test_library_art_enabled_by_default_allows_managed_existing_path(
+def test_library_art_enabled_setting_allows_managed_existing_path(
     client,
     tmp_path,
     monkeypatch,
 ):
     """
     Feature flag behavior:
-    - ENABLE_LEGACY_ART_PATH_ROUTE defaults enabled, preserving current behavior
+    - ENABLE_LEGACY_ART_PATH_ROUTE=true preserves guarded legacy behavior
     """
     managed_dir = tmp_path / "managed"
     managed_dir.mkdir()
+    monkeypatch.setattr(
+        library_route.settings,
+        "enable_legacy_art_path_route",
+        True,
+    )
     monkeypatch.setattr(library_route.settings, "managed_static_dirs", [managed_dir])
     monkeypatch.setattr(library_route.settings, "managed_artwork_dir", managed_dir / "art")
     image_path = managed_dir / "cover-default.jpg"
@@ -90,11 +115,16 @@ def test_library_art_returns_403_when_legacy_path_route_disabled(
     assert response.json()["detail"] == "Legacy artwork path access is disabled."
 
 
-def test_library_art_returns_404_for_missing_path(client, tmp_path):
+def test_library_art_returns_404_for_missing_path(client, tmp_path, monkeypatch):
     """
     Current behavior:
     - missing raw filesystem paths return 404
     """
+    monkeypatch.setattr(
+        library_route.settings,
+        "enable_legacy_art_path_route",
+        True,
+    )
     missing_path = tmp_path / "missing.jpg"
 
     response = client.get("/library/art", params={"path": str(missing_path)})
@@ -106,12 +136,18 @@ def test_library_art_returns_404_for_missing_path(client, tmp_path):
 def test_library_art_blocks_arbitrary_existing_local_file(
     client,
     tmp_path,
+    monkeypatch,
 ):
     """
     Hardened behavior:
     - the endpoint is named for artwork
     - arbitrary local files are no longer returned
     """
+    monkeypatch.setattr(
+        library_route.settings,
+        "enable_legacy_art_path_route",
+        True,
+    )
     arbitrary_file = tmp_path / "not-managed.jpg"
     file_bytes = b"this is not artwork"
     arbitrary_file.write_bytes(file_bytes)
@@ -125,11 +161,17 @@ def test_library_art_blocks_arbitrary_existing_local_file(
 def test_library_art_blocks_parent_directory_path_traversal(
     client,
     tmp_path,
+    monkeypatch,
 ):
     """
     Hardened behavior:
     - paths containing '..' are blocked before file access
     """
+    monkeypatch.setattr(
+        library_route.settings,
+        "enable_legacy_art_path_route",
+        True,
+    )
     nested_dir = tmp_path / "nested"
     nested_dir.mkdir()
     secret_file = tmp_path / "secret.jpg"

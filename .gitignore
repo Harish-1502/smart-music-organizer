@@ -25,6 +25,7 @@ data/
 backend/data/
 backend/test_app.db
 backend/test_scanner.db
+backend/.env
 
 # Frontend generated files
 node_modules/

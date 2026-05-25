@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { addTrackToPlaylist } from "../../api/playlistApi";
-import useTrackBrowser from "../../hooks/useTrackBrowser";
-import TrackBrowser from "../TrackBrowser";
-import "../../styles/playlist/AddTracksModal.css";
+import { addTrackToPlaylist } from "../../../api/playlistApi";
+import useTrackBrowser from "../../../hooks/useTrackBrowser";
+import TrackBrowser from "../../../components/TrackBrowser";
+import "../../../styles/playlist/AddTracksModal.css";
 
 export default function AddTracksModal({ playlistId, onClose, onTracksAdded }) {
   const [selectedTrackIds, setSelectedTrackIds] = useState([]);

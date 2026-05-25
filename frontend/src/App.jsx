@@ -1,8 +1,9 @@
 import { Link, Routes, Route, Navigate } from "react-router-dom";
 import LibraryPage from "./pages/LibraryPage";
-import PlaylistsPage from "./pages/PlaylistsPage";
-import PlaylistDetailPage from "./pages/PlaylistDetailPage";
+import PlaylistsPage from "./features/playlists/pages/PlaylistsPage";
+import PlaylistDetailPage from "./features/playlists/pages/PlaylistDetailPage";
 import PlayerPage from "./pages/PlayerPage.jsx";
+import TagCalibrationPage from "./pages/TagCalibrationPage.jsx";
 import MiniPlayer from "./components/MiniPlayer";
 import { usePlayer } from "./context/PlayerContext";
 
@@ -44,6 +45,9 @@ export default function App() {
             <Link to="/player" className="app-shell__nav-link">
               Player
             </Link>
+            <Link to="/calibration" className="app-shell__nav-link">
+              Calibration
+            </Link>
           </div>
 
           <div className="app-shell__nav-actions" aria-hidden="true">
@@ -64,6 +68,7 @@ export default function App() {
             element={<PlaylistDetailPage />}
           />
           <Route path="/player" element={<PlayerPage />} />
+          <Route path="/calibration" element={<TagCalibrationPage />} />
         </Routes>
       </main>
 

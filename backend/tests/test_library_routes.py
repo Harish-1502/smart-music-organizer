@@ -10,6 +10,7 @@ from app.routes import library as library_route
 from app.services.scanner import reset_scan_state, scan_state
 
 client = TestClient(app)
+CLEAR_LIBRARY_CONFIRMATION = "CLEAR LIBRARY"
 
 def test_get_scan_status():
     response = client.get("/library/scan_status")
@@ -59,7 +60,11 @@ def test_clear_library(client, db_session):
     scan_state["last_error"] = "some error"
 
     # Call the route
-    response = client.delete("/library/clear")
+    response = client.request(
+        "DELETE",
+        "/library/clear",
+        json={"confirm": CLEAR_LIBRARY_CONFIRMATION},
+    )
 
     assert response.status_code == 200
 
@@ -252,6 +257,52 @@ def test_scan_status_preserves_empty_last_error_when_local_paths_are_hidden(
     assert scan_state["last_error"] is None
 
 
+def test_clear_library_without_confirmation_fails_and_preserves_tracks(
+    client,
+    db_session,
+):
+    track = Track(
+        file_path="C:/Music/private-song.mp3",
+        file_name="private-song.mp3",
+        extension=".mp3",
+        folder_path="C:/Music",
+    )
+    db_session.add(track)
+    db_session.commit()
+
+    response = client.delete("/library/clear")
+
+    assert response.status_code == 422
+    assert db_session.query(Track).count() == 1
+    assert "C:/Music/private-song.mp3" not in response.text
+
+
+def test_clear_library_with_wrong_confirmation_fails_and_preserves_tracks(
+    client,
+    db_session,
+):
+    private_path = "C:/Music/private-song.mp3"
+    track = Track(
+        file_path=private_path,
+        file_name="private-song.mp3",
+        extension=".mp3",
+        folder_path="C:/Music",
+    )
+    db_session.add(track)
+    db_session.commit()
+
+    response = client.request(
+        "DELETE",
+        "/library/clear",
+        json={"confirm": "clear library"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == 'Confirmation must exactly match "CLEAR LIBRARY".'
+    assert db_session.query(Track).count() == 1
+    assert private_path not in response.text
+
+
 def test_clear_library_deletes_tracks_and_resets_scan_state(client, db_session):
     """
     Test:
@@ -286,7 +337,11 @@ def test_clear_library_deletes_tracks_and_resets_scan_state(client, db_session):
     db_session.add(track)
     db_session.commit()
 
-    response = client.delete("/library/clear")
+    response = client.request(
+        "DELETE",
+        "/library/clear",
+        json={"confirm": CLEAR_LIBRARY_CONFIRMATION},
+    )
 
     assert response.status_code == 200
     assert response.json()["deleted_tracks"] >= 1
@@ -324,7 +379,11 @@ def test_clear_library_deletes_tracks_but_preserves_unlinked_playlists_and_tags(
     db_session.add_all([track, playlist, tag])
     db_session.commit()
 
-    response = client.delete("/library/clear")
+    response = client.request(
+        "DELETE",
+        "/library/clear",
+        json={"confirm": CLEAR_LIBRARY_CONFIRMATION},
+    )
 
     assert response.status_code == 200
     assert response.json()["deleted_tracks"] == 1
@@ -385,7 +444,11 @@ def test_clear_library_with_dependent_rows_deletes_tracks_and_links_only(
     db_session.add_all([playlist_track, track_tag, tag_suggestion])
     db_session.commit()
 
-    response = client.delete("/library/clear")
+    response = client.request(
+        "DELETE",
+        "/library/clear",
+        json={"confirm": CLEAR_LIBRARY_CONFIRMATION},
+    )
 
     assert response.status_code == 200
     assert response.json()["deleted_tracks"] == 1

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  CLEAR_LIBRARY_CONFIRMATION,
   scanLibrary,
   getScanStatus,
   clearLibrary,
@@ -22,8 +23,12 @@ export default function LibraryPage() {
   const [folderPath, setFolderPath] = useState("");
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
   const trackBrowser = useTrackBrowser();
   const demoModeEnabled = isDemoMode();
+  const clearConfirmationMatches =
+    clearConfirmText === CLEAR_LIBRARY_CONFIRMATION;
   
   const {
     viewMode,
@@ -87,8 +92,29 @@ export default function LibraryPage() {
     }
   }
 
-  async function deleteAllSong() {
-    console.warn("[DEBUG deleteAllSong] clicked", {
+  function openClearConfirmation() {
+    setClearConfirmText("");
+    setClearConfirmOpen(true);
+  }
+
+  function closeClearConfirmation() {
+    if (loading) {
+      return;
+    }
+
+    setClearConfirmOpen(false);
+    setClearConfirmText("");
+  }
+
+  async function handleClearLibrary(event) {
+    event.preventDefault();
+
+    if (!clearConfirmationMatches) {
+      trackBrowser.setMessage("Type CLEAR LIBRARY to confirm.");
+      return;
+    }
+
+    console.warn("[LibraryPage] clear library confirmed", {
       time: new Date().toISOString(),
     });
     setLoading(true);
@@ -96,8 +122,10 @@ export default function LibraryPage() {
     trackBrowser.setMessage("");
 
     try {
-      const latestDeleteStatus = await clearLibrary();
+      const latestDeleteStatus = await clearLibrary(clearConfirmText);
       setStatus(latestDeleteStatus);
+      setClearConfirmOpen(false);
+      setClearConfirmText("");
 
       if (trackBrowser.page !== 1) {
         trackBrowser.setPage(1);
@@ -109,7 +137,7 @@ export default function LibraryPage() {
         await loadArtists();
       }
 
-      trackBrowser.setMessage("Delete complete");
+      trackBrowser.setMessage("Library cleared");
     } catch (error) {
       trackBrowser.setMessage(error.message || "Delete failed");
     } finally {
@@ -183,15 +211,80 @@ export default function LibraryPage() {
                 <button
                   type="button"
                   className="library-page__button library-page__button--danger"
-                  onClick={deleteAllSong}
+                  onClick={openClearConfirmation}
                   disabled={loading}
                 >
-                  Delete
+                  Clear Library
                 </button>
               </div>
             </div>
           </div>
         </header>
+
+        {clearConfirmOpen && (
+          <div
+            className="clear-library-modal__overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeClearConfirmation();
+              }
+            }}
+          >
+            <form
+              className="clear-library-modal__dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clear-library-modal-title"
+              onSubmit={handleClearLibrary}
+            >
+              <div className="clear-library-modal__header">
+                <h2
+                  id="clear-library-modal-title"
+                  className="clear-library-modal__title"
+                >
+                  Clear Library
+                </h2>
+                <p className="clear-library-modal__subtitle">
+                  This removes tracks and track relationships from the app
+                  database. Music files on disk are not deleted.
+                </p>
+              </div>
+
+              <label className="clear-library-modal__field">
+                <span className="clear-library-modal__label">
+                  Type {CLEAR_LIBRARY_CONFIRMATION}
+                </span>
+                <input
+                  className="clear-library-modal__input"
+                  value={clearConfirmText}
+                  onChange={(event) => setClearConfirmText(event.target.value)}
+                  autoFocus
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+
+              <div className="clear-library-modal__actions">
+                <button
+                  type="button"
+                  className="clear-library-modal__button clear-library-modal__button--secondary"
+                  onClick={closeClearConfirmation}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="clear-library-modal__button clear-library-modal__button--danger"
+                  disabled={loading || !clearConfirmationMatches}
+                >
+                  {loading ? "Clearing..." : "Clear Library"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {trackBrowser.message && (
           <p className="library-page__message" role="alert">

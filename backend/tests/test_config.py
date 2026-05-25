@@ -21,10 +21,10 @@ def test_default_settings_preserve_current_local_behavior():
     assert settings.managed_static_dirs == [Path("data")]
     assert settings.managed_artwork_dir == Path("data/track_art")
     assert settings.allowed_scan_roots == []
-    assert settings.upload_max_bytes is None
+    assert settings.upload_max_bytes == 5 * 1024 * 1024
     assert settings.enable_ai_playlists is True
     assert settings.enable_deep_scan is True
-    assert settings.enable_legacy_art_path_route is True
+    assert settings.enable_legacy_art_path_route is False
     assert settings.expose_local_paths is True
 
 
@@ -39,7 +39,7 @@ def test_settings_support_environment_overrides(monkeypatch):
     monkeypatch.setenv("UPLOAD_MAX_BYTES", "12345")
     monkeypatch.setenv("ENABLE_AI_PLAYLISTS", "false")
     monkeypatch.setenv("ENABLE_DEEP_SCAN", "false")
-    monkeypatch.setenv("ENABLE_LEGACY_ART_PATH_ROUTE", "false")
+    monkeypatch.setenv("ENABLE_LEGACY_ART_PATH_ROUTE", "true")
     monkeypatch.setenv("DEBUG_EXPOSE_LOCAL_PATHS", "false")
 
     settings = Settings(_env_file=None)
@@ -54,7 +54,7 @@ def test_settings_support_environment_overrides(monkeypatch):
     assert settings.upload_max_bytes == 12345
     assert settings.enable_ai_playlists is False
     assert settings.enable_deep_scan is False
-    assert settings.enable_legacy_art_path_route is False
+    assert settings.enable_legacy_art_path_route is True
     assert settings.expose_local_paths is False
 
 

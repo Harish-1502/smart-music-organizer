@@ -6,6 +6,7 @@ from app.models.track import Track
 from app.models.tag import Tag
 from app.models.track_tag import TrackTag
 from app.services.tag_inference import apply_inferred_tags
+from app.services.tagging.tag_candidates import AUTO_APPLY_THRESHOLD
 
 
 def make_test_db():
@@ -55,12 +56,11 @@ def test_apply_inferred_tags_creates_rule_tags():
         saved_tag_names = {tag.name for tag in saved_tags}
 
         assert "lofi" in saved_tag_names
-        assert "chill" in saved_tag_names
         assert len(saved_track_tags) > 0
 
         for track_tag in saved_track_tags:
             assert track_tag.source == "rule"
-            assert track_tag.confidence > 0
+            assert track_tag.confidence >= AUTO_APPLY_THRESHOLD
 
     finally:
         db.close()

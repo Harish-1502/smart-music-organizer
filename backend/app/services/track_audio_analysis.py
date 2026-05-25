@@ -24,6 +24,8 @@ def analyze_track_audio(db: Session, track: Track) -> Track:
         track.energy_score = energy_result.energy_score
         track.energy_label = energy_result.energy_label
         track.energy_confidence = energy_result.confidence
+        track.loudness_db = energy_result.loudness_db
+        track.loudness_label = energy_result.loudness_label
 
         track.audio_analyzed_at = datetime.now(timezone.utc)
 

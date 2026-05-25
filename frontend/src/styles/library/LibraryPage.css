@@ -710,6 +710,118 @@
   color: #fecaca;
 }
 
+.clear-library-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  background: rgba(6, 10, 18, 0.74);
+  backdrop-filter: blur(10px);
+}
+
+.clear-library-modal__dialog {
+  width: min(100%, 440px);
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(248, 113, 113, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    var(--surface-strong);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+.clear-library-modal__header,
+.clear-library-modal__field {
+  display: grid;
+  gap: 8px;
+}
+
+.clear-library-modal__title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 1.3rem;
+}
+
+.clear-library-modal__subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.clear-library-modal__label {
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.clear-library-modal__input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--action-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.clear-library-modal__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.clear-library-modal__button {
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    filter 0.2s ease;
+}
+
+.clear-library-modal__button--secondary {
+  border: 1px solid var(--action-border);
+  background: transparent;
+  color: var(--action-text);
+}
+
+.clear-library-modal__button--secondary:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.clear-library-modal__button--danger {
+  border: 1px solid var(--danger-border);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+}
+
+.clear-library-modal__button--danger:hover {
+  filter: brightness(1.08);
+}
+
+.clear-library-modal__input:focus-visible,
+.clear-library-modal__button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.clear-library-modal__button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .edit-track-modal__overlay {
   position: fixed;
   inset: 0;
@@ -1203,6 +1315,10 @@
   .edit-track-modal__dialog {
     max-height: 92vh;
     padding: 20px;
+  }
+
+  .clear-library-modal__actions {
+    grid-template-columns: 1fr;
   }
 
   .edit-track-modal__actions {

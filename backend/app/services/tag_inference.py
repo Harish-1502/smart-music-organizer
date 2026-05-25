@@ -6,6 +6,13 @@ from app.utils.tag_rules import TAG_RULES
 from app.models.tag import Tag
 from app.models.track import Track
 from app.models.track_tag import TrackTag
+from app.services.tag_persistence import ensure_controlled_tag_exists
+from app.services.tagging.auto_apply import get_auto_apply_candidates
+from app.services.tagging.candidate_merge import merge_tag_candidates
+from app.services.tagging.tag_candidates import TagCandidate
+
+
+TRUSTED_INFERRED_TAG_SOURCES = {"rule"}
 
 
 def normalize_text(value: str) -> str:
@@ -84,7 +91,7 @@ def keyword_matches(text: str, keyword: str) -> bool:
     return re.search(pattern, text) is not None
 
 
-def infer_keyword_tags(track: Track) -> list[tuple[str, float]]:
+def infer_keyword_tags(track: Track) -> list[TagCandidate]:
     """
     Infer tags from configured keyword rules.
 
@@ -109,12 +116,12 @@ def infer_keyword_tags(track: Track) -> list[tuple[str, float]]:
         )
 
         if has_match:
-            inferred.append((tag_name, confidence))
+            inferred.append(TagCandidate(tag_name=tag_name, confidence=confidence))
 
     return inferred
 
 
-def infer_duration_tags(track: Track) -> list[tuple[str, float]]:
+def infer_duration_tags(track: Track) -> list[TagCandidate]:
     """
     Infer simple length-based tags from track duration.
 
@@ -131,14 +138,14 @@ def infer_duration_tags(track: Track) -> list[tuple[str, float]]:
         return inferred
 
     if track.duration < 90:
-        inferred.append(("short", 0.75))
+        inferred.append(TagCandidate(tag_name="short", confidence=0.75))
 
     if track.duration > 420:
-        inferred.append(("long", 0.75))
+        inferred.append(TagCandidate(tag_name="long", confidence=0.75))
 
     return inferred
 
-def infer_bpm_tags(track: Track) -> list[tuple[str, float]]:
+def infer_bpm_tags(track: Track) -> list[TagCandidate]:
     inferred = []
 
     bpm = getattr(track, "bpm", None)
@@ -148,14 +155,14 @@ def infer_bpm_tags(track: Track) -> list[tuple[str, float]]:
         return inferred
 
     if bpm >= 155:
-        inferred.append(("fast", 0.8))
+        inferred.append(TagCandidate(tag_name="fast", confidence=0.8))
     elif bpm <= 85:
-        inferred.append(("slow", 0.75))
+        inferred.append(TagCandidate(tag_name="slow", confidence=0.75))
 
     return inferred
 
 
-def infer_energy_tags(track: Track) -> list[tuple[str, float]]:
+def infer_energy_tags(track: Track) -> list[TagCandidate]:
     inferred = []
 
     energy_label = getattr(track, "energy_label", None)
@@ -166,7 +173,7 @@ def infer_energy_tags(track: Track) -> list[tuple[str, float]]:
 
     # Low energy is safer to infer from energy alone.
     if energy_label == "low":
-        inferred.append(("low_energy", 0.75))
+        inferred.append(TagCandidate(tag_name="low_energy", confidence=0.75))
 
     # Many slow/chill songs are mastered loud, especially YouTube downloads.
     return inferred
@@ -184,7 +191,7 @@ def track_has_slow_text_signal(track: Track) -> bool:
 
     return any(keyword_matches(text, keyword) for keyword in slow_keywords)
 
-def infer_bpm_energy_combo_tags(track: Track) -> list[tuple[str, float]]:
+def infer_bpm_energy_combo_tags(track: Track) -> list[TagCandidate]:
     inferred = []
 
     bpm = getattr(track, "bpm", None)
@@ -204,31 +211,31 @@ def infer_bpm_energy_combo_tags(track: Track) -> list[tuple[str, float]]:
     # If filename/title clearly says slowed, do not add high_energy
     # just because the audio is mastered loud.
     if has_slow_text:
-        inferred.append(("slow", 0.85))
-        inferred.append(("low_energy", 0.65))
-        inferred.append(("chill", 0.60))
+        inferred.append(TagCandidate(tag_name="slow", confidence=0.85))
+        inferred.append(TagCandidate(tag_name="low_energy", confidence=0.65))
+        inferred.append(TagCandidate(tag_name="chill", confidence=0.60))
         return inferred
 
     if bpm >= 140 and energy_label == "high":
-        inferred.append(("high_energy", 0.85))
-        inferred.append(("workout", 0.72))
-        inferred.append(("party", 0.65))
+        inferred.append(TagCandidate(tag_name="high_energy", confidence=0.85))
+        inferred.append(TagCandidate(tag_name="workout", confidence=0.72))
+        inferred.append(TagCandidate(tag_name="party", confidence=0.65))
 
     elif bpm >= 125 and energy_label == "high":
-        inferred.append(("high_energy", 0.70))
-        inferred.append(("party", 0.60))
+        inferred.append(TagCandidate(tag_name="high_energy", confidence=0.70))
+        inferred.append(TagCandidate(tag_name="party", confidence=0.60))
 
     if bpm <= 90 and energy_label in {"low", "medium"}:
-        inferred.append(("low_energy", 0.75))
-        inferred.append(("chill", 0.65))
+        inferred.append(TagCandidate(tag_name="low_energy", confidence=0.75))
+        inferred.append(TagCandidate(tag_name="chill", confidence=0.65))
 
     return inferred
 
-def infer_track_tags(track: Track) -> list[tuple[str, float]]:
+def infer_track_tag_candidates(track: Track) -> list[TagCandidate]:
     """
     Run all available tag inference strategies for one track.
 
-    This function is the public entry point for inference. Keep individual
+    This function is the candidate-based entry point for inference. Keep individual
     inference strategies separated so we can add more later without changing
     the rest of the app.
 
@@ -246,15 +253,17 @@ def infer_track_tags(track: Track) -> list[tuple[str, float]]:
     inferred.extend(infer_energy_tags(track))
     inferred.extend(infer_bpm_energy_combo_tags(track))
 
-    # A track may match the same tag from multiple strategies.
-    # Keep the strongest confidence instead of creating duplicates.
-    merged = {}
+    return merge_tag_candidates(inferred)
 
-    for tag_name, confidence in inferred:
-        current_confidence = merged.get(tag_name, 0)
-        merged[tag_name] = max(current_confidence, confidence)
 
-    return list(merged.items())
+def infer_track_tags(track: Track) -> list[tuple[str, float]]:
+    """
+    Return inferred tags in the legacy tuple shape used by existing callers.
+    """
+    return [
+        candidate.as_tuple()
+        for candidate in infer_track_tag_candidates(track)
+    ]
 
 
 def ensure_tag_exists(db: Session, tag_name: str) -> Tag | None:
@@ -270,29 +279,7 @@ def ensure_tag_exists(db: Session, tag_name: str) -> Tag | None:
         "hig_energy"
         ""
     """
-    rule = TAG_RULES.get(tag_name)
-
-    if not rule:
-        return None
-
-    category = rule["category"]
-
-    tag = db.query(Tag).filter(Tag.name == tag_name).first()
-
-    if tag:
-        return tag
-
-    tag = Tag(
-        name=tag_name,
-        category=category,
-    )
-
-    # flush() writes the row enough for tag.id to exist in this transaction,
-    # but does not commit yet. The caller should control the final commit.
-    db.add(tag)
-    db.flush()
-
-    return tag
+    return ensure_controlled_tag_exists(db, tag_name)
 
 
 def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
@@ -308,11 +295,15 @@ def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
     Manual tags are treated as stronger than inferred tags because the user is
     correcting the system. Auto-tagging should assist the user, not fight them.
     """
-    inferred_tags = infer_track_tags(track)
+    inferred_tags = [
+        candidate
+        for candidate in get_auto_apply_candidates(infer_track_tag_candidates(track))
+        if candidate.source in TRUSTED_INFERRED_TAG_SOURCES
+    ]
     applied_track_tags = []
 
-    for tag_name, confidence in inferred_tags:
-        tag = ensure_tag_exists(db, tag_name)
+    for candidate in inferred_tags:
+        tag = ensure_tag_exists(db, candidate.tag_name)
 
         if not tag:
             continue
@@ -335,9 +326,9 @@ def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
             # confidence score we have seen so far.
             existing_track_tag.confidence = max(
                 existing_track_tag.confidence,
-                confidence,
+                candidate.confidence,
             )
-            existing_track_tag.source = "rule"
+            existing_track_tag.source = candidate.source
 
             applied_track_tags.append(existing_track_tag)
             continue
@@ -345,8 +336,8 @@ def apply_inferred_tags(db: Session, track: Track) -> list[TrackTag]:
         track_tag = TrackTag(
             track_id=track.id,
             tag_id=tag.id,
-            source="rule",
-            confidence=confidence,
+            source=candidate.source,
+            confidence=candidate.confidence,
         )
 
         db.add(track_tag)
