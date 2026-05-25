@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
+import pytest
 
 from app.core import database
 from app.core.config import Settings
@@ -13,6 +14,10 @@ def test_default_settings_preserve_current_local_behavior():
 
     assert settings.app_env == "development"
     assert settings.api_mode == "local"
+    assert settings.app_lan_mode is False
+    assert settings.backend_host == "127.0.0.1"
+    assert settings.backend_port == 8000
+    assert settings.api_auth_token is None
     assert settings.database_url == "sqlite:///./data/app.db"
     assert settings.cors_origins == [
         "http://localhost:5173",
@@ -31,6 +36,10 @@ def test_default_settings_preserve_current_local_behavior():
 def test_settings_support_environment_overrides(monkeypatch):
     monkeypatch.setenv("API_ENV", "test")
     monkeypatch.setenv("API_MODE", "ci")
+    monkeypatch.setenv("APP_LAN_MODE", "true")
+    monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
+    monkeypatch.setenv("BACKEND_PORT", "9000")
+    monkeypatch.setenv("API_AUTH_TOKEN", "test-token")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./override.db")
     monkeypatch.setenv("CORS_ORIGINS", '["http://example.test"]')
     monkeypatch.setenv("MANAGED_STATIC_DIRS", '["data", "public"]')
@@ -46,6 +55,10 @@ def test_settings_support_environment_overrides(monkeypatch):
 
     assert settings.app_env == "test"
     assert settings.api_mode == "ci"
+    assert settings.app_lan_mode is True
+    assert settings.backend_host == "0.0.0.0"
+    assert settings.backend_port == 9000
+    assert settings.api_auth_token == "test-token"
     assert settings.database_url == "sqlite:///./override.db"
     assert settings.cors_origins == ["http://example.test"]
     assert settings.managed_static_dirs == [Path("data"), Path("public")]
@@ -56,6 +69,21 @@ def test_settings_support_environment_overrides(monkeypatch):
     assert settings.enable_deep_scan is False
     assert settings.enable_legacy_art_path_route is True
     assert settings.expose_local_paths is False
+
+
+def test_wildcard_backend_host_requires_lan_mode(monkeypatch):
+    monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
+
+    with pytest.raises(ValueError, match="APP_LAN_MODE=true"):
+        Settings(_env_file=None)
+
+
+def test_lan_mode_requires_api_auth_token(monkeypatch):
+    monkeypatch.setenv("APP_LAN_MODE", "true")
+    monkeypatch.setenv("API_AUTH_TOKEN", "   ")
+
+    with pytest.raises(ValueError, match="API_AUTH_TOKEN"):
+        Settings(_env_file=None)
 
 
 def test_database_uses_configured_database_url():

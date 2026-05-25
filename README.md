@@ -1,10 +1,12 @@
 # Smart Music Organizer
 
 Smart Music Organizer is a local personal server app. One computer runs the
-FastAPI server and serves the built React app. Other devices on the same Wi-Fi
-can open the app in a browser.
+FastAPI server and serves the built React app. By default the backend binds to
+`127.0.0.1`, so it is only reachable from the same computer.
 
 This is not a public hosted website setup.
+LAN/mobile access is an explicit opt-in mode, requires an API token, and should
+not be exposed to the internet.
 
 ## Docker Local-Server Mode
 
@@ -45,14 +47,10 @@ Then open:
 http://localhost:8000
 ```
 
-From a tablet or phone on the same Wi-Fi, open:
-
-```text
-http://<server-ip>:8000
-```
-
 Docker builds the React/Vite frontend inside the image, then runs FastAPI from
 the final Python container. The final runtime container does not need Node.
+
+Docker Compose publishes the app to `127.0.0.1:8000` on the host by default.
 
 ### Docker V1 Limitations
 
@@ -192,7 +190,7 @@ After building the frontend, run the backend server:
 ```powershell
 cd backend
 .\venv\Scripts\activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Then open:
@@ -211,10 +209,51 @@ You can also use the Windows launcher:
 Start Smart Music Organizer.bat
 ```
 
-The launcher starts the FastAPI server on `0.0.0.0:8000`, opens
-`http://localhost:8000`, and prints tablet access instructions.
+The launcher starts the FastAPI server on `127.0.0.1:8000` by default and opens
+`http://localhost:8000`. It only binds to `0.0.0.0` when `APP_LAN_MODE=true`.
 
 ## Tablet Or Phone Access
+
+LAN/mobile mode exposes the API to your local network. Use it only on a trusted
+network, set a long random `API_AUTH_TOKEN`, and do not expose the app to the
+internet.
+
+For the Windows launcher, set explicit LAN mode before starting the app:
+
+```powershell
+$env:APP_LAN_MODE = "true"
+$env:BACKEND_HOST = "0.0.0.0"
+$env:API_AUTH_TOKEN = "use-a-long-random-token"
+.\Start Smart Music Organizer.bat
+```
+
+If you are serving a built frontend, build it with the same token:
+
+```powershell
+cd frontend
+$env:VITE_API_AUTH_TOKEN = "use-a-long-random-token"
+npm run build
+```
+
+For manual backend startup:
+
+```powershell
+cd backend
+.\venv\Scripts\activate
+$env:APP_LAN_MODE = "true"
+$env:API_AUTH_TOKEN = "use-a-long-random-token"
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+If you are using the Vite dev server in LAN mode, set
+`VITE_API_AUTH_TOKEN` to the same value before starting `npm run dev`.
+
+For Docker Compose, use the explicit LAN override:
+
+```powershell
+$env:API_AUTH_TOKEN = "use-a-long-random-token"
+docker compose -f docker-compose.yml -f docker-compose.lan.yml up --build
+```
 
 Make sure the server computer and tablet/phone are on the same Wi-Fi network.
 

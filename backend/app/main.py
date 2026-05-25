@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
+from fastapi import HTTPException
+from app.core.auth import is_auth_exempt_path, require_api_token
 from app.core.config import settings
 from app.core.database import Base, engine
 from fastapi.staticfiles import StaticFiles
@@ -96,6 +99,31 @@ async def serve_react_app_for_html_navigation(request: Request, call_next):
 
         if is_html_navigation(request) and is_frontend_route(request.url.path):
             return FileResponse(FRONTEND_INDEX)
+
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def require_token_in_lan_mode(request: Request, call_next):
+    is_frontend_navigation = (
+        frontend_build_available()
+        and is_html_navigation(request)
+        and is_frontend_route(request.url.path)
+    )
+
+    if (
+        settings.app_lan_mode
+        and not is_auth_exempt_path(request.url.path)
+        and not is_frontend_navigation
+    ):
+        try:
+            require_api_token(request)
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers,
+            )
 
     return await call_next(request)
 

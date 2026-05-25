@@ -1,5 +1,8 @@
 FROM node:20-slim AS frontend-build
 
+ARG VITE_API_AUTH_TOKEN=""
+ENV VITE_API_AUTH_TOKEN=${VITE_API_AUTH_TOKEN}
+
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -29,4 +32,7 @@ RUN mkdir -p /app/backend/data /music
 
 EXPOSE 8000
 
+# Container-internal 0.0.0.0 is required for Docker port publishing.
+# docker-compose.yml binds the host port to 127.0.0.1 by default; exposing this
+# on 0.0.0.0/LAN should only be done deliberately with API_AUTH_TOKEN set.
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
