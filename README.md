@@ -203,14 +203,20 @@ FastAPI serves the built React frontend from `frontend/dist` when it exists.
 API routes such as `/tracks`, `/playlists`, `/library`, `/tags`, and
 `/ai_playlists` remain unchanged.
 
-You can also use the Windows launcher:
+The safe default is the local launcher:
 
 ```text
 Start Smart Music Organizer.bat
 ```
 
-The launcher starts the FastAPI server on `127.0.0.1:8000` by default and opens
-`http://localhost:8000`. It only binds to `0.0.0.0` when `APP_LAN_MODE=true`.
+It forces:
+
+```text
+APP_LAN_MODE=false
+BACKEND_HOST=127.0.0.1
+```
+
+It does not require an API token and is meant for desktop use on the same PC.
 
 ## Tablet Or Phone Access
 
@@ -218,22 +224,34 @@ LAN/mobile mode exposes the API to your local network. Use it only on a trusted
 network, set a long random `API_AUTH_TOKEN`, and do not expose the app to the
 internet.
 
-For the Windows launcher, set explicit LAN mode before starting the app:
+Use the dedicated LAN launcher:
 
-```powershell
-$env:APP_LAN_MODE = "true"
-$env:BACKEND_HOST = "0.0.0.0"
-$env:API_AUTH_TOKEN = "use-a-long-random-token"
-.\Start Smart Music Organizer.bat
+```text
+Start Smart Music Organizer LAN.bat
 ```
 
-If you are serving a built frontend, build it with the same token:
+Before first use, create `.env.lan` from `.env.lan.example`:
 
 ```powershell
-cd frontend
-$env:VITE_API_AUTH_TOKEN = "use-a-long-random-token"
-npm run build
+copy .env.lan.example .env.lan
 ```
+
+Set a long random token in `.env.lan`:
+
+```text
+API_AUTH_TOKEN=replace-with-a-long-random-token
+```
+
+The LAN launcher forces:
+
+```text
+APP_LAN_MODE=true
+BACKEND_HOST=0.0.0.0
+```
+
+It requires `API_AUTH_TOKEN`, opens `http://localhost:8000` on the PC, and
+lets the built frontend ask for the token at runtime in the browser. You do not
+need to rebuild the frontend when the token changes.
 
 For manual backend startup:
 
@@ -241,12 +259,19 @@ For manual backend startup:
 cd backend
 .\venv\Scripts\activate
 $env:APP_LAN_MODE = "true"
+$env:BACKEND_HOST = "0.0.0.0"
 $env:API_AUTH_TOKEN = "use-a-long-random-token"
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-If you are using the Vite dev server in LAN mode, set
-`VITE_API_AUTH_TOKEN` to the same value before starting `npm run dev`.
+If you are using the Vite dev server and want a build-time fallback token for
+development only, you can still set:
+
+```powershell
+$env:VITE_API_AUTH_TOKEN = "use-a-long-random-token"
+```
+
+Runtime browser entry remains the primary LAN token path.
 
 For Docker Compose, use the explicit LAN override:
 

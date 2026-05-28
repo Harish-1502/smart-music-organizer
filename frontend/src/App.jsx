@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link, Routes, Route, Navigate } from "react-router-dom";
+import { API_AUTH_REQUIRED_EVENT } from "./api/apiBase";
+import { clearApiToken } from "./api/authToken";
+import ApiTokenPrompt from "./components/ApiTokenPrompt";
 import LibraryPage from "./pages/LibraryPage";
 import PlaylistsPage from "./features/playlists/pages/PlaylistsPage";
 import PlaylistDetailPage from "./features/playlists/pages/PlaylistDetailPage";
@@ -10,6 +14,20 @@ import { usePlayer } from "./context/PlayerContext";
 export default function App() {
   const { currentTrack, audioRef, getStreamUrl, handleEnded } = usePlayer();
   const hasMiniPlayer = Boolean(currentTrack);
+  const [showApiTokenPrompt, setShowApiTokenPrompt] = useState(false);
+
+  useEffect(() => {
+    function handleApiAuthRequired() {
+      clearApiToken();
+      setShowApiTokenPrompt(true);
+    }
+
+    window.addEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
+
+    return () => {
+      window.removeEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
+    };
+  }, []);
 
   return (
     <div
@@ -73,6 +91,11 @@ export default function App() {
       </main>
 
       <MiniPlayer />
+
+      <ApiTokenPrompt
+        open={showApiTokenPrompt}
+        onClose={() => setShowApiTokenPrompt(false)}
+      />
 
       {currentTrack ? (
         <audio

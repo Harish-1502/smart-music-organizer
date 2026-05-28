@@ -7,35 +7,40 @@ set "PYTHON_EXE=%~dp0backend\venv\Scripts\python.exe"
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 
 if "%BACKEND_PORT%"=="" set "BACKEND_PORT=8000"
+set "APP_LAN_MODE=false"
+set "BACKEND_HOST=127.0.0.1"
+set "API_AUTH_TOKEN="
 
 echo Smart Music Organizer
 echo.
+echo APP_LAN_MODE=false
+echo BACKEND_HOST=127.0.0.1
+echo BACKEND_PORT=%BACKEND_PORT%
+echo Starting the local desktop server on http://localhost:%BACKEND_PORT%
+echo LAN/mobile access is disabled by default.
+echo.
 
-if /I "%APP_LAN_MODE%"=="true" (
-    set "BACKEND_HOST=0.0.0.0"
+echo Building frontend...
+echo.
 
-    if "%API_AUTH_TOKEN%"=="" (
-        echo ERROR: APP_LAN_MODE=true requires API_AUTH_TOKEN.
-        echo Set API_AUTH_TOKEN to a long random value before starting LAN mode.
-        exit /b 1
-    )
-
-    echo WARNING: LAN mode exposes the API on your local network.
-    echo Only use this on a trusted network. Do not expose it to the internet.
-    echo.
-    echo Starting LAN server on http://%BACKEND_HOST%:%BACKEND_PORT%
-    echo From this PC, open:
-    echo   http://localhost:%BACKEND_PORT%
-    echo From a tablet or phone on the same Wi-Fi, open:
-    echo   http://^<server-ip^>:%BACKEND_PORT%
-    echo.
-    echo To find this computer's IP address, run ipconfig and use the IPv4 Address.
-) else (
-    set "BACKEND_HOST=127.0.0.1"
-    echo Starting the local desktop server on http://localhost:%BACKEND_PORT%
-    echo LAN/mobile access is disabled by default.
+if not exist "%~dp0frontend\package.json" (
+    echo ERROR: frontend\package.json was not found.
+    pause
+    exit /b 1
 )
 
+cd /d "%~dp0frontend"
+call npm run build
+if errorlevel 1 (
+    echo.
+    echo ERROR: frontend build failed.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Frontend build complete.
+echo.
 echo Keep this window open while using the app.
 echo.
 

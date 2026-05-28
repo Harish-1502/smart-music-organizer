@@ -3,8 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        VITE_API_AUTH_TOKEN: ${API_AUTH_TOKEN:-}
     container_name: smart-music-organizer
     ports:
       # Local-only by default. Use the documented LAN/mobile override only when

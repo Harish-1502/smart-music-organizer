@@ -1,8 +1,5 @@
 FROM node:20-slim AS frontend-build
 
-ARG VITE_API_AUTH_TOKEN=""
-ENV VITE_API_AUTH_TOKEN=${VITE_API_AUTH_TOKEN}
-
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./

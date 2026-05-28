@@ -9,7 +9,13 @@ from app.core.config import Settings
 from app.main import app, settings as main_settings
 
 
-def test_default_settings_preserve_current_local_behavior():
+def clear_lan_env(monkeypatch):
+    for name in ("APP_LAN_MODE", "BACKEND_HOST", "BACKEND_PORT", "API_AUTH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_default_settings_preserve_current_local_behavior(monkeypatch):
+    clear_lan_env(monkeypatch)
     settings = Settings(_env_file=None)
 
     assert settings.app_env == "development"
@@ -72,6 +78,7 @@ def test_settings_support_environment_overrides(monkeypatch):
 
 
 def test_wildcard_backend_host_requires_lan_mode(monkeypatch):
+    clear_lan_env(monkeypatch)
     monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
 
     with pytest.raises(ValueError, match="APP_LAN_MODE=true"):
@@ -79,6 +86,7 @@ def test_wildcard_backend_host_requires_lan_mode(monkeypatch):
 
 
 def test_lan_mode_requires_api_auth_token(monkeypatch):
+    clear_lan_env(monkeypatch)
     monkeypatch.setenv("APP_LAN_MODE", "true")
     monkeypatch.setenv("API_AUTH_TOKEN", "   ")
 
