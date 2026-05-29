@@ -107,7 +107,7 @@ def test_scan_rejects_folder_outside_configured_allowed_scan_roots(
     try:
         scan_library(str(blocked_root), db_session)
     except ValueError as exc:
-        assert str(exc) == "Folder is outside the allowed scan roots."
+        assert str(exc) == "Scan folder is outside the allowed scan roots."
     else:
         raise AssertionError("Expected scan_library to reject blocked_root")
 

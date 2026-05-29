@@ -10,7 +10,13 @@ from app.main import app, settings as main_settings
 
 
 def clear_lan_env(monkeypatch):
-    for name in ("APP_LAN_MODE", "BACKEND_HOST", "BACKEND_PORT", "API_AUTH_TOKEN"):
+    for name in (
+        "APP_LAN_MODE",
+        "BACKEND_HOST",
+        "BACKEND_PORT",
+        "API_AUTH_TOKEN",
+        "ALLOWED_SCAN_ROOTS",
+    ):
         monkeypatch.delenv(name, raising=False)
 
 

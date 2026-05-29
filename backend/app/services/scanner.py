@@ -26,6 +26,11 @@ thread_lock = threading.Lock()
 
 # Ensure scanning happens in the right folder
 def validate_folder(folder_path: str) -> Path:
+    if settings.app_lan_mode and not settings.allowed_scan_roots:
+        raise ValueError(
+            "LAN mode requires ALLOWED_SCAN_ROOTS. Set at least one allowed music folder before scanning."
+        )
+
     return validate_scan_root(folder_path, settings.allowed_scan_roots)
 
 
