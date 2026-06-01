@@ -240,7 +240,13 @@ Set a long random token in `.env.lan`:
 
 ```text
 API_AUTH_TOKEN=replace-with-a-long-random-token
+ALLOWED_SCAN_ROOTS=["S:/Music"]
 ```
+
+In LAN mode, library scans are allowed only inside `ALLOWED_SCAN_ROOTS`.
+Use a JSON array of absolute folder paths. Subfolders under those roots are
+allowed. If `ALLOWED_SCAN_ROOTS` is missing or empty in LAN mode, scan
+requests are rejected.
 
 The LAN launcher forces:
 
@@ -261,6 +267,7 @@ cd backend
 $env:APP_LAN_MODE = "true"
 $env:BACKEND_HOST = "0.0.0.0"
 $env:API_AUTH_TOKEN = "use-a-long-random-token"
+$env:ALLOWED_SCAN_ROOTS = '["S:/Music"]'
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 

@@ -16,6 +16,12 @@ if "%API_AUTH_TOKEN%"=="" if exist "%~dp0.env.lan" (
     )
 )
 
+if "%ALLOWED_SCAN_ROOTS%"=="" if exist "%~dp0.env.lan" (
+    for /f "usebackq tokens=1* delims==" %%A in (`findstr /r /b /c:"ALLOWED_SCAN_ROOTS=" "%~dp0.env.lan"`) do (
+        if /I "%%A"=="ALLOWED_SCAN_ROOTS" set "ALLOWED_SCAN_ROOTS=%%B"
+    )
+)
+
 if "%API_AUTH_TOKEN%"=="" (
     echo Smart Music Organizer LAN
     echo.

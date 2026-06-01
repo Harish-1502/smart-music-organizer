@@ -101,5 +101,5 @@ export function trackArtUrlForTrack(track) {
     return trackArtUrl(trackId);
   }
 
-  return libraryArtUrl(track?.art_path);
+  return null;
 }
