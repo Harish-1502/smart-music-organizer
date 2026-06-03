@@ -46,7 +46,7 @@ def test_default_settings_preserve_current_local_behavior(monkeypatch):
 
 
 def test_settings_support_environment_overrides(monkeypatch):
-    monkeypatch.setenv("API_ENV", "test")
+    monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("API_MODE", "ci")
     monkeypatch.setenv("APP_LAN_MODE", "true")
     monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
