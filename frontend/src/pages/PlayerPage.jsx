@@ -12,8 +12,9 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { trackArtUrlForTrack } from "../api/apiBase";
+import { getTrackArtPath } from "../api/apiBase";
 import { usePlayer } from "../context/PlayerContext";
+import useAuthenticatedBlobUrl from "../hooks/useAuthenticatedBlobUrl";
 import { maskTrack, shouldHideDemoArtwork } from "../utils/demoMode";
 import "../styles/PlayerPage.css";
 
@@ -93,10 +94,6 @@ function getPlaybackErrorMessage(error, audioElement) {
   return "Playback could not start. Try another track.";
 }
 
-function getTrackArtUrl(track) {
-  return trackArtUrlForTrack(track);
-}
-
 export default function PlayerPage() {
   const navigate = useNavigate();
   const {
@@ -105,9 +102,9 @@ export default function PlayerPage() {
     currentIndex,
     queue,
     playQueue,
-    getStreamUrl,
     handleEnded,
     isPlaying,
+    streamUrl,
     shuffleEnabled,
     repeatMode,
     togglePlayPause,
@@ -116,6 +113,7 @@ export default function PlayerPage() {
     stop,
     toggleShuffle,
     cycleRepeatMode,
+    streamError,
   } = usePlayer();
   const progressBarRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -162,7 +160,7 @@ export default function PlayerPage() {
       };
     }
 
-    if (isPlaying) {
+    if (isPlaying && streamUrl) {
       try {
         const playPromise = audioElement.play();
 
@@ -192,7 +190,7 @@ export default function PlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [audioRef, currentTrack, isPlaying]);
+  }, [audioRef, currentTrack, isPlaying, streamUrl]);
 
   useEffect(() => {
     const audioElement = audioRef.current;
@@ -331,10 +329,10 @@ export default function PlayerPage() {
   const hasQueueItems = queueItems.length > 0;
   const canJumpQueue = typeof playQueue === "function" && hasQueueItems;
   const transportDisabled =
-    isLoading || !isAudioReady || Boolean(playbackError);
+    isLoading || !isAudioReady || Boolean(playbackError || streamError);
   const seekDisabled = transportDisabled || !(duration > 0);
-  const playerStatus = playbackError
-    ? playbackError
+  const playerStatus = playbackError || streamError
+    ? playbackError || streamError
     : isBuffering
       ? "Buffering..."
       : isLoading
@@ -345,7 +343,12 @@ export default function PlayerPage() {
   const displayArtist = getDisplayArtist(displayCurrentTrack);
   const displayAlbum = getDisplayAlbum(displayCurrentTrack);
   const displayFileName = firstNonEmpty(displayCurrentTrack?.file_name, displayTitle);
-  const artUrl = shouldHideDemoArtwork() ? null : getTrackArtUrl(currentTrack);
+  const currentTrackId = currentTrack?.track_id ?? currentTrack?.id ?? null;
+  const artPath =
+    shouldHideDemoArtwork() || !currentTrackId ? "" : getTrackArtPath(currentTrackId);
+  const { blobUrl: artUrl } = useAuthenticatedBlobUrl(artPath, {
+    enabled: Boolean(artPath),
+  });
 
   const playerThemeVars = {
     ...(currentTrack?.accentColor
@@ -742,9 +745,9 @@ export default function PlayerPage() {
         {playerStatus ? (
           <p
             className={`player-page__status${
-              playbackError ? " player-page__status--error" : ""
+              playbackError || streamError ? " player-page__status--error" : ""
             }`}
-            role={playbackError ? "alert" : "status"}
+            role={playbackError || streamError ? "alert" : "status"}
             aria-atomic="true"
           >
             {playerStatus}

@@ -47,7 +47,7 @@ echo.
 start "" "http://localhost:%BACKEND_PORT%"
 
 cd /d "%~dp0backend"
-"%PYTHON_EXE%" -m uvicorn app.main:app --host "%BACKEND_HOST%" --port "%BACKEND_PORT%"
+"%PYTHON_EXE%" -m uvicorn app.main:app --host "%BACKEND_HOST%" --port "%BACKEND_PORT%" --no-access-log
 
 echo.
 echo Server stopped.

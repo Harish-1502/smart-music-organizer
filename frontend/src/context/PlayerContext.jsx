@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { trackStreamUrl } from "../api/apiBase";
+import { getTrackStreamBlobUrl } from "../api/apiBase";
 
 const PlayerContext = createContext(null);
 
@@ -9,13 +9,15 @@ const VALID_REPEAT_MODES = new Set(["off", "track", "playlist"]);
 
 // Session persistence constants and helpers
 const PLAYER_SESSION_STORAGE_KEY = "smart-music-player-session";
-const PLAYER_SESSION_VERSION = 1;
+const PLAYER_SESSION_VERSION = 2;
 const MAX_PERSISTED_QUEUE_SIZE = 500;
 const CURRENT_TIME_SAVE_INTERVAL_MS = 2000; // throttle timeupdate saves
 // const [hasHydratedSession, setHasHydratedSession] = useState(false);
 
 function createTrackSnapshot(track) {
   if (!track || typeof track !== "object") return null;
+
+  // Keep persisted sessions limited to playback-relevant metadata.
   return {
     id: track.id ?? null,
     track_id: track.track_id ?? null,
@@ -99,6 +101,52 @@ export function PlayerProvider({ children }) {
     currentIndex >= 0 && currentIndex < queue.length
       ? queue[currentIndex]
       : null;
+  const currentTrackId = getPlayableTrackId(currentTrack);
+  const [streamUrl, setStreamUrl] = useState("");
+  const [streamError, setStreamError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+
+    setStreamUrl("");
+    setStreamError("");
+
+    if (!currentTrackId) {
+      return () => {};
+    }
+
+    async function loadStreamUrl() {
+      try {
+        objectUrl = await getTrackStreamBlobUrl(currentTrackId);
+
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        setStreamUrl(objectUrl);
+      } catch (error) {
+        if (!cancelled) {
+          setStreamError(
+            error instanceof Error && error.message.trim()
+              ? error.message
+              : "Unable to load playback source.",
+          );
+        }
+      }
+    }
+
+    loadStreamUrl();
+
+    return () => {
+      cancelled = true;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [currentTrackId]);
 
   function playAudioSafely(audioElement) {
     if (!audioElement) {
@@ -114,11 +162,6 @@ export function PlayerProvider({ children }) {
     } catch {
       setIsPlaying(false);
     }
-  }
-
-  function getStreamUrl(track) {
-    const trackId = track.track_id ?? track.id;
-    return trackStreamUrl(trackId);
   }
 
   function playQueue(tracks, startIndex = 0) {
@@ -263,7 +306,7 @@ export function PlayerProvider({ children }) {
     if (!Array.isArray(queue) || queue.length === 0 || currentIndex < 0) {
       return;
     }
-    
+
     try {
       const { queueSnapshot, currentIndex: persistedIndex } =
         sanitizeQueueForStorage(queue, currentIndex);
@@ -380,7 +423,7 @@ export function PlayerProvider({ children }) {
     // run once on mount
   }, []);
 
-  // Persist session on important changes — do not run until hydration completed.
+  // Persist session on important changes - do not run until hydration completed.
   useEffect(() => {
     if (!hasHydratedSession) return;
 
@@ -495,10 +538,12 @@ export function PlayerProvider({ children }) {
         currentTrack,
         currentIndex,
         isPlaying,
+        streamUrl,
+        streamError,
         shuffleEnabled,
         repeatMode,
 
-        getStreamUrl,
+        getStreamUrl: () => streamUrl,
         playQueue,
         playTrack,
         togglePlayPause,

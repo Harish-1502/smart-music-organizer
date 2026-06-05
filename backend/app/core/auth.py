@@ -35,6 +35,7 @@ def _bearer_token_from_header(value: str | None) -> str | None:
     token = token.strip()
     return token or None
 
+# TODO: remove api_token query support once all media consumers are using Authorization headers.
 # This function first checks the Authorization header for a Bearer token. If it finds it, then it will return it. If not, it will look for an api_token query parameter in the URL. If that's found then it will return the token, if not then it will return None.
 def _request_token(request: Request) -> str | None:
     header_token = _bearer_token_from_header(request.headers.get("authorization"))

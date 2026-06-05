@@ -165,6 +165,15 @@ http://localhost:5173
 In Vite development, frontend API calls use `http://127.0.0.1:8000` by
 default. You can override this with `VITE_API_BASE_URL`.
 
+For privacy-safe local or LAN use, set `EXPOSE_LOCAL_PATHS=false` on the
+backend. That hides `file_path`, `folder_path`, and raw `art_path` values from
+API JSON, but real album art still works through `/tracks/{id}/art` for tracks
+that have an `id` or `track_id`.
+
+The frontend only falls back to raw `art_path` when you explicitly enable
+`VITE_ALLOW_RAW_ART_PATH_FALLBACK=true` and `VITE_EXPOSE_LOCAL_PATHS=true`
+in a local-debug build, and it should stay off for normal use.
+
 ## Build The Frontend
 
 Build the React app once before using production local-server mode:
@@ -248,6 +257,10 @@ Use a JSON array of absolute folder paths. Subfolders under those roots are
 allowed. If `ALLOWED_SCAN_ROOTS` is missing or empty in LAN mode, scan
 requests are rejected.
 
+For LAN/demo/privacy mode, pair that with `EXPOSE_LOCAL_PATHS=false` so the UI
+keeps using safe ID-based artwork and does not expose raw local paths in API
+responses.
+
 The LAN launcher forces:
 
 ```text
@@ -258,6 +271,9 @@ BACKEND_HOST=0.0.0.0
 It requires `API_AUTH_TOKEN`, opens `http://localhost:8000` on the PC, and
 lets the built frontend ask for the token at runtime in the browser. You do not
 need to rebuild the frontend when the token changes.
+
+The launchers run uvicorn with `--no-access-log` so tokenized stream and art
+request URLs are not printed to the terminal.
 
 For manual backend startup:
 
@@ -271,14 +287,10 @@ $env:ALLOWED_SCAN_ROOTS = '["S:/Music"]'
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-If you are using the Vite dev server and want a build-time fallback token for
-development only, you can still set:
-
-```powershell
-$env:VITE_API_AUTH_TOKEN = "use-a-long-random-token"
-```
-
-Runtime browser entry remains the primary LAN token path.
+Runtime browser entry is the supported LAN token path. Normal API requests use
+the `Authorization` header, and only `/tracks/{id}/stream` and
+`/tracks/{id}/art` use `api_token` query parameters for browser media and image
+requests.
 
 For Docker Compose, use the explicit LAN override:
 

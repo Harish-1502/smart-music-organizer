@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { updateTrack, uploadTrackArt } from "../api/libraryApi";
 import {
   addTagToTrack,
@@ -7,8 +7,8 @@ import {
   getTrackTags,
   removeTagFromTrack,
 } from "../api/tagsApi";
-import { trackArtUrlForTrack } from "../api/apiBase";
-
+import { getTrackArtPath } from "../api/apiBase";
+import useAuthenticatedBlobUrl from "./useAuthenticatedBlobUrl";
 const FALLBACK_TAG_CATEGORIES = [
   "mood",
   "genre",
@@ -18,10 +18,6 @@ const FALLBACK_TAG_CATEGORIES = [
   "language",
   "custom",
 ];
-
-function getTrackArtPreviewUrl(track) {
-  return trackArtUrlForTrack(track) || "";
-}
 
 export default function useTrackEdit({ loadTracks, setMessage }) {
   const [editStatus, setEditStatus] = useState("idle");
@@ -33,7 +29,7 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     album: "",
   });
   const [selectedArtFile, setSelectedArtFile] = useState(null);
-  const [artPreviewUrl, setArtPreviewUrl] = useState("");
+  const [selectedArtPreviewUrl, setSelectedArtPreviewUrl] = useState("");
   const [allTags, setAllTags] = useState([]);
   const [trackTags, setTrackTags] = useState([]);
   const [tagsLoading, setTagsLoading] = useState(false);
@@ -45,6 +41,13 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
     category: "",
   });
   const tagRequestIdRef = useRef(0);
+  const selectedArtPreviewUrlRef = useRef("");
+  const selectedTrackId = selectedTrack?.track_id ?? selectedTrack?.id ?? null;
+  const selectedTrackArtPath = selectedTrackId ? getTrackArtPath(selectedTrackId) : "";
+  const { blobUrl: remoteArtUrl } = useAuthenticatedBlobUrl(selectedTrackArtPath, {
+    enabled: Boolean(selectedTrackArtPath),
+  });
+  const artPreviewUrl = selectedArtFile ? selectedArtPreviewUrl : remoteArtUrl;
 
   function sortTags(tags) {
     return [...tags].sort((a, b) => {
@@ -127,8 +130,12 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
       artist: track.display_artist || "",
       album: track.display_album || "",
     });
-    
-    setArtPreviewUrl(getTrackArtPreviewUrl(track));
+
+    if (selectedArtPreviewUrlRef.current) {
+      URL.revokeObjectURL(selectedArtPreviewUrlRef.current);
+      selectedArtPreviewUrlRef.current = "";
+    }
+    setSelectedArtPreviewUrl("");
     setSelectedArtFile(null);
     setSelectedTagId("");
     setNewTagForm({
@@ -140,10 +147,21 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
   }
 
   function handleArtFileChange(file) {
-    if (!file) return;
+    if (selectedArtPreviewUrlRef.current) {
+      URL.revokeObjectURL(selectedArtPreviewUrlRef.current);
+      selectedArtPreviewUrlRef.current = "";
+    }
+
+    if (!file) {
+      setSelectedArtFile(null);
+      setSelectedArtPreviewUrl("");
+      return;
+    }
 
     setSelectedArtFile(file);
-    setArtPreviewUrl(URL.createObjectURL(file));
+    const nextPreviewUrl = URL.createObjectURL(file);
+    selectedArtPreviewUrlRef.current = nextPreviewUrl;
+    setSelectedArtPreviewUrl(nextPreviewUrl);
   }
 
   function handleFormChange(field, value) {
@@ -155,6 +173,12 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
 
   function handleCancelEdit() {
     tagRequestIdRef.current += 1;
+
+    if (selectedArtPreviewUrlRef.current) {
+      URL.revokeObjectURL(selectedArtPreviewUrlRef.current);
+      selectedArtPreviewUrlRef.current = "";
+    }
+
     setShowModal(false);
     setSelectedTrack(null);
     setEditStatus("idle");
@@ -164,7 +188,7 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
       album: "",
     });
     setSelectedArtFile(null);
-    setArtPreviewUrl("");
+    setSelectedArtPreviewUrl("");
     setAllTags([]);
     setTrackTags([]);
     setTagsLoading(false);
@@ -298,7 +322,11 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
         album: "",
       });
       setSelectedArtFile(null);
-      setArtPreviewUrl("");
+      if (selectedArtPreviewUrlRef.current) {
+        URL.revokeObjectURL(selectedArtPreviewUrlRef.current);
+        selectedArtPreviewUrlRef.current = "";
+      }
+      setSelectedArtPreviewUrl("");
 
       await loadTracks();
     } catch (error) {
@@ -306,6 +334,15 @@ export default function useTrackEdit({ loadTracks, setMessage }) {
       setEditStatus("idle");
     }
   }
+
+  useEffect(() => {
+    return () => {
+      if (selectedArtPreviewUrlRef.current) {
+        URL.revokeObjectURL(selectedArtPreviewUrlRef.current);
+        selectedArtPreviewUrlRef.current = "";
+      }
+    };
+  }, []);
 
   const categoryOptions = Array.from(
     new Set([

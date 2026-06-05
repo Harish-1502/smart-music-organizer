@@ -18,6 +18,7 @@ from app.routes import (
     ai_playlists,
     tags,
     reference_suggestions,
+    system,
 )
 import logging
 from pathlib import Path
@@ -159,3 +160,4 @@ app.include_router(playback.router)
 app.include_router(ai_playlists.router)
 app.include_router(tags.router)
 app.include_router(reference_suggestions.router)
+app.include_router(system.router)

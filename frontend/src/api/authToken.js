@@ -1,5 +1,4 @@
 const SESSION_STORAGE_KEY = "smart-music-organizer:api-auth-token";
-const fallbackApiToken = import.meta.env.VITE_API_AUTH_TOKEN?.trim() || "";
 
 function sessionStorageAvailable() {
   return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
@@ -16,15 +15,11 @@ function normalizeToken(token) {
 export function getApiToken() {
   if (sessionStorageAvailable()) {
     try {
-      const storedToken = normalizeToken(window.sessionStorage.getItem(SESSION_STORAGE_KEY));
-
-      if (storedToken) {
-        return storedToken;
-      }
+      return normalizeToken(window.sessionStorage.getItem(SESSION_STORAGE_KEY));
     } catch {}
   }
 
-  return fallbackApiToken;
+  return "";
 }
 
 export function setApiToken(token) {
@@ -62,29 +57,8 @@ export function getAuthHeaders() {
 }
 
 export function appendApiToken(url) {
-  const token = getApiToken();
-
-  if (!token || !url) {
-    return url;
-  }
-
-  try {
-    const resolvedUrl = new URL(
-      url,
-      typeof window !== "undefined" ? window.location.origin : "http://localhost",
-    );
-
-    resolvedUrl.searchParams.set("api_token", token);
-
-    if (/^https?:\/\//i.test(url)) {
-      return resolvedUrl.toString();
-    }
-
-    return `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
-  } catch {
-    const separator = url.includes("?") ? "&" : "?";
-    return `${url}${separator}api_token=${encodeURIComponent(token)}`;
-  }
+  // Deprecated: media requests now use Authorization headers instead of query tokens.
+  return url;
 }
 
 export function hasRuntimeApiToken() {
@@ -97,4 +71,4 @@ export function hasRuntimeApiToken() {
   } catch {
     return false;
   }
-}
+} 

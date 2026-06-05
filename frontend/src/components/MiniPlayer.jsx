@@ -7,8 +7,9 @@ import {
   Shuffle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { trackArtUrlForTrack } from "../api/apiBase";
 import { usePlayer } from "../context/PlayerContext";
+import { getTrackArtPath } from "../api/apiBase";
+import useAuthenticatedBlobUrl from "../hooks/useAuthenticatedBlobUrl";
 import { maskTrack, shouldHideDemoArtwork } from "../utils/demoMode";
 
 // Call actions safely from JSX without recreating the wrapper each render.
@@ -22,10 +23,6 @@ function safeInvokeAction(action) {
   } catch (error) {
     console.error("MiniPlayer control failed:", error);
   }
-}
-
-function getTrackArtUrl(track) {
-  return trackArtUrlForTrack(track);
 }
 
 export default function MiniPlayer() {
@@ -60,7 +57,12 @@ export default function MiniPlayer() {
     displayTrack?.scanned_artist ||
     "Unknown artist";
 
-  const artUrl = shouldHideDemoArtwork() ? null : getTrackArtUrl(currentTrack);
+  const currentTrackId = currentTrack?.track_id ?? currentTrack?.id ?? null;
+  const artPath =
+    shouldHideDemoArtwork() || !currentTrackId ? "" : getTrackArtPath(currentTrackId);
+  const { blobUrl: artUrl } = useAuthenticatedBlobUrl(artPath, {
+    enabled: Boolean(artPath),
+  });
 
   function handleOpenPlayer() {
     if (!currentTrack) {
