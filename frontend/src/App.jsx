@@ -5,6 +5,7 @@ import { clearApiToken } from "./api/authToken";
 import ApiTokenPrompt from "./components/ApiTokenPrompt";
 import LibraryPage from "./pages/LibraryPage";
 import ConnectionPage from "./pages/ConnectionPage";
+import DownloadedPage from "./pages/DownloadedPage";
 import PlaylistsPage from "./features/playlists/pages/PlaylistsPage";
 import PlaylistDetailPage from "./features/playlists/pages/PlaylistDetailPage";
 import PlayerPage from "./pages/PlayerPage.jsx";
@@ -81,6 +82,9 @@ export default function App() {
             <Link to="/connection" className="app-shell__nav-link">
               Connection
             </Link>
+            <Link to="/downloaded" className="app-shell__nav-link">
+              Downloaded
+            </Link>
           </div>
 
           <div className="app-shell__nav-actions" aria-hidden="true">
@@ -103,6 +107,7 @@ export default function App() {
           <Route path="/player" element={<PlayerPage />} />
           <Route path="/calibration" element={<TagCalibrationPage />} />
           <Route path="/connection" element={<ConnectionPage />} />
+          <Route path="/downloaded" element={<DownloadedPage />} />
         </Routes>
       </main>
 

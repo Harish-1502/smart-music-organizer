@@ -12,6 +12,8 @@
   --social-bg: rgba(47, 48, 58, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  --mini-player-height: 72px;
+  --mini-player-safe-gap: 24px;
 
   --sans: system-ui, "Segoe UI", Roboto, sans-serif;
   --heading: system-ui, "Segoe UI", Roboto, sans-serif;
@@ -358,7 +360,7 @@ code {
 }
 
 .app-shell--has-mini-player .app-shell__main {
-  padding-bottom: 96px;
+  padding-bottom: calc(var(--mini-player-height) + var(--mini-player-safe-gap));
 }
 
 .api-token-prompt {
@@ -505,6 +507,7 @@ code {
   right: 0;
   bottom: 0;
   z-index: 45;
+  min-height: var(--mini-player-height);
   display: grid;
   /* three-column layout: left info (shrinks), center: controls fixed, right: reserved placeholder
      use symmetrical flexible outer columns so controls remain visually centered */
@@ -709,6 +712,11 @@ code {
 }
 
 @media (max-width: 480px) {
+  :root {
+    --mini-player-height: 60px;
+    --mini-player-safe-gap: 20px;
+  }
+
   .mini-player {
     /* keep controls centered on small screens as well */
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

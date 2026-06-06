@@ -38,11 +38,6 @@ export default function MiniPlayer() {
     toggleShuffle,
     cycleRepeatMode,
   } = usePlayer();
-
-  if (!currentTrack) {
-    return null;
-  }
-
   const displayTrack = maskTrack(currentTrack);
   const title =
     displayTrack?.title ||
@@ -63,6 +58,10 @@ export default function MiniPlayer() {
   const { blobUrl: artUrl } = useAuthenticatedBlobUrl(artPath, {
     enabled: Boolean(artPath),
   });
+
+  if (!currentTrack) {
+    return null;
+  }
 
   function handleOpenPlayer() {
     if (!currentTrack) {

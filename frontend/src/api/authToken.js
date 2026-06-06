@@ -56,11 +56,6 @@ export function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export function appendApiToken(url) {
-  // Deprecated: media requests now use Authorization headers instead of query tokens.
-  return url;
-}
-
 export function hasRuntimeApiToken() {
   if (!sessionStorageAvailable()) {
     return false;
