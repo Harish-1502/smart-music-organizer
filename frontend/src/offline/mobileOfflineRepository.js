@@ -5,12 +5,21 @@ import {
   getDownloadedPlaylists,
   getDownloadedTrack,
   getDownloadedTracks,
+  getOfflineStorageSummary as getIndexedDbOfflineStorageSummary,
+  hasDownloadedPlaylist as hasIndexedDbDownloadedPlaylist,
 } from "./offlineStorage";
 import {
   getMobileOfflineDb,
   initializeMobileOfflineDb,
   isNativeAndroidMobileOfflineSupported,
 } from "./mobileSqliteDb";
+import {
+  clearNativeMediaFiles,
+  deleteAudioFile,
+  deleteArtworkFile,
+  getNativeMediaFileSize,
+  nativeMediaFileExists,
+} from "./nativeMediaFileStorage";
 
 // Native mobile metadata must never store API tokens, auth headers, or PC file paths.
 // Audio files and artwork files will live in native storage later; SQLite only stores metadata and local refs.
@@ -66,6 +75,11 @@ function normalizeTimestamp(value) {
   return timestamp || new Date().toISOString();
 }
 
+function normalizeNullableText(value) {
+  const normalizedValue = normalizeText(value).trim();
+  return normalizedValue || null;
+}
+
 function isSafeMobileLocalUri(value) {
   const normalizedValue = normalizeText(value).trim();
 
@@ -84,6 +98,116 @@ function isSafeMobileLocalUri(value) {
   }
 
   return true;
+}
+
+function sanitizeOfflineTrackMetadata(track, now = new Date().toISOString()) {
+  return {
+    id: normalizeOfflineId(track?.id ?? track?.trackId),
+    title: normalizeText(track?.title, "Unknown Title"),
+    artist: normalizeText(track?.artist),
+    album: normalizeText(track?.album),
+    duration: Number.isFinite(Number(track?.duration))
+      ? Math.trunc(Number(track.duration))
+      : null,
+    downloadStatus: normalizeDownloadStatus(track?.downloadStatus, "pending"),
+    storageType: normalizeStorageType(track?.storageType, "native_file"),
+    downloadedAt: track?.downloadedAt ? normalizeTimestamp(track.downloadedAt) : null,
+    updatedAt: now,
+  };
+}
+
+function sanitizeOfflinePlaylistMetadata(playlist, now = new Date().toISOString()) {
+  return {
+    id: normalizeOfflineId(playlist?.id),
+    name: normalizeText(playlist?.name, "Untitled playlist"),
+    totalTracks: normalizePositiveInteger(playlist?.totalTracks),
+    totalBytes: normalizePositiveInteger(playlist?.totalBytes),
+    downloadStatus: normalizeDownloadStatus(playlist?.downloadStatus, "pending"),
+    storageType: normalizeStorageType(playlist?.storageType, "native_file"),
+    downloadedAt: playlist?.downloadedAt ? normalizeTimestamp(playlist.downloadedAt) : null,
+    updatedAt: now,
+  };
+}
+
+function sanitizeOfflineTrackRow(row) {
+  const trackId = normalizeOfflineId(row?.id);
+
+  if (!trackId) {
+    return null;
+  }
+
+  return {
+    id: trackId,
+    title: normalizeText(row?.title, "Unknown Title"),
+    artist: normalizeText(row?.artist),
+    album: normalizeText(row?.album),
+    duration: Number.isFinite(Number(row?.duration))
+      ? Math.trunc(Number(row.duration))
+      : null,
+    downloadStatus: normalizeDownloadStatus(row?.downloadStatus ?? row?.download_status),
+    storageType: normalizeStorageType(row?.storageType ?? row?.storage_type, "native_file"),
+    downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
+    updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
+    trackOrder: Number.isFinite(Number(row?.trackOrder ?? row?.track_order))
+      ? Math.trunc(Number(row?.trackOrder ?? row?.track_order))
+      : null,
+    audioLocalUri: isSafeMobileLocalUri(row?.audioLocalUri ?? row?.audio_local_uri)
+      ? normalizeNullableText(row?.audioLocalUri ?? row?.audio_local_uri)
+      : null,
+    artworkLocalUri: isSafeMobileLocalUri(row?.artworkLocalUri ?? row?.artwork_local_uri)
+      ? normalizeNullableText(row?.artworkLocalUri ?? row?.artwork_local_uri)
+      : null,
+  };
+}
+
+function sanitizeOfflinePlaylistRow(row) {
+  const playlistId = normalizeOfflineId(row?.id);
+
+  if (!playlistId) {
+    return null;
+  }
+
+  return {
+    id: playlistId,
+    name: normalizeText(row?.name, "Untitled playlist"),
+    totalTracks: normalizePositiveInteger(row?.totalTracks ?? row?.total_tracks),
+    totalBytes: normalizePositiveInteger(row?.totalBytes ?? row?.total_bytes),
+    downloadStatus: normalizeDownloadStatus(
+      row?.downloadStatus ?? row?.download_status,
+      "pending",
+    ),
+    storageType: normalizeStorageType(
+      row?.storageType ?? row?.storage_type,
+      "native_file",
+    ),
+    downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
+    updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
+  };
+}
+
+function sanitizeOfflineMediaFileRow(row) {
+  const trackId = normalizeOfflineId(row?.trackId ?? row?.track_id);
+  const mediaType = normalizeNullableText(row?.mediaType ?? row?.media_type);
+  const localUri = row?.localUri ?? row?.local_uri;
+
+  if (!trackId || !mediaType || !isSafeMobileLocalUri(localUri)) {
+    return null;
+  }
+
+  return {
+    id:
+      Number.isFinite(Number(row?.id)) && Number(row?.id) > 0
+        ? Math.trunc(Number(row.id))
+        : null,
+    trackId,
+    mediaType,
+    localUri: normalizeNullableText(localUri),
+    storageType: normalizeStorageType(
+      row?.storageType ?? row?.storage_type,
+      "native_file",
+    ),
+    downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
+  };
 }
 
 async function withMobileOfflineTransaction(work) {
@@ -112,6 +236,22 @@ async function withMobileOfflineTransaction(work) {
   }
 }
 
+async function bestEffortDeleteNativeTrackFiles(trackIds) {
+  if (!shouldUseMobileOfflineSqlite()) {
+    return;
+  }
+
+  for (const trackId of trackIds) {
+    try {
+      await deleteAudioFile(trackId);
+    } catch {}
+
+    try {
+      await deleteArtworkFile(trackId);
+    } catch {}
+  }
+}
+
 async function queryRows(statement, values = []) {
   const database = await getMobileOfflineDb();
 
@@ -131,8 +271,93 @@ export function shouldUseMobileOfflineSqlite() {
   return isNativeAndroidMobileOfflineSupported();
 }
 
+export async function hasOfflinePlaylist(playlistId) {
+  const normalizedPlaylistId = normalizeOfflineId(playlistId);
+
+  if (!normalizedPlaylistId) {
+    return false;
+  }
+
+  if (!shouldUseMobileOfflineSqlite()) {
+    return hasIndexedDbDownloadedPlaylist(normalizedPlaylistId);
+  }
+
+  const rows = await queryRows(
+    "SELECT id FROM offline_playlists WHERE id = ? LIMIT 1",
+    [normalizedPlaylistId],
+  );
+
+  return rows.length > 0;
+}
+
+export async function getOfflineStorageSummary() {
+  if (!shouldUseMobileOfflineSqlite()) {
+    return getIndexedDbOfflineStorageSummary();
+  }
+
+  const [playlistCountRows, trackCountRows, totalBytesRows, mediaRows] = await Promise.all([
+    queryRows("SELECT COUNT(*) AS count FROM offline_playlists"),
+    queryRows("SELECT COUNT(*) AS count FROM offline_tracks"),
+    queryRows("SELECT COALESCE(SUM(total_bytes), 0) AS totalBytes FROM offline_playlists"),
+    queryRows(
+      `SELECT
+          SUM(CASE WHEN media_type = 'audio' THEN 1 ELSE 0 END) AS audioCount,
+          SUM(CASE WHEN media_type = 'artwork' THEN 1 ELSE 0 END) AS artworkCount
+        FROM offline_media_files`,
+    ),
+  ]);
+
+  return {
+    available: true,
+    playlistCount: normalizePositiveInteger(playlistCountRows?.[0]?.count),
+    trackCount: normalizePositiveInteger(trackCountRows?.[0]?.count),
+    audioBlobCount: normalizePositiveInteger(mediaRows?.[0]?.audioCount),
+    artworkBlobCount: normalizePositiveInteger(mediaRows?.[0]?.artworkCount),
+    totalBytes: normalizePositiveInteger(totalBytesRows?.[0]?.totalBytes),
+  };
+}
+
+export async function getOfflineTrack(trackId) {
+  const normalizedTrackId = normalizeOfflineId(trackId);
+
+  if (!normalizedTrackId) {
+    return null;
+  }
+
+  if (!shouldUseMobileOfflineSqlite()) {
+    return getDownloadedTrack(normalizedTrackId);
+  }
+
+  const rows = await queryRows(
+    `SELECT
+        t.id,
+        t.title,
+        t.artist,
+        t.album,
+        t.duration,
+        t.download_status AS downloadStatus,
+        t.storage_type AS storageType,
+        t.downloaded_at AS downloadedAt,
+        t.updated_at AS updatedAt,
+        audio.local_uri AS audioLocalUri,
+        artwork.local_uri AS artworkLocalUri
+      FROM offline_tracks t
+      LEFT JOIN offline_media_files audio
+        ON audio.track_id = t.id AND audio.media_type = 'audio'
+      LEFT JOIN offline_media_files artwork
+        ON artwork.track_id = t.id AND artwork.media_type = 'artwork'
+      WHERE t.id = ?
+      LIMIT 1`,
+    [normalizedTrackId],
+  );
+
+  return sanitizeOfflineTrackRow(rows?.[0] ?? null);
+}
+
 export async function saveOfflineTrackMetadata(track) {
-  const trackId = normalizeOfflineId(track?.id ?? track?.trackId);
+  const now = new Date().toISOString();
+  const safeTrack = sanitizeOfflineTrackMetadata(track, now);
+  const trackId = safeTrack.id;
 
   if (!trackId) {
     return null;
@@ -142,7 +367,6 @@ export async function saveOfflineTrackMetadata(track) {
     return null;
   }
 
-  const now = new Date().toISOString();
   const savedTrack = await withMobileOfflineTransaction(async (database) => {
     await database.run(
       `INSERT INTO offline_tracks (
@@ -167,14 +391,14 @@ export async function saveOfflineTrackMetadata(track) {
           updated_at = excluded.updated_at`,
       [
         trackId,
-        normalizeText(track?.title, "Unknown Title"),
-        normalizeText(track?.artist),
-        normalizeText(track?.album),
-        Number.isFinite(Number(track?.duration)) ? Math.trunc(Number(track.duration)) : null,
-        normalizeDownloadStatus(track?.downloadStatus, "pending"),
-        normalizeStorageType(track?.storageType, "native_file"),
-        track?.downloadedAt ? normalizeTimestamp(track.downloadedAt) : null,
-        now,
+        safeTrack.title,
+        safeTrack.artist,
+        safeTrack.album,
+        safeTrack.duration,
+        safeTrack.downloadStatus,
+        safeTrack.storageType,
+        safeTrack.downloadedAt,
+        safeTrack.updatedAt,
       ],
       false,
     );
@@ -184,14 +408,16 @@ export async function saveOfflineTrackMetadata(track) {
       [trackId],
     );
 
-    return rows?.values?.[0] ?? null;
+    return sanitizeOfflineTrackRow(rows?.values?.[0] ?? null);
   });
 
   return savedTrack;
 }
 
 export async function saveOfflinePlaylistMetadata(playlist) {
-  const playlistId = normalizeOfflineId(playlist?.id);
+  const now = new Date().toISOString();
+  const safePlaylist = sanitizeOfflinePlaylistMetadata(playlist, now);
+  const playlistId = safePlaylist.id;
 
   if (!playlistId) {
     return null;
@@ -201,7 +427,6 @@ export async function saveOfflinePlaylistMetadata(playlist) {
     return null;
   }
 
-  const now = new Date().toISOString();
   const savedPlaylist = await withMobileOfflineTransaction(async (database) => {
     await database.run(
       `INSERT INTO offline_playlists (
@@ -224,13 +449,13 @@ export async function saveOfflinePlaylistMetadata(playlist) {
           updated_at = excluded.updated_at`,
       [
         playlistId,
-        normalizeText(playlist?.name, "Untitled playlist"),
-        normalizePositiveInteger(playlist?.totalTracks),
-        normalizePositiveInteger(playlist?.totalBytes),
-        normalizeDownloadStatus(playlist?.downloadStatus, "pending"),
-        normalizeStorageType(playlist?.storageType, "native_file"),
-        playlist?.downloadedAt ? normalizeTimestamp(playlist.downloadedAt) : null,
-        now,
+        safePlaylist.name,
+        safePlaylist.totalTracks,
+        safePlaylist.totalBytes,
+        safePlaylist.downloadStatus,
+        safePlaylist.storageType,
+        safePlaylist.downloadedAt,
+        safePlaylist.updatedAt,
       ],
       false,
     );
@@ -240,7 +465,7 @@ export async function saveOfflinePlaylistMetadata(playlist) {
       [playlistId],
     );
 
-    return rows?.values?.[0] ?? null;
+    return sanitizeOfflinePlaylistRow(rows?.values?.[0] ?? null);
   });
 
   return savedPlaylist;
@@ -333,10 +558,242 @@ export async function saveOfflineMediaFileRef(trackId, type, localUri) {
       [normalizedTrackId, normalizedType],
     );
 
-    return rows?.values?.[0] ?? null;
+    return sanitizeOfflineMediaFileRow(rows?.values?.[0] ?? null);
   });
 
   return savedMediaFile;
+}
+
+export async function saveNativeDownloadedPlaylist(downloadPayload) {
+  const normalizedPlaylistId = normalizeOfflineId(downloadPayload?.id);
+
+  if (!normalizedPlaylistId || !shouldUseMobileOfflineSqlite()) {
+    return null;
+  }
+
+  const downloadedAt = normalizeTimestamp(downloadPayload?.downloadedAt);
+  const requestedTracks = Array.isArray(downloadPayload?.tracks)
+    ? downloadPayload.tracks
+    : [];
+  const safeTracks = requestedTracks
+    .map((track) => sanitizeOfflineTrackMetadata(track, downloadedAt))
+    .map((track, index) => ({
+      ...track,
+      audioLocalUri: normalizeNullableText(track?.audioLocalUri ?? requestedTracks[index]?.audioLocalUri),
+      artworkLocalUri: normalizeNullableText(track?.artworkLocalUri ?? requestedTracks[index]?.artworkLocalUri),
+      sizeBytes: normalizePositiveInteger(requestedTracks[index]?.sizeBytes),
+    }))
+    .filter((track) => track.id && isSafeMobileLocalUri(track.audioLocalUri));
+
+  if (safeTracks.length === 0) {
+    return null;
+  }
+
+  const totalBytes = safeTracks.reduce(
+    (sum, track) => sum + normalizePositiveInteger(track.sizeBytes),
+    0,
+  );
+  const safePlaylist = sanitizeOfflinePlaylistMetadata(
+    {
+      id: normalizedPlaylistId,
+      name: downloadPayload?.name,
+      totalTracks: safeTracks.length,
+      totalBytes,
+      downloadStatus: "downloaded",
+      storageType: "native_file",
+      downloadedAt,
+    },
+    downloadedAt,
+  );
+
+  const transactionResult = await withMobileOfflineTransaction(async (database) => {
+    const previousTrackRows = await database.query(
+      "SELECT track_id AS trackId FROM offline_playlist_tracks WHERE playlist_id = ?",
+      [normalizedPlaylistId],
+    );
+    const previousTrackIds = Array.isArray(previousTrackRows?.values)
+      ? previousTrackRows.values
+          .map((row) => normalizeOfflineId(row?.trackId))
+          .filter((trackId) => trackId !== null)
+      : [];
+
+    await database.run(
+      `INSERT INTO offline_playlists (
+          id,
+          name,
+          total_tracks,
+          total_bytes,
+          download_status,
+          storage_type,
+          downloaded_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          total_tracks = excluded.total_tracks,
+          total_bytes = excluded.total_bytes,
+          download_status = excluded.download_status,
+          storage_type = excluded.storage_type,
+          downloaded_at = excluded.downloaded_at,
+          updated_at = excluded.updated_at`,
+      [
+        safePlaylist.id,
+        safePlaylist.name,
+        safePlaylist.totalTracks,
+        safePlaylist.totalBytes,
+        safePlaylist.downloadStatus,
+        safePlaylist.storageType,
+        safePlaylist.downloadedAt,
+        safePlaylist.updatedAt,
+      ],
+      false,
+    );
+
+    await database.run(
+      "DELETE FROM offline_playlist_tracks WHERE playlist_id = ?",
+      [normalizedPlaylistId],
+      false,
+    );
+
+    const savedTrackIds = [];
+
+    for (let index = 0; index < safeTracks.length; index += 1) {
+      const track = safeTracks[index];
+
+      await database.run(
+        `INSERT INTO offline_tracks (
+            id,
+            title,
+            artist,
+            album,
+            duration,
+            download_status,
+            storage_type,
+            downloaded_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            artist = excluded.artist,
+            album = excluded.album,
+            duration = excluded.duration,
+            download_status = excluded.download_status,
+            storage_type = excluded.storage_type,
+            downloaded_at = COALESCE(excluded.downloaded_at, offline_tracks.downloaded_at),
+            updated_at = excluded.updated_at`,
+        [
+          track.id,
+          track.title,
+          track.artist,
+          track.album,
+          track.duration,
+          "downloaded",
+          "native_file",
+          track.downloadedAt,
+          track.updatedAt,
+        ],
+        false,
+      );
+
+      await database.run(
+        `INSERT INTO offline_media_files (
+            track_id,
+            media_type,
+            local_uri,
+            storage_type,
+            downloaded_at
+          ) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(track_id, media_type) DO UPDATE SET
+            local_uri = excluded.local_uri,
+            storage_type = excluded.storage_type,
+            downloaded_at = excluded.downloaded_at`,
+        [track.id, "audio", track.audioLocalUri, "native_file", track.downloadedAt],
+        false,
+      );
+
+      if (isSafeMobileLocalUri(track.artworkLocalUri)) {
+        await database.run(
+          `INSERT INTO offline_media_files (
+              track_id,
+              media_type,
+              local_uri,
+              storage_type,
+              downloaded_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(track_id, media_type) DO UPDATE SET
+              local_uri = excluded.local_uri,
+              storage_type = excluded.storage_type,
+              downloaded_at = excluded.downloaded_at`,
+          [track.id, "artwork", track.artworkLocalUri, "native_file", track.downloadedAt],
+          false,
+        );
+      }
+
+      await database.run(
+        `INSERT INTO offline_playlist_tracks (
+            playlist_id,
+            track_id,
+            track_order,
+            downloaded_at
+          ) VALUES (?, ?, ?, ?)`,
+        [normalizedPlaylistId, track.id, index, downloadedAt],
+        false,
+      );
+
+      savedTrackIds.push(track.id);
+    }
+
+    const retainedTrackIds = new Set(savedTrackIds);
+    const removedExclusiveTrackIds = [];
+
+    for (const previousTrackId of previousTrackIds) {
+      if (retainedTrackIds.has(previousTrackId)) {
+        continue;
+      }
+
+      const remainingPlaylistRows = await database.query(
+        "SELECT COUNT(*) AS count FROM offline_playlist_tracks WHERE track_id = ?",
+        [previousTrackId],
+      );
+      const remainingCount = normalizePositiveInteger(
+        remainingPlaylistRows?.values?.[0]?.count,
+      );
+
+      if (remainingCount > 0) {
+        continue;
+      }
+
+      await database.run(
+        "DELETE FROM offline_media_files WHERE track_id = ?",
+        [previousTrackId],
+        false,
+      );
+      await database.run(
+        "DELETE FROM offline_tracks WHERE id = ?",
+        [previousTrackId],
+        false,
+      );
+      removedExclusiveTrackIds.push(previousTrackId);
+    }
+
+    const playlistRows = await database.query(
+      "SELECT * FROM offline_playlists WHERE id = ? LIMIT 1",
+      [normalizedPlaylistId],
+    );
+
+    return {
+      playlist: sanitizeOfflinePlaylistRow(playlistRows?.values?.[0] ?? null),
+      removedExclusiveTrackIds,
+    };
+  });
+
+  if (!transactionResult?.playlist) {
+    return null;
+  }
+
+  await bestEffortDeleteNativeTrackFiles(transactionResult.removedExclusiveTrackIds ?? []);
+
+  return transactionResult.playlist;
 }
 
 export async function getOfflinePlaylists() {
@@ -344,7 +801,7 @@ export async function getOfflinePlaylists() {
     return getDownloadedPlaylists();
   }
 
-  return queryRows(
+  const rows = await queryRows(
     `SELECT
         id,
         name,
@@ -360,6 +817,8 @@ export async function getOfflinePlaylists() {
         downloaded_at DESC,
         updated_at DESC`,
   );
+
+  return rows.map(sanitizeOfflinePlaylistRow).filter(Boolean);
 }
 
 export async function getOfflineTracksForPlaylist(playlistId) {
@@ -402,7 +861,7 @@ export async function getOfflineTracksForPlaylist(playlistId) {
       .filter(Boolean);
   }
 
-  return queryRows(
+  const rows = await queryRows(
     `SELECT
         t.id,
         t.title,
@@ -425,6 +884,97 @@ export async function getOfflineTracksForPlaylist(playlistId) {
       ORDER BY pt.track_order ASC`,
     [normalizedPlaylistId],
   );
+
+  return rows.map(sanitizeOfflineTrackRow).filter(Boolean);
+}
+
+function countTracksWithLocalUri(tracks, key) {
+  return tracks.filter((track) => normalizeNullableText(track?.[key])).length;
+}
+
+async function inspectTrackMediaFiles(tracks, key) {
+  const details = [];
+
+  for (const track of tracks) {
+    const relativePath = normalizeNullableText(track?.[key]);
+
+    if (!relativePath) {
+      continue;
+    }
+
+    const exists = await nativeMediaFileExists(relativePath);
+    const sizeBytes = exists ? await getNativeMediaFileSize(relativePath) : null;
+
+    details.push({
+      trackId: normalizeOfflineId(track?.id),
+      relativePath,
+      exists,
+      sizeBytes: normalizePositiveInteger(sizeBytes, 0),
+    });
+  }
+
+  return details;
+}
+
+export async function inspectNativeMediaFilesForPlaylist(playlistId) {
+  const normalizedPlaylistId = normalizeOfflineId(playlistId);
+
+  if (!normalizedPlaylistId || !shouldUseMobileOfflineSqlite()) {
+    return null;
+  }
+
+  const tracks = await getOfflineTracksForPlaylist(normalizedPlaylistId);
+  const audioFiles = await inspectTrackMediaFiles(tracks, "audioLocalUri");
+  const artworkFiles = await inspectTrackMediaFiles(tracks, "artworkLocalUri");
+  const sqliteAudioMediaRefCount = countTracksWithLocalUri(tracks, "audioLocalUri");
+  const sqliteArtworkMediaRefCount = countTracksWithLocalUri(tracks, "artworkLocalUri");
+
+  return {
+    playlistId: normalizedPlaylistId,
+    trackCount: tracks.length,
+    sqliteAudioMediaRefCount,
+    sqliteArtworkMediaRefCount,
+    nativeAudioFiles: audioFiles,
+    nativeAudioFileCount: audioFiles.filter((file) => file.exists).length,
+    missingNativeAudioFileCount: audioFiles.filter((file) => !file.exists).length,
+    nativeArtworkFiles: artworkFiles,
+    nativeArtworkFileCount: artworkFiles.filter((file) => file.exists).length,
+    missingNativeArtworkFileCount: artworkFiles.filter((file) => !file.exists).length,
+  };
+}
+
+export async function inspectDownloadedPlaylist(playlistId) {
+  const normalizedPlaylistId = normalizeOfflineId(playlistId);
+
+  if (!normalizedPlaylistId || !shouldUseMobileOfflineSqlite()) {
+    return null;
+  }
+
+  const [playlists, trackInspection] = await Promise.all([
+    getOfflinePlaylists(),
+    inspectNativeMediaFilesForPlaylist(normalizedPlaylistId),
+  ]);
+
+  const playlist = playlists.find((entry) => entry.id === normalizedPlaylistId) ?? null;
+
+  if (!playlist || !trackInspection) {
+    return null;
+  }
+
+  return {
+    playlistId: playlist.id,
+    playlistName: playlist.name,
+    trackCount: normalizePositiveInteger(playlist.totalTracks),
+    sqliteTrackRowCount: trackInspection.trackCount,
+    sqliteAudioMediaRefCount: trackInspection.sqliteAudioMediaRefCount,
+    sqliteArtworkMediaRefCount: trackInspection.sqliteArtworkMediaRefCount,
+    nativeAudioFileCount: trackInspection.nativeAudioFileCount,
+    missingNativeAudioFileCount: trackInspection.missingNativeAudioFileCount,
+    nativeArtworkFileCount: trackInspection.nativeArtworkFileCount,
+    missingNativeArtworkFileCount: trackInspection.missingNativeArtworkFileCount,
+    audioFiles: trackInspection.nativeAudioFiles,
+    artworkFiles: trackInspection.nativeArtworkFiles,
+  };
 }
 
 export async function deleteOfflinePlaylist(playlistId) {
@@ -465,6 +1015,8 @@ export async function deleteOfflinePlaylist(playlistId) {
       false,
     );
 
+    const deletedTrackIds = [];
+
     for (const trackId of trackIds) {
       const remainingPlaylistRows = await database.query(
         "SELECT COUNT(*) AS count FROM offline_playlist_tracks WHERE track_id = ?",
@@ -489,12 +1041,20 @@ export async function deleteOfflinePlaylist(playlistId) {
         false,
       );
       await database.run("DELETE FROM offline_tracks WHERE id = ?", [trackId], false);
+      deletedTrackIds.push(trackId);
     }
 
-    return true;
+    return {
+      deletedTrackIds,
+    };
   });
 
-  return Boolean(result);
+  if (!result) {
+    return false;
+  }
+
+  await bestEffortDeleteNativeTrackFiles(result.deletedTrackIds ?? []);
+  return true;
 }
 
 export async function clearMobileOfflineData() {
@@ -511,7 +1071,21 @@ export async function clearMobileOfflineData() {
     return true;
   });
 
-  return Boolean(result);
+  if (!result) {
+    return false;
+  }
+
+  try {
+    await clearNativeMediaFiles();
+  } catch {}
+
+  return true;
+}
+
+export async function clearOfflineData() {
+  return shouldUseMobileOfflineSqlite()
+    ? clearMobileOfflineData()
+    : clearOfflineDownloads();
 }
 
 export { initializeMobileOfflineDb };

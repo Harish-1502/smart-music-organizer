@@ -1,7 +1,23 @@
 const SESSION_STORAGE_KEY = "smart-music-organizer:api-auth-token";
+export const API_TOKEN_UPDATED_EVENT =
+  "smart-music-organizer:api-token-updated";
 
 function sessionStorageAvailable() {
   return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
+}
+
+function dispatchApiTokenUpdated(configured) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(API_TOKEN_UPDATED_EVENT, {
+      detail: {
+        configured: Boolean(configured),
+      },
+    }),
+  );
 }
 
 function normalizeToken(token) {
@@ -26,6 +42,7 @@ export function setApiToken(token) {
   const normalizedToken = normalizeToken(token);
 
   if (!sessionStorageAvailable()) {
+    dispatchApiTokenUpdated(Boolean(normalizedToken));
     return normalizedToken;
   }
 
@@ -37,17 +54,22 @@ export function setApiToken(token) {
     }
   } catch {}
 
+  dispatchApiTokenUpdated(Boolean(normalizedToken));
+
   return normalizedToken;
 }
 
 export function clearApiToken() {
   if (!sessionStorageAvailable()) {
+    dispatchApiTokenUpdated(false);
     return;
   }
 
   try {
     window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
   } catch {}
+
+  dispatchApiTokenUpdated(false);
 }
 
 export function getAuthHeaders() {

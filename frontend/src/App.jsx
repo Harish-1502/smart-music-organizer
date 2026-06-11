@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
+// import { runAndroidOfflineFoundationSmokeTest } from "./offline/androidOfflineFoundationSmokeTest";
 import { Link, Routes, Route, Navigate } from "react-router-dom";
 import { API_AUTH_REQUIRED_EVENT } from "./api/apiBase";
-import { clearApiToken } from "./api/authToken";
+import {
+  API_TOKEN_UPDATED_EVENT,
+  clearApiToken,
+  hasRuntimeApiToken,
+} from "./api/authToken";
 import ApiTokenPrompt from "./components/ApiTokenPrompt";
 import LibraryPage from "./pages/LibraryPage";
 import ConnectionPage from "./pages/ConnectionPage";
@@ -17,17 +22,36 @@ export default function App() {
   const { currentTrack, audioRef, isPlaying, streamUrl, handleEnded } = usePlayer();
   const hasMiniPlayer = Boolean(currentTrack);
   const [showApiTokenPrompt, setShowApiTokenPrompt] = useState(false);
+  const [authRefreshKey, setAuthRefreshKey] = useState(0);
 
   useEffect(() => {
+    // runAndroidOfflineFoundationSmokeTest({ allowInProduction: true });
+    console.log(
+      "[auth-debug] app token configured: yes/no",
+      hasRuntimeApiToken(),
+    );
+
     function handleApiAuthRequired() {
       clearApiToken();
       setShowApiTokenPrompt(true);
     }
 
+    function handleApiTokenUpdated(event) {
+      const tokenConfigured = Boolean(event?.detail?.configured);
+      // console.log("[auth-debug] app token configured: yes/no", tokenConfigured);
+
+      if (tokenConfigured) {
+        setShowApiTokenPrompt(false);
+        setAuthRefreshKey((currentKey) => currentKey + 1);
+      }
+    }
+
     window.addEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
+    window.addEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
 
     return () => {
       window.removeEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
+      window.removeEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
     };
   }, []);
 
@@ -96,7 +120,7 @@ export default function App() {
       </nav>
 
       <main className="app-shell__main">
-        <Routes>
+        <Routes key={authRefreshKey}>
           <Route path="/" element={<Navigate to="/library" replace />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/playlists" element={<PlaylistsPage />} />

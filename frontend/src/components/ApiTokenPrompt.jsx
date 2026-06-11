@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { clearApiToken, hasRuntimeApiToken, setApiToken } from "../api/authToken";
+import {
+  clearApiToken,
+  getApiToken,
+  hasRuntimeApiToken,
+  setApiToken,
+} from "../api/authToken";
 
 export default function ApiTokenPrompt({ open, onClose }) {
   const [token, setToken] = useState("");
@@ -14,14 +19,19 @@ export default function ApiTokenPrompt({ open, onClose }) {
     event.preventDefault();
 
     const savedToken = setApiToken(token);
+    // console.log("[auth-debug] token saved: yes/no", Boolean(savedToken));
+    // console.log(
+    //   "[auth-debug] token readable after save: yes/no",
+    //   Boolean(getApiToken()),
+    // );
 
     if (!savedToken) {
       setShowValidation(true);
       return;
     }
 
+    setShowValidation(false);
     onClose();
-    window.location.reload();
   }
 
   function handleClearToken() {

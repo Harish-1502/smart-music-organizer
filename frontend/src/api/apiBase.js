@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getAuthHeaders } from "./authToken";
+import { getApiToken, getAuthHeaders } from "./authToken";
 
 const DEFAULT_DEV_API_BASE = "http://127.0.0.1:8000";
 export const API_AUTH_REQUIRED_EVENT = "smart-music-organizer:api-auth-required";
@@ -28,7 +28,18 @@ function normalizeApiPath(path) {
 }
 
 api.interceptors.request.use((config) => {
+  const token = getApiToken();
   const authHeaders = getAuthHeaders();
+  const requestUrl = config.baseURL
+    ? `${config.baseURL}${config.url || ""}`
+    : (config.url || "");
+
+  // console.log("[auth-debug] axios request url/path", requestUrl);
+  // console.log("[auth-debug] axios request has token: yes/no", Boolean(token));
+  // console.log(
+  //   "[auth-debug] authorization header attached: yes/no",
+  //   Boolean(authHeaders.Authorization),
+  // );
 
   config.headers = {
     ...(config.headers || {}),
@@ -42,6 +53,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401 && typeof window !== "undefined") {
+      // console.log("[auth-debug] received 401, clearing token");
       window.dispatchEvent(
         new CustomEvent(API_AUTH_REQUIRED_EVENT, {
           detail: {
@@ -83,16 +95,27 @@ function getSafeMediaErrorMessage(status) {
   return "Unable to load protected media.";
 }
 
-export async function fetchAuthenticatedBlob(path) {
+export async function fetchAuthenticatedBlob(path, options = {}) {
   if (!path) {
     throw new Error("Missing media path.");
   }
 
+  const token = getApiToken();
+  const authHeaders = getAuthHeaders();
+  // console.log("[auth-debug] fetch blob url/path", path);
+  // console.log("[auth-debug] fetch blob has token: yes/no", Boolean(token));
+  // console.log(
+  //   "[auth-debug] fetch blob authorization header attached: yes/no",
+  //   Boolean(authHeaders.Authorization),
+  // );
+
   const response = await fetch(path, {
-    headers: getAuthHeaders(),
+    headers: authHeaders,
+    signal: options.signal,
   });
 
   if (response.status === 401 && typeof window !== "undefined") {
+    console.log("[auth-debug] received 401, clearing token");
     window.dispatchEvent(
       new CustomEvent(API_AUTH_REQUIRED_EVENT, {
         detail: {
@@ -109,8 +132,8 @@ export async function fetchAuthenticatedBlob(path) {
   return response.blob();
 }
 
-export async function createAuthenticatedBlobUrl(path) {
-  const blob = await fetchAuthenticatedBlob(path);
+export async function createAuthenticatedBlobUrl(path, options = {}) {
+  const blob = await fetchAuthenticatedBlob(path, options);
   return URL.createObjectURL(blob);
 }
 
@@ -162,10 +185,10 @@ export function trackArtUrlForTrack(track) {
   return getLibraryArtPath(track?.art_path);
 }
 
-export async function getTrackStreamBlobUrl(trackId) {
-  return createAuthenticatedBlobUrl(getTrackStreamPath(trackId));
+export async function getTrackStreamBlobUrl(trackId, options = {}) {
+  return createAuthenticatedBlobUrl(getTrackStreamPath(trackId), options);
 }
 
-export async function getTrackArtBlobUrl(trackId) {
-  return createAuthenticatedBlobUrl(getTrackArtPath(trackId));
+export async function getTrackArtBlobUrl(trackId, options = {}) {
+  return createAuthenticatedBlobUrl(getTrackArtPath(trackId), options);
 }

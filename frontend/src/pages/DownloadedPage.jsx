@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  clearOfflineDownloads,
-  deleteDownloadedPlaylist,
-  getDownloadedPlaylists,
+  clearOfflineData,
+  deleteOfflinePlaylist,
+  getOfflinePlaylists,
   getOfflineStorageSummary,
-} from "../offline/offlineStorage";
+  inspectDownloadedPlaylist,
+  shouldUseMobileOfflineSqlite,
+} from "../offline/mobileOfflineRepository";
 import "../styles/DownloadedPage.css";
 
 function formatStorageSize(totalBytes) {
@@ -65,7 +67,7 @@ export default function DownloadedPage() {
       try {
         const [nextSummary, nextPlaylists] = await Promise.all([
           getOfflineStorageSummary(),
-          getDownloadedPlaylists(),
+          getOfflinePlaylists(),
         ]);
 
         if (!isMounted) {
@@ -108,7 +110,7 @@ export default function DownloadedPage() {
     try {
       const [nextSummary, nextPlaylists] = await Promise.all([
         getOfflineStorageSummary(),
-        getDownloadedPlaylists(),
+        getOfflinePlaylists(),
       ]);
 
       setSummary(nextSummary);
@@ -135,7 +137,7 @@ export default function DownloadedPage() {
       return;
     }
 
-    const deleted = await deleteDownloadedPlaylist(playlistId);
+    const deleted = await deleteOfflinePlaylist(playlistId);
 
     if (!deleted) {
       setMessage("Could not delete the downloaded playlist.");
@@ -155,7 +157,7 @@ export default function DownloadedPage() {
       return;
     }
 
-    const cleared = await clearOfflineDownloads();
+    const cleared = await clearOfflineData();
 
     if (!cleared) {
       setMessage("Could not clear offline downloads.");
@@ -168,6 +170,21 @@ export default function DownloadedPage() {
 
   const hasPlaylists = playlists.length > 0;
   const storageAvailable = Boolean(summary?.available);
+  const canInspectNativeDownloads = shouldUseMobileOfflineSqlite();
+
+  async function handleInspectPlaylist(playlistId) {
+    const inspection = await inspectDownloadedPlaylist(playlistId);
+
+    if (!inspection) {
+      setMessage("Could not inspect this downloaded playlist.");
+      setMessageTone("error");
+      return;
+    }
+
+    console.info("[offline-inspect] playlist inspection", inspection);
+    setMessage(`Inspection logged for playlist ${inspection.playlistId}.`);
+    setMessageTone("success");
+  }
 
   return (
     <section className="downloaded-page" aria-labelledby="downloaded-title">
@@ -227,7 +244,7 @@ export default function DownloadedPage() {
               Loading offline storage...
             </p>
             <p className="downloaded-page__state-text">
-              Reading downloaded playlist data from this browser.
+              Reading downloaded playlist data from local offline storage.
             </p>
           </section>
         ) : null}
@@ -238,8 +255,7 @@ export default function DownloadedPage() {
               Offline storage is unavailable in this browser.
             </p>
             <p className="downloaded-page__state-text">
-              IndexedDB is missing or blocked, so downloaded playlists cannot be
-              read here.
+              Local offline storage is unavailable or blocked on this device.
             </p>
           </section>
         ) : null}
@@ -308,6 +324,15 @@ export default function DownloadedPage() {
                     >
                       Play Offline
                     </button>
+                    {canInspectNativeDownloads ? (
+                      <button
+                        type="button"
+                        className="downloaded-page__button downloaded-page__button--secondary"
+                        onClick={() => handleInspectPlaylist(playlist.id)}
+                      >
+                        Inspect Download
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="downloaded-page__button downloaded-page__button--ghost-danger"

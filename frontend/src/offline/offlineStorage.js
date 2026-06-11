@@ -19,13 +19,60 @@ const EMPTY_SUMMARY = {
 };
 
 function normalizeOfflineId(value) {
-  return value === null || value === undefined || value === "" ? null : value;
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+    return trimmedValue ? trimmedValue : null;
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  return null;
+}
+
+function normalizeOfflineIdList(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return [...new Set(values.map(normalizeOfflineId).filter((id) => id !== null))];
+}
+
+function normalizeText(value, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function normalizeDuration(value) {
+  const duration = Number(value);
+
+  return Number.isFinite(duration) && duration >= 0 ? duration : null;
 }
 
 function getByteSize(value) {
   const size = Number(value);
 
   return Number.isFinite(size) && size > 0 ? size : 0;
+}
+
+function buildAudioBlobId(trackId) {
+  const normalizedTrackId = normalizeOfflineId(trackId);
+
+  return normalizedTrackId === null ? null : `track:${String(normalizedTrackId)}:audio`;
+}
+
+function buildArtworkBlobId(trackId) {
+  const normalizedTrackId = normalizeOfflineId(trackId);
+
+  return normalizedTrackId === null ? null : `track:${String(normalizedTrackId)}:artwork`;
 }
 
 async function readAllFromStore(storeName) {
@@ -42,12 +89,83 @@ async function readAllFromStore(storeName) {
   }
 }
 
+async function readRecordFromStore(storeName, recordId) {
+  const normalizedRecordId = normalizeOfflineId(recordId);
+
+  if (normalizedRecordId === null) {
+    return null;
+  }
+
+  const database = await getOfflineDatabase();
+
+  if (!database) {
+    return null;
+  }
+
+  try {
+    return (await database.get(storeName, normalizedRecordId)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getTransactionStores(transaction) {
+  return {
+    playlistStore: transaction.objectStore(OFFLINE_PLAYLISTS_STORE),
+    trackStore: transaction.objectStore(OFFLINE_TRACKS_STORE),
+    audioBlobStore: transaction.objectStore(OFFLINE_AUDIO_BLOBS_STORE),
+    artworkBlobStore: transaction.objectStore(OFFLINE_ARTWORK_BLOBS_STORE),
+  };
+}
+
+async function cleanupUnreferencedBlobs({
+  trackStore,
+  audioBlobStore,
+  artworkBlobStore,
+}) {
+  const remainingTracks = await trackStore.getAll();
+
+  const usedAudioBlobIds = new Set(
+    remainingTracks
+      .map((track) => normalizeOfflineId(track?.audioBlobId))
+      .filter((blobId) => blobId !== null),
+  );
+
+  const usedArtworkBlobIds = new Set(
+    remainingTracks
+      .map((track) => normalizeOfflineId(track?.artworkBlobId))
+      .filter((blobId) => blobId !== null),
+  );
+
+  const allAudioBlobs = await audioBlobStore.getAll();
+  for (const blobRecord of allAudioBlobs) {
+    if (!usedAudioBlobIds.has(normalizeOfflineId(blobRecord.id))) {
+      await audioBlobStore.delete(blobRecord.id);
+    }
+  }
+
+  const allArtworkBlobs = await artworkBlobStore.getAll();
+  for (const blobRecord of allArtworkBlobs) {
+    if (!usedArtworkBlobIds.has(normalizeOfflineId(blobRecord.id))) {
+      await artworkBlobStore.delete(blobRecord.id);
+    }
+  }
+}
+
 export async function getDownloadedPlaylists() {
   return readAllFromStore(OFFLINE_PLAYLISTS_STORE);
 }
 
+export async function getDownloadedPlaylist(playlistId) {
+  return readRecordFromStore(OFFLINE_PLAYLISTS_STORE, playlistId);
+}
+
 export async function getDownloadedTracks() {
   return readAllFromStore(OFFLINE_TRACKS_STORE);
+}
+
+export async function getDownloadedTrack(trackId) {
+  return readRecordFromStore(OFFLINE_TRACKS_STORE, trackId);
 }
 
 export async function hasDownloadedPlaylist(playlistId) {
@@ -100,6 +218,292 @@ export async function getOfflineStorageSummary() {
   }
 }
 
+export async function saveOfflineAudioBlob(trackId, blob, options = {}) {
+  const normalizedTrackId = normalizeOfflineId(trackId);
+
+  if (normalizedTrackId === null || !(blob instanceof Blob)) {
+    return null;
+  }
+
+  const blobId = buildAudioBlobId(normalizedTrackId);
+  const audioBlobStore = options.audioBlobStore;
+
+  if (!audioBlobStore) {
+    const database = await getOfflineDatabase();
+
+    if (!database) {
+      return null;
+    }
+
+    try {
+      const tx = database.transaction([OFFLINE_AUDIO_BLOBS_STORE], "readwrite");
+      await tx.objectStore(OFFLINE_AUDIO_BLOBS_STORE).put({ id: blobId, blob });
+      await tx.done;
+      return blobId;
+    } catch {
+      return null;
+    }
+  }
+
+  await audioBlobStore.put({ id: blobId, blob });
+  return blobId;
+}
+
+export async function saveOfflineArtworkBlob(trackId, blob, options = {}) {
+  const normalizedTrackId = normalizeOfflineId(trackId);
+
+  if (normalizedTrackId === null || !(blob instanceof Blob)) {
+    return null;
+  }
+
+  const blobId = buildArtworkBlobId(normalizedTrackId);
+  const artworkBlobStore = options.artworkBlobStore;
+
+  if (!artworkBlobStore) {
+    const database = await getOfflineDatabase();
+
+    if (!database) {
+      return null;
+    }
+
+    try {
+      const tx = database.transaction([OFFLINE_ARTWORK_BLOBS_STORE], "readwrite");
+      await tx.objectStore(OFFLINE_ARTWORK_BLOBS_STORE).put({ id: blobId, blob });
+      await tx.done;
+      return blobId;
+    } catch {
+      return null;
+    }
+  }
+
+  await artworkBlobStore.put({ id: blobId, blob });
+  return blobId;
+}
+
+export async function saveOfflineTrack(track, options = {}) {
+  const normalizedTrackId = normalizeOfflineId(track?.id ?? track?.trackId);
+
+  if (normalizedTrackId === null) {
+    return null;
+  }
+
+  const database =
+    options.trackStore && options.audioBlobStore && options.artworkBlobStore
+      ? null
+      : await getOfflineDatabase();
+
+  if (!options.trackStore && !database) {
+    return null;
+  }
+
+  const tx =
+    options.trackStore && options.audioBlobStore && options.artworkBlobStore
+      ? null
+      : database.transaction(
+          [
+            OFFLINE_TRACKS_STORE,
+            OFFLINE_AUDIO_BLOBS_STORE,
+            OFFLINE_ARTWORK_BLOBS_STORE,
+          ],
+          "readwrite",
+        );
+
+  const trackStore = options.trackStore ?? tx.objectStore(OFFLINE_TRACKS_STORE);
+  const audioBlobStore =
+    options.audioBlobStore ?? tx.objectStore(OFFLINE_AUDIO_BLOBS_STORE);
+  const artworkBlobStore =
+    options.artworkBlobStore ?? tx.objectStore(OFFLINE_ARTWORK_BLOBS_STORE);
+
+  try {
+    const existingTrack =
+      options.existingTrack ?? (await trackStore.get(normalizedTrackId));
+    const playlistIds = normalizeOfflineIdList(
+      track?.playlistIds ?? existingTrack?.playlistIds,
+    );
+
+    let audioBlobId = normalizeOfflineId(track?.audioBlobId);
+
+    if (track?.audioBlob instanceof Blob) {
+      audioBlobId = await saveOfflineAudioBlob(normalizedTrackId, track.audioBlob, {
+        audioBlobStore,
+      });
+    } else if (audioBlobId === null) {
+      audioBlobId = normalizeOfflineId(existingTrack?.audioBlobId);
+    }
+
+    if (audioBlobId === null) {
+      if (tx) {
+        await tx.done.catch(() => {});
+      }
+
+      return null;
+    }
+
+    let artworkBlobId = normalizeOfflineId(track?.artworkBlobId);
+
+    if (track?.artworkBlob instanceof Blob) {
+      artworkBlobId = await saveOfflineArtworkBlob(
+        normalizedTrackId,
+        track.artworkBlob,
+        { artworkBlobStore },
+      );
+    } else if (artworkBlobId === null) {
+      artworkBlobId = normalizeOfflineId(existingTrack?.artworkBlobId);
+    }
+
+    const record = {
+      id: normalizedTrackId,
+      title: normalizeText(track?.title, existingTrack?.title || "Unknown Title"),
+      artist: normalizeText(track?.artist, existingTrack?.artist || ""),
+      album: normalizeText(track?.album, existingTrack?.album || ""),
+      duration:
+        normalizeDuration(track?.duration) ?? normalizeDuration(existingTrack?.duration),
+      playlistIds,
+      audioBlobId,
+      artworkBlobId,
+      sizeBytes:
+        getByteSize(track?.sizeBytes) ||
+        getByteSize(track?.audioBlob?.size) ||
+        getByteSize(existingTrack?.sizeBytes),
+      downloadedAt:
+        normalizeText(track?.downloadedAt, existingTrack?.downloadedAt || "") ||
+        new Date().toISOString(),
+    };
+
+    await trackStore.put(record);
+
+    if (tx) {
+      await tx.done;
+    }
+
+    return record;
+  } catch {
+    if (tx) {
+      await tx.done.catch(() => {});
+    }
+
+    return null;
+  }
+}
+
+export async function saveDownloadedPlaylist(downloadPayload) {
+  const normalizedPlaylistId = normalizeOfflineId(downloadPayload?.id);
+
+  if (normalizedPlaylistId === null) {
+    return null;
+  }
+
+  const database = await getOfflineDatabase();
+
+  if (!database) {
+    return null;
+  }
+
+  const requestedTracks = Array.isArray(downloadPayload?.tracks)
+    ? downloadPayload.tracks
+    : [];
+
+  try {
+    const tx = database.transaction(
+      [
+        OFFLINE_PLAYLISTS_STORE,
+        OFFLINE_TRACKS_STORE,
+        OFFLINE_AUDIO_BLOBS_STORE,
+        OFFLINE_ARTWORK_BLOBS_STORE,
+      ],
+      "readwrite",
+    );
+    const { playlistStore, trackStore, audioBlobStore, artworkBlobStore } =
+      getTransactionStores(tx);
+
+    const existingPlaylist = await playlistStore.get(normalizedPlaylistId);
+    const previousTrackIds = normalizeOfflineIdList(existingPlaylist?.trackIds);
+    const savedTrackIds = [];
+    let totalBytes = 0;
+
+    for (const track of requestedTracks) {
+      const savedTrack = await saveOfflineTrack(
+        {
+          ...track,
+          id: track?.id ?? track?.trackId,
+          playlistIds: [
+            normalizedPlaylistId,
+            ...normalizeOfflineIdList(track?.playlistIds),
+          ],
+          downloadedAt:
+            normalizeText(track?.downloadedAt, downloadPayload?.downloadedAt || "") ||
+            new Date().toISOString(),
+        },
+        {
+          trackStore,
+          audioBlobStore,
+          artworkBlobStore,
+        },
+      );
+
+      if (!savedTrack) {
+        continue;
+      }
+
+      savedTrackIds.push(savedTrack.id);
+      totalBytes += getByteSize(savedTrack.sizeBytes);
+    }
+
+    const retainedTrackIds = new Set(savedTrackIds);
+
+    for (const previousTrackId of previousTrackIds) {
+      if (retainedTrackIds.has(previousTrackId)) {
+        continue;
+      }
+
+      const existingTrack = await trackStore.get(previousTrackId);
+
+      if (!existingTrack) {
+        continue;
+      }
+
+      const remainingPlaylistIds = normalizeOfflineIdList(
+        existingTrack.playlistIds,
+      ).filter((playlistId) => playlistId !== normalizedPlaylistId);
+
+      if (remainingPlaylistIds.length > 0) {
+        await trackStore.put({
+          ...existingTrack,
+          playlistIds: remainingPlaylistIds,
+        });
+      } else {
+        await trackStore.delete(previousTrackId);
+      }
+    }
+
+    const playlistRecord = {
+      id: normalizedPlaylistId,
+      name: normalizeText(downloadPayload?.name, existingPlaylist?.name || "Untitled playlist"),
+      trackIds: savedTrackIds,
+      downloadedAt:
+        normalizeText(downloadPayload?.downloadedAt, existingPlaylist?.downloadedAt || "") ||
+        new Date().toISOString(),
+      totalTracks: savedTrackIds.length,
+      totalBytes,
+      requestedTrackCount:
+        getByteSize(downloadPayload?.requestedTrackCount) || requestedTracks.length,
+      failedTrackCount: getByteSize(downloadPayload?.failedTrackCount),
+    };
+
+    await playlistStore.put(playlistRecord);
+    await cleanupUnreferencedBlobs({
+      trackStore,
+      audioBlobStore,
+      artworkBlobStore,
+    });
+    await tx.done;
+
+    return playlistRecord;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteDownloadedPlaylist(playlistId) {
   const normalizedPlaylistId = normalizeOfflineId(playlistId);
 
@@ -136,11 +540,7 @@ export async function deleteDownloadedPlaylist(playlistId) {
       return false;
     }
 
-    const playlistTrackIds = new Set(
-      Array.isArray(playlist.trackIds)
-        ? playlist.trackIds.map(normalizeOfflineId).filter((id) => id !== null)
-        : [],
-    );
+    const playlistTrackIds = new Set(normalizeOfflineIdList(playlist.trackIds));
 
     await playlistStore.delete(normalizedPlaylistId);
 
@@ -151,13 +551,9 @@ export async function deleteDownloadedPlaylist(playlistId) {
         continue;
       }
 
-      const remainingPlaylistIds = Array.isArray(track.playlistIds)
-        ? [...new Set(
-            track.playlistIds
-              .map(normalizeOfflineId)
-              .filter((id) => id !== null && id !== normalizedPlaylistId),
-          )]
-        : [];
+      const remainingPlaylistIds = normalizeOfflineIdList(track.playlistIds).filter(
+        (id) => id !== normalizedPlaylistId,
+      );
 
       if (remainingPlaylistIds.length > 0) {
         await trackStore.put({
@@ -169,33 +565,11 @@ export async function deleteDownloadedPlaylist(playlistId) {
       }
     }
 
-    const remainingTracks = await trackStore.getAll();
-
-    const usedAudioBlobIds = new Set(
-      remainingTracks
-        .map((track) => normalizeOfflineId(track?.audioBlobId))
-        .filter((blobId) => blobId !== null),
-    );
-
-    const usedArtworkBlobIds = new Set(
-      remainingTracks
-        .map((track) => normalizeOfflineId(track?.artworkBlobId))
-        .filter((blobId) => blobId !== null),
-    );
-
-    const allAudioBlobs = await audioBlobStore.getAll();
-    for (const blobRecord of allAudioBlobs) {
-      if (!usedAudioBlobIds.has(normalizeOfflineId(blobRecord.id))) {
-        await audioBlobStore.delete(blobRecord.id);
-      }
-    }
-
-    const allArtworkBlobs = await artworkBlobStore.getAll();
-    for (const blobRecord of allArtworkBlobs) {
-      if (!usedArtworkBlobIds.has(normalizeOfflineId(blobRecord.id))) {
-        await artworkBlobStore.delete(blobRecord.id);
-      }
-    }
+    await cleanupUnreferencedBlobs({
+      trackStore,
+      audioBlobStore,
+      artworkBlobStore,
+    });
 
     await tx.done;
     return true;
