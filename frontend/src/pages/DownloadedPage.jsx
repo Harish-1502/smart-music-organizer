@@ -10,7 +10,7 @@ import {
 import { usePlayer } from "../context/PlayerContext";
 import "../styles/DownloadedPage.css";
 
-function formatStorageSize(totalBytes) {
+export function formatStorageSize(totalBytes) {
   const size = Number(totalBytes);
 
   if (!Number.isFinite(size) || size <= 0) {
@@ -27,6 +27,18 @@ function formatStorageSize(totalBytes) {
   return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
+export function formatStorageType(storageType) {
+  if (storageType === "native_file") {
+    return "Native files";
+  }
+
+  if (storageType === "indexeddb" || storageType === "indexeddb_blob") {
+    return "IndexedDB";
+  }
+
+  return "Unknown";
+}
+
 function formatDownloadedDate(value) {
   if (!value) {
     return "Date unavailable";
@@ -39,6 +51,29 @@ function formatDownloadedDate(value) {
   }
 
   return date.toLocaleString();
+}
+
+export function buildDeleteDownloadConfirmationText(playlistName) {
+  const safePlaylistName =
+    typeof playlistName === "string" && playlistName.trim()
+      ? playlistName.trim()
+      : "this playlist";
+
+  return `Delete the offline download for ${safePlaylistName}? Shared tracks used by other downloaded playlists will be kept.`;
+}
+
+export function buildClearAllDownloadsConfirmationText(summary) {
+  return `Clear all offline downloads? This removes ${summary?.playlistCount ?? 0} playlists, ${summary?.trackCount ?? 0} tracks, and ${formatStorageSize(summary?.totalBytes ?? 0)} from ${formatStorageType(summary?.storageType)} storage.`;
+}
+
+export function getMissingAudioWarningMessage(summary) {
+  const missingAudioFileCount = Number(summary?.missingAudioFileCount ?? 0);
+
+  if (!Number.isFinite(missingAudioFileCount) || missingAudioFileCount <= 0) {
+    return "";
+  }
+
+  return `${missingAudioFileCount} offline audio file${missingAudioFileCount === 1 ? "" : "s"} ${missingAudioFileCount === 1 ? "is" : "are"} missing. Play Offline will skip unavailable tracks until those downloads are refreshed.`;
 }
 
 function sortPlaylistsByDownloadedDate(playlists) {
@@ -134,7 +169,10 @@ export default function DownloadedPage() {
   }
 
   async function handleDeletePlaylist(playlistId) {
-    const confirmed = window.confirm("Delete this downloaded playlist?");
+    const playlist = playlists.find((entry) => entry.id === playlistId);
+    const confirmed = window.confirm(
+      buildDeleteDownloadConfirmationText(playlist?.name),
+    );
 
     if (!confirmed) {
       return;
@@ -153,7 +191,7 @@ export default function DownloadedPage() {
 
   async function handleClearAll() {
     const confirmed = window.confirm(
-      "Clear all downloaded playlists and offline media?",
+      buildClearAllDownloadsConfirmationText(summary),
     );
 
     if (!confirmed) {
@@ -173,6 +211,7 @@ export default function DownloadedPage() {
 
   const hasPlaylists = playlists.length > 0;
   const storageAvailable = Boolean(summary?.available);
+  const missingAudioWarning = getMissingAudioWarningMessage(summary);
 
   async function handlePlayOffline(playlistId) {
     const playbackQueue = await buildOfflinePlaybackQueue(playlistId);
@@ -214,8 +253,8 @@ export default function DownloadedPage() {
               Downloaded
             </h1>
             <p className="downloaded-page__lead">
-              Review what is already stored in this browser for future offline
-              listening steps. No API token or PC file path is shown here.
+              Review what is already stored for offline listening. No API token
+              or PC file path is shown here.
             </p>
           </div>
 
@@ -233,13 +272,31 @@ export default function DownloadedPage() {
               </span>
             </div>
             <div className="downloaded-page__summary-card">
+              <span className="downloaded-page__summary-label">Storage type</span>
+              <span className="downloaded-page__summary-value downloaded-page__summary-value--compact">
+                {formatStorageType(summary?.storageType)}
+              </span>
+            </div>
+            <div className="downloaded-page__summary-card">
               <span className="downloaded-page__summary-label">Tracks</span>
               <span className="downloaded-page__summary-value">
                 {summary?.trackCount ?? 0}
               </span>
             </div>
             <div className="downloaded-page__summary-card">
-              <span className="downloaded-page__summary-label">Storage used</span>
+              <span className="downloaded-page__summary-label">Audio size</span>
+              <span className="downloaded-page__summary-value downloaded-page__summary-value--compact">
+                {formatStorageSize(summary?.totalAudioBytes ?? 0)}
+              </span>
+            </div>
+            <div className="downloaded-page__summary-card">
+              <span className="downloaded-page__summary-label">Artwork size</span>
+              <span className="downloaded-page__summary-value downloaded-page__summary-value--compact">
+                {formatStorageSize(summary?.totalArtworkBytes ?? 0)}
+              </span>
+            </div>
+            <div className="downloaded-page__summary-card">
+              <span className="downloaded-page__summary-label">Offline total</span>
               <span className="downloaded-page__summary-value">
                 {formatStorageSize(summary?.totalBytes ?? 0)}
               </span>
@@ -254,6 +311,13 @@ export default function DownloadedPage() {
           >
             {message}
           </p>
+        ) : null}
+
+        {missingAudioWarning ? (
+          <section className="downloaded-page__warning" role="alert">
+            <p className="downloaded-page__warning-title">Missing offline audio files</p>
+            <p className="downloaded-page__warning-text">{missingAudioWarning}</p>
+          </section>
         ) : null}
 
         {loading && !summary ? (
@@ -323,10 +387,13 @@ export default function DownloadedPage() {
                       {playlist.totalTracks ?? 0} tracks
                     </p>
                     <p className="downloaded-page__playlist-meta">
-                      Estimated size {formatStorageSize(playlist.totalBytes ?? 0)}
+                      Offline size {formatStorageSize(playlist.totalBytes ?? 0)}
                     </p>
                     <p className="downloaded-page__playlist-meta">
                       Downloaded {formatDownloadedDate(playlist.downloadedAt)}
+                    </p>
+                    <p className="downloaded-page__playlist-status">
+                      Already downloaded for offline playback.
                     </p>
                   </div>
 
@@ -347,7 +414,7 @@ export default function DownloadedPage() {
                       className="downloaded-page__button downloaded-page__button--ghost-danger"
                       onClick={() => handleDeletePlaylist(playlist.id)}
                     >
-                      Delete
+                      Delete Download
                     </button>
                   </div>
                 </article>

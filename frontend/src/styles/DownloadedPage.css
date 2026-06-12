@@ -103,6 +103,10 @@
   color: var(--text-strong);
 }
 
+.downloaded-page__summary-value--compact {
+  font-size: clamp(16px, 3vw, 22px);
+}
+
 .downloaded-page__message,
 .downloaded-page__state {
   padding: 14px 16px;
@@ -114,6 +118,33 @@
 
 .downloaded-page__message--error {
   color: #fda4af;
+}
+
+.downloaded-page__message--warning {
+  color: #fde68a;
+}
+
+.downloaded-page__warning {
+  padding: 14px 16px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 20px;
+  background: rgba(120, 53, 15, 0.2);
+  color: #fde68a;
+  box-shadow: var(--shadow-soft);
+}
+
+.downloaded-page__warning-title,
+.downloaded-page__warning-text {
+  margin: 0;
+}
+
+.downloaded-page__warning-title {
+  font-weight: 700;
+}
+
+.downloaded-page__warning-text {
+  margin-top: 6px;
+  line-height: 1.5;
 }
 
 .downloaded-page__state {
@@ -178,6 +209,11 @@
 
 .downloaded-page__playlist-meta {
   color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.downloaded-page__playlist-status {
+  color: #86efac;
   line-height: 1.45;
 }
 

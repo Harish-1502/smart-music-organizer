@@ -10,6 +10,7 @@ const offlineStorageMocks = {
   getDownloadedPlaylists: vi.fn(),
   getDownloadedTrack: vi.fn(),
   getDownloadedTracks: vi.fn(),
+  getOfflineStorageSummary: vi.fn(),
 };
 
 const nativeMediaStorageMocks = {
@@ -65,6 +66,20 @@ describe("mobileOfflineRepository", () => {
     offlineStorageMocks.getDownloadedPlaylists.mockResolvedValue([]);
     offlineStorageMocks.getDownloadedTrack.mockResolvedValue(null);
     offlineStorageMocks.getDownloadedTracks.mockResolvedValue([]);
+    offlineStorageMocks.getOfflineStorageSummary.mockResolvedValue({
+      available: true,
+      playlistCount: 0,
+      trackCount: 0,
+      storageType: "indexeddb",
+      audioBlobCount: 0,
+      artworkBlobCount: 0,
+      totalAudioBytes: 0,
+      totalArtworkBytes: 0,
+      missingAudioFileCount: 0,
+      missingArtworkFileCount: 0,
+      missingFileCount: 0,
+      totalBytes: 0,
+    });
     nativeMediaStorageMocks.clearNativeMediaFiles.mockResolvedValue({
       deletedAudioFiles: 0,
       deletedArtworkFiles: 0,
@@ -75,6 +90,7 @@ describe("mobileOfflineRepository", () => {
     nativeMediaStorageMocks.getPlayableNativeAudioUri.mockResolvedValue(null);
     nativeMediaStorageMocks.getPlayableNativeArtworkUri.mockResolvedValue(null);
     nativeMediaStorageMocks.nativeMediaFileExists.mockResolvedValue(false);
+    global.fetch = vi.fn();
   });
 
   it("uses the SQLite path for playlist reads on native Android", async () => {
@@ -99,6 +115,87 @@ describe("mobileOfflineRepository", () => {
     expect(offlineStorageMocks.getDownloadedPlaylists).not.toHaveBeenCalled();
   });
 
+  it("builds the Android storage summary from verified native files without network calls", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement) => {
+        if (statement.includes("COUNT(*) AS count FROM offline_playlists")) {
+          return { values: [{ count: 2 }] };
+        }
+
+        if (statement.includes("FROM offline_tracks t")) {
+          return {
+            values: [
+              {
+                id: "track-1",
+                audioLocalUri: "media/audio/track-1.mp3",
+                artworkLocalUri: "media/artwork/track-1.jpg",
+              },
+              {
+                id: "track-2",
+                audioLocalUri: "media/audio/track-2.mp3",
+                artworkLocalUri: "media/artwork/track-2.jpg",
+              },
+              {
+                id: "track-3",
+                audioLocalUri: null,
+                artworkLocalUri: null,
+              },
+            ],
+          };
+        }
+
+        if (statement.includes("SUM(CASE WHEN media_type = 'audio'")) {
+          return {
+            values: [{ audioCount: 2, artworkCount: 2 }],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+    nativeMediaStorageMocks.getNativeMediaFileSize.mockImplementation(async (relativePath) => {
+      if (relativePath === "media/audio/track-1.mp3") {
+        return 4096;
+      }
+
+      if (relativePath === "media/artwork/track-1.jpg") {
+        return 512;
+      }
+
+      if (relativePath === "media/artwork/track-2.jpg") {
+        return null;
+      }
+
+      if (relativePath === "media/audio/track-2.mp3") {
+        return null;
+      }
+
+      return null;
+    });
+
+    const { getOfflineStorageSummary } = await loadRepository();
+    const summary = await getOfflineStorageSummary();
+
+    expect(summary).toEqual({
+      available: true,
+      playlistCount: 2,
+      trackCount: 3,
+      storageType: "native_file",
+      audioBlobCount: 2,
+      artworkBlobCount: 2,
+      audioFileCount: 1,
+      artworkFileCount: 1,
+      totalAudioBytes: 4096,
+      totalArtworkBytes: 512,
+      missingAudioFileCount: 2,
+      missingArtworkFileCount: 1,
+      missingFileCount: 3,
+      totalBytes: 4608,
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it("uses the IndexedDB fallback path in the browser", async () => {
     offlineStorageMocks.getDownloadedPlaylists.mockResolvedValue([
       { id: "browser-playlist", name: "Browser Fallback" },
@@ -111,6 +208,42 @@ describe("mobileOfflineRepository", () => {
       { id: "browser-playlist", name: "Browser Fallback" },
     ]);
     expect(offlineStorageMocks.getDownloadedPlaylists).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the IndexedDB fallback summary in the browser", async () => {
+    offlineStorageMocks.getOfflineStorageSummary.mockResolvedValue({
+      available: true,
+      playlistCount: 1,
+      trackCount: 4,
+      storageType: "indexeddb",
+      audioBlobCount: 4,
+      artworkBlobCount: 2,
+      totalAudioBytes: 8192,
+      totalArtworkBytes: 1024,
+      missingAudioFileCount: 0,
+      missingArtworkFileCount: 0,
+      missingFileCount: 0,
+      totalBytes: 9216,
+    });
+
+    const { getOfflineStorageSummary } = await loadRepository();
+    const summary = await getOfflineStorageSummary();
+
+    expect(summary).toEqual({
+      available: true,
+      playlistCount: 1,
+      trackCount: 4,
+      storageType: "indexeddb",
+      audioBlobCount: 4,
+      artworkBlobCount: 2,
+      totalAudioBytes: 8192,
+      totalArtworkBytes: 1024,
+      missingAudioFileCount: 0,
+      missingArtworkFileCount: 0,
+      missingFileCount: 0,
+      totalBytes: 9216,
+    });
+    expect(offlineStorageMocks.getOfflineStorageSummary).toHaveBeenCalledTimes(1);
   });
 
   it("builds playlist tracks from the IndexedDB fallback path in the browser", async () => {

@@ -13,8 +13,14 @@ const EMPTY_SUMMARY = {
   available: false,
   playlistCount: 0,
   trackCount: 0,
+  storageType: "indexeddb",
   audioBlobCount: 0,
   artworkBlobCount: 0,
+  totalAudioBytes: 0,
+  totalArtworkBytes: 0,
+  missingAudioFileCount: 0,
+  missingArtworkFileCount: 0,
+  missingFileCount: 0,
   totalBytes: 0,
 };
 
@@ -61,6 +67,10 @@ function getByteSize(value) {
   const size = Number(value);
 
   return Number.isFinite(size) && size > 0 ? size : 0;
+}
+
+function getBlobByteSize(record) {
+  return record?.blob instanceof Blob ? getByteSize(record.blob.size) : 0;
 }
 
 function buildAudioBlobId(trackId) {
@@ -210,7 +220,7 @@ export async function getOfflineStorageSummary() {
   const database = await getOfflineDatabase();
 
   if (!database) {
-    return { ...EMPTY_SUMMARY, available: false };
+    return { ...EMPTY_SUMMARY, available: false, storageType: "indexeddb" };
   }
 
   try {
@@ -221,18 +231,50 @@ export async function getOfflineStorageSummary() {
       database.getAll(OFFLINE_ARTWORK_BLOBS_STORE),
     ]);
 
-    const totalBytes = tracks.reduce((sum, track) => sum + getByteSize(track?.sizeBytes), 0);
+    const audioBlobIds = new Set(
+      audioBlobs
+        .map((blobRecord) => normalizeOfflineId(blobRecord?.id))
+        .filter((blobId) => blobId !== null),
+    );
+    const artworkBlobIds = new Set(
+      artworkBlobs
+        .map((blobRecord) => normalizeOfflineId(blobRecord?.id))
+        .filter((blobId) => blobId !== null),
+    );
+    const totalAudioBytes = audioBlobs.reduce(
+      (sum, blobRecord) => sum + getBlobByteSize(blobRecord),
+      0,
+    );
+    const totalArtworkBytes = artworkBlobs.reduce(
+      (sum, blobRecord) => sum + getBlobByteSize(blobRecord),
+      0,
+    );
+    const missingAudioFileCount = tracks.filter((track) => {
+      const audioBlobId = normalizeOfflineId(track?.audioBlobId);
+      return audioBlobId === null || !audioBlobIds.has(audioBlobId);
+    }).length;
+    const missingArtworkFileCount = tracks.filter((track) => {
+      const artworkBlobId = normalizeOfflineId(track?.artworkBlobId);
+      return artworkBlobId !== null && !artworkBlobIds.has(artworkBlobId);
+    }).length;
+    const totalBytes = totalAudioBytes + totalArtworkBytes;
 
     return {
       available: true,
       playlistCount: playlists.length,
       trackCount: tracks.length,
+      storageType: "indexeddb",
       audioBlobCount: audioBlobs.length,
       artworkBlobCount: artworkBlobs.length,
+      totalAudioBytes,
+      totalArtworkBytes,
+      missingAudioFileCount,
+      missingArtworkFileCount,
+      missingFileCount: missingAudioFileCount + missingArtworkFileCount,
       totalBytes,
     };
   } catch {
-    return { ...EMPTY_SUMMARY, available: true };
+    return { ...EMPTY_SUMMARY, available: true, storageType: "indexeddb" };
   }
 }
 

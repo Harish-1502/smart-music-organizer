@@ -297,10 +297,19 @@ export async function getOfflineStorageSummary() {
     return getIndexedDbOfflineStorageSummary();
   }
 
-  const [playlistCountRows, trackCountRows, totalBytesRows, mediaRows] = await Promise.all([
+  const [playlistCountRows, trackRows, mediaRows] = await Promise.all([
     queryRows("SELECT COUNT(*) AS count FROM offline_playlists"),
-    queryRows("SELECT COUNT(*) AS count FROM offline_tracks"),
-    queryRows("SELECT COALESCE(SUM(total_bytes), 0) AS totalBytes FROM offline_playlists"),
+    queryRows(
+      `SELECT
+          t.id,
+          audio.local_uri AS audioLocalUri,
+          artwork.local_uri AS artworkLocalUri
+        FROM offline_tracks t
+        LEFT JOIN offline_media_files audio
+          ON audio.track_id = t.id AND audio.media_type = 'audio'
+        LEFT JOIN offline_media_files artwork
+          ON artwork.track_id = t.id AND artwork.media_type = 'artwork'`,
+    ),
     queryRows(
       `SELECT
           SUM(CASE WHEN media_type = 'audio' THEN 1 ELSE 0 END) AS audioCount,
@@ -309,13 +318,65 @@ export async function getOfflineStorageSummary() {
     ),
   ]);
 
+  let totalAudioBytes = 0;
+  let totalArtworkBytes = 0;
+  let verifiedAudioFileCount = 0;
+  let verifiedArtworkFileCount = 0;
+  let missingAudioFileCount = 0;
+  let missingArtworkFileCount = 0;
+
+  for (const row of trackRows) {
+    const audioLocalUri = isSafeMobileLocalUri(row?.audioLocalUri)
+      ? normalizeNullableText(row.audioLocalUri)
+      : null;
+    const artworkLocalUri = isSafeMobileLocalUri(row?.artworkLocalUri)
+      ? normalizeNullableText(row.artworkLocalUri)
+      : null;
+
+    if (!audioLocalUri) {
+      missingAudioFileCount += 1;
+    } else {
+      const audioSize = await getNativeMediaFileSize(audioLocalUri);
+
+      if (Number.isFinite(Number(audioSize)) && Number(audioSize) > 0) {
+        totalAudioBytes += Number(audioSize);
+        verifiedAudioFileCount += 1;
+      } else {
+        missingAudioFileCount += 1;
+      }
+    }
+
+    if (!artworkLocalUri) {
+      continue;
+    }
+
+    const artworkSize = await getNativeMediaFileSize(artworkLocalUri);
+
+    if (Number.isFinite(Number(artworkSize)) && Number(artworkSize) > 0) {
+      totalArtworkBytes += Number(artworkSize);
+      verifiedArtworkFileCount += 1;
+    } else {
+      missingArtworkFileCount += 1;
+    }
+  }
+
+  const totalBytes = totalAudioBytes + totalArtworkBytes;
+
   return {
     available: true,
     playlistCount: normalizePositiveInteger(playlistCountRows?.[0]?.count),
-    trackCount: normalizePositiveInteger(trackCountRows?.[0]?.count),
+    trackCount: trackRows.length,
+    storageType: "native_file",
     audioBlobCount: normalizePositiveInteger(mediaRows?.[0]?.audioCount),
     artworkBlobCount: normalizePositiveInteger(mediaRows?.[0]?.artworkCount),
-    totalBytes: normalizePositiveInteger(totalBytesRows?.[0]?.totalBytes),
+    audioFileCount: verifiedAudioFileCount,
+    artworkFileCount: verifiedArtworkFileCount,
+    totalAudioBytes: normalizePositiveInteger(totalAudioBytes),
+    totalArtworkBytes: normalizePositiveInteger(totalArtworkBytes),
+    missingAudioFileCount,
+    missingArtworkFileCount,
+    missingFileCount: missingAudioFileCount + missingArtworkFileCount,
+    totalBytes: normalizePositiveInteger(totalBytes),
   };
 }
 
