@@ -99,6 +99,78 @@
   padding: 16px;
 }
 
+.connection-page__settings-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.connection-page__setting-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--action-border);
+  border-radius: 16px;
+  background: rgba(17, 24, 39, 0.72);
+}
+
+.connection-page__setting-note {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.connection-page__field {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-page__field-label {
+  color: var(--text-subtle);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.connection-page__input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(7, 12, 20, 0.72);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.connection-page__input::placeholder {
+  color: var(--text-subtle);
+}
+
+.connection-page__input:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.connection-page__inline-code {
+  font-family: var(--mono);
+}
+
+.connection-page__warning {
+  padding: 12px 14px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 14px;
+  background: rgba(120, 53, 15, 0.24);
+  color: #fde68a;
+  line-height: 1.45;
+}
+
+.connection-page__settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .connection-page__panel-header {
   display: grid;
   gap: 8px;
@@ -182,6 +254,12 @@
   outline-offset: 2px;
 }
 
+.connection-page__button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+  transform: none;
+}
+
 .connection-page__button--secondary {
   border-color: rgba(148, 163, 184, 0.2);
   background: rgba(255, 255, 255, 0.04);
@@ -252,13 +330,24 @@
 
 .connection-page__message {
   padding: 14px 16px;
+}
+
+.connection-page__message--error {
   color: #fda4af;
+}
+
+.connection-page__message--success {
+  color: #86efac;
 }
 
 @media (min-width: 960px) {
   .connection-page__grid {
     grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
     align-items: start;
+  }
+
+  .connection-page__settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

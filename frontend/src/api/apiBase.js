@@ -1,19 +1,16 @@
 import axios from "axios";
 import { getAuthHeaders } from "./authToken";
+import {
+  getBackendBaseUrl,
+  normalizeBackendBaseUrl,
+} from "./backendBaseUrl";
 
-const DEFAULT_DEV_API_BASE = "http://127.0.0.1:8000";
 export const API_AUTH_REQUIRED_EVENT = "smart-music-organizer:api-auth-required";
-const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
 const allowRawArtPathFallback =
   import.meta.env.VITE_ALLOW_RAW_ART_PATH_FALLBACK === "true" &&
   import.meta.env.VITE_EXPOSE_LOCAL_PATHS === "true";
 
-export const API_BASE =
-  configuredApiBase || (import.meta.env.DEV ? DEFAULT_DEV_API_BASE : "");
-
-export const api = axios.create({
-  baseURL: API_BASE,
-});
+export const api = axios.create();
 
 function normalizeApiPath(path) {
   if (!path) {
@@ -29,6 +26,10 @@ function normalizeApiPath(path) {
 
 api.interceptors.request.use((config) => {
   const authHeaders = getAuthHeaders();
+  const requestBaseUrl =
+    typeof config.baseURL === "string" && config.baseURL.trim()
+      ? normalizeBackendBaseUrl(config.baseURL)
+      : getBackendBaseUrl();
 
   // console.log("[auth-debug] axios request url/path", requestUrl);
   // console.log("[auth-debug] axios request has token: yes/no", Boolean(token));
@@ -41,6 +42,8 @@ api.interceptors.request.use((config) => {
     ...(config.headers || {}),
     ...authHeaders,
   };
+  config.baseURL =
+    !isAbsoluteUrl(config.url || "") && requestBaseUrl ? requestBaseUrl : undefined;
 
   return config;
 });
@@ -67,12 +70,17 @@ export function isAbsoluteUrl(value) {
   return /^https?:\/\//i.test(value);
 }
 
-export function apiUrl(path) {
+export function getApiBaseUrl() {
+  return getBackendBaseUrl();
+}
+
+export function apiUrl(path, baseUrl = getBackendBaseUrl()) {
   if (isAbsoluteUrl(path)) {
     return path;
   }
 
-  return `${API_BASE}${normalizeApiPath(path)}`;
+  const normalizedPath = normalizeApiPath(path);
+  return baseUrl ? `${baseUrl}${normalizedPath}` : normalizedPath;
 }
 
 function getSafeMediaErrorMessage(status) {
@@ -97,6 +105,7 @@ export async function fetchAuthenticatedBlob(path, options = {}) {
   }
 
   const authHeaders = getAuthHeaders();
+  const requestUrl = apiUrl(path, options.baseURL);
   // console.log("[auth-debug] fetch blob url/path", path);
   // console.log("[auth-debug] fetch blob has token: yes/no", Boolean(token));
   // console.log(
@@ -104,7 +113,7 @@ export async function fetchAuthenticatedBlob(path, options = {}) {
   //   Boolean(authHeaders.Authorization),
   // );
 
-  const response = await fetch(path, {
+  const response = await fetch(requestUrl, {
     headers: authHeaders,
     signal: options.signal,
   });
@@ -113,7 +122,7 @@ export async function fetchAuthenticatedBlob(path, options = {}) {
     window.dispatchEvent(
       new CustomEvent(API_AUTH_REQUIRED_EVENT, {
         detail: {
-          url: path,
+          url: requestUrl,
         },
       }),
     );

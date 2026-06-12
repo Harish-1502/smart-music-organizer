@@ -2,6 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, QrCode, Server, ShieldCheck, Wifi } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../api/apiBase";
+import {
+  clearBackendBaseUrl,
+  getBackendBaseUrl,
+  getDefaultBackendBaseUrl,
+  hasSavedBackendBaseUrl,
+  isNativeAndroidRuntime,
+  normalizeBackendBaseUrl,
+  setBackendBaseUrl,
+} from "../api/backendBaseUrl";
 import { getApiErrorMessage } from "../api/apiErrors";
 import "../styles/ConnectionPage.css";
 
@@ -31,35 +40,56 @@ function ConnectionUrlCard({ label, url, copiedUrl, onCopy }) {
 }
 
 export default function ConnectionPage() {
+  const [backendUrlInput, setBackendUrlInput] = useState(() => getBackendBaseUrl());
   const [networkInfo, setNetworkInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("error");
   const [copiedUrl, setCopiedUrl] = useState("");
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [savingBackendUrl, setSavingBackendUrl] = useState(false);
   const copiedTimerRef = useRef(null);
+  const isAndroidRuntime = isNativeAndroidRuntime();
+  const defaultBackendBaseUrl = getDefaultBackendBaseUrl();
+  const currentBackendBaseUrl = getBackendBaseUrl();
+  const usingSavedBackendBaseUrl = hasSavedBackendBaseUrl();
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadNetworkInfo() {
+    async function loadNetworkInfo(baseURL) {
+      if (!isMounted) {
+        return null;
+      }
+
       setLoading(true);
       setMessage("");
+      setMessageTone("error");
 
       try {
-        const response = await api.get("/system/network-info");
+        const response = await api.get(
+          "/system/network-info",
+          baseURL ? { baseURL } : undefined,
+        );
 
         if (isMounted) {
           setNetworkInfo(response.data);
         }
+
+        return response.data;
       } catch (error) {
         if (error?.response?.status === 401) {
-          return;
+          return null;
         }
 
         if (isMounted) {
           setMessage(
-            getApiErrorMessage(error, "Unable to load connection details.")
+            getApiErrorMessage(error, "Unable to load connection details."),
           );
+          setMessageTone("error");
         }
+
+        return null;
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -67,7 +97,17 @@ export default function ConnectionPage() {
       }
     }
 
-    loadNetworkInfo();
+    if (!currentBackendBaseUrl && isAndroidRuntime) {
+      setLoading(false);
+      return () => {
+        isMounted = false;
+        if (copiedTimerRef.current) {
+          window.clearTimeout(copiedTimerRef.current);
+        }
+      };
+    }
+
+    loadNetworkInfo(currentBackendBaseUrl || undefined);
 
     return () => {
       isMounted = false;
@@ -82,6 +122,45 @@ export default function ConnectionPage() {
     [networkInfo],
   );
 
+  async function loadNetworkInfoForBaseUrl(baseURL) {
+    setLoading(true);
+    setMessage("");
+    setMessageTone("error");
+
+    try {
+      const response = await api.get(
+        "/system/network-info",
+        baseURL ? { baseURL } : undefined,
+      );
+      setNetworkInfo(response.data);
+      return {
+        status: "success",
+        data: response.data,
+      };
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        return {
+          status: "unauthorized",
+          data: null,
+        };
+      }
+
+      if (error?.response?.status !== 401) {
+        setMessage(
+          getApiErrorMessage(error, "Unable to load connection details."),
+        );
+        setMessageTone("error");
+      }
+
+      return {
+        status: "error",
+        data: null,
+      };
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function copyUrl(url) {
     if (!url) {
       return;
@@ -95,6 +174,7 @@ export default function ConnectionPage() {
     try {
       await navigator.clipboard.writeText(url);
       setCopiedUrl(url);
+      setMessage("");
 
       if (copiedTimerRef.current) {
         window.clearTimeout(copiedTimerRef.current);
@@ -105,7 +185,96 @@ export default function ConnectionPage() {
       }, 1600);
     } catch {
       setMessage("Could not copy the URL. Please copy it manually.");
+      setMessageTone("error");
     }
+  }
+
+  async function handleTestConnection() {
+    let normalizedBackendBaseUrl = "";
+
+    try {
+      normalizedBackendBaseUrl = normalizeBackendBaseUrl(backendUrlInput);
+    } catch (error) {
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "Enter a valid backend URL before testing.",
+      );
+      setMessageTone("error");
+      return;
+    }
+
+    setTestingConnection(true);
+    const result = await loadNetworkInfoForBaseUrl(normalizedBackendBaseUrl);
+
+    if (result?.status === "success") {
+      setBackendUrlInput(normalizedBackendBaseUrl);
+      setMessage("Connection test succeeded.");
+      setMessageTone("success");
+    }
+
+    setTestingConnection(false);
+  }
+
+  async function handleSaveBackendUrl() {
+    let normalizedBackendBaseUrl = "";
+
+    try {
+      normalizedBackendBaseUrl = setBackendBaseUrl(backendUrlInput);
+    } catch (error) {
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "Enter a valid backend URL before saving.",
+      );
+      setMessageTone("error");
+      return;
+    }
+
+    setSavingBackendUrl(true);
+    setBackendUrlInput(normalizedBackendBaseUrl);
+    const result = await loadNetworkInfoForBaseUrl(normalizedBackendBaseUrl);
+
+    if (result?.status === "success") {
+      setMessage("Backend URL saved.");
+      setMessageTone("success");
+    } else if (result?.status === "unauthorized") {
+      setMessage("Backend URL saved. Finish token entry to continue.");
+      setMessageTone("success");
+    }
+
+    setSavingBackendUrl(false);
+  }
+
+  async function handleResetBackendUrl() {
+    clearBackendBaseUrl();
+    const resetBackendBaseUrl = getBackendBaseUrl();
+    setBackendUrlInput(resetBackendBaseUrl);
+
+    if (resetBackendBaseUrl) {
+      const result = await loadNetworkInfoForBaseUrl(resetBackendBaseUrl);
+
+      if (result?.status === "success") {
+        setMessage("Runtime backend URL cleared. Using the build default.");
+        setMessageTone("success");
+      } else if (result?.status === "unauthorized") {
+        setMessage(
+          "Runtime backend URL cleared. Using the build default. Finish token entry to continue.",
+        );
+        setMessageTone("success");
+      }
+
+      return;
+    }
+
+    setNetworkInfo(null);
+    setLoading(false);
+    setMessage(
+      isAndroidRuntime
+        ? "Runtime backend URL cleared. Enter your PC LAN URL to reconnect."
+        : "Runtime backend URL cleared.",
+    );
+    setMessageTone("success");
   }
 
   return (
@@ -139,10 +308,100 @@ export default function ConnectionPage() {
         </section>
 
         {message ? (
-          <div className="connection-page__message" role="alert">
+          <div
+            className={`connection-page__message connection-page__message--${messageTone}`}
+            role={messageTone === "error" ? "alert" : "status"}
+          >
             {message}
           </div>
         ) : null}
+
+        <section className="connection-page__panel">
+          <div className="connection-page__panel-header">
+            <div>
+              <p className="connection-page__panel-eyebrow">Backend</p>
+              <h2>Backend URL</h2>
+            </div>
+            <p className="connection-page__panel-note">
+              Change the PC backend address at runtime without rebuilding the Android app.
+            </p>
+          </div>
+
+          <div className="connection-page__settings-grid">
+            <div className="connection-page__setting-card">
+              <p className="connection-page__url-label">Current backend URL</p>
+              <code className="connection-page__url-value">
+                {currentBackendBaseUrl || "Not set"}
+              </code>
+              <p className="connection-page__setting-note">
+                {usingSavedBackendBaseUrl
+                  ? "Using the saved runtime backend URL."
+                  : defaultBackendBaseUrl
+                    ? "Using the build default backend URL."
+                    : "No backend URL is saved yet."}
+              </p>
+            </div>
+
+            <div className="connection-page__setting-card">
+              <p className="connection-page__url-label">Build default</p>
+              <code className="connection-page__url-value">
+                {defaultBackendBaseUrl || "Not configured"}
+              </code>
+              <p className="connection-page__setting-note">
+                Runtime settings override this value until you reset them.
+              </p>
+            </div>
+          </div>
+
+          <label className="connection-page__field">
+            <span className="connection-page__field-label">PC backend URL</span>
+            <input
+              className="connection-page__input"
+              type="url"
+              inputMode="url"
+              placeholder="http://192.168.1.50:8000"
+              value={backendUrlInput}
+              onChange={(event) => setBackendUrlInput(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+
+          <p className="connection-page__setting-note">
+            Example: <code className="connection-page__inline-code">http://192.168.1.50:8000</code>
+          </p>
+
+          {isAndroidRuntime ? (
+            <div className="connection-page__warning" role="note">
+              Do not use localhost for your PC backend. Use your PC LAN IP.
+            </div>
+          ) : null}
+
+          <div className="connection-page__settings-actions">
+            <button
+              type="button"
+              className="connection-page__button connection-page__button--secondary"
+              onClick={handleTestConnection}
+              disabled={testingConnection}
+            >
+              {testingConnection ? "Testing..." : "Test Connection"}
+            </button>
+            <button
+              type="button"
+              className="connection-page__button connection-page__button--primary"
+              onClick={handleSaveBackendUrl}
+              disabled={savingBackendUrl}
+            >
+              {savingBackendUrl ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              className="connection-page__button connection-page__button--secondary"
+              onClick={handleResetBackendUrl}
+            >
+              Reset to Build Default
+            </button>
+          </div>
+        </section>
 
         {loading && !networkInfo ? (
           <section className="connection-page__panel" aria-live="polite">
