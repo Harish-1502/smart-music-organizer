@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+  buildOfflinePlaybackQueue,
   clearOfflineData,
   deleteOfflinePlaylist,
   getOfflinePlaylists,
   getOfflineStorageSummary,
-  inspectDownloadedPlaylist,
-  shouldUseMobileOfflineSqlite,
 } from "../offline/mobileOfflineRepository";
+import { usePlayer } from "../context/PlayerContext";
 import "../styles/DownloadedPage.css";
 
 function formatStorageSize(totalBytes) {
@@ -50,6 +51,8 @@ function sortPlaylistsByDownloadedDate(playlists) {
 }
 
 export default function DownloadedPage() {
+  const navigate = useNavigate();
+  const { playQueue } = usePlayer();
   const [summary, setSummary] = useState(null);
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -170,19 +173,34 @@ export default function DownloadedPage() {
 
   const hasPlaylists = playlists.length > 0;
   const storageAvailable = Boolean(summary?.available);
-  const canInspectNativeDownloads = shouldUseMobileOfflineSqlite();
 
-  async function handleInspectPlaylist(playlistId) {
-    const inspection = await inspectDownloadedPlaylist(playlistId);
+  async function handlePlayOffline(playlistId) {
+    const playbackQueue = await buildOfflinePlaybackQueue(playlistId);
 
-    if (!inspection) {
-      setMessage("Could not inspect this downloaded playlist.");
+    if (!playbackQueue) {
+      setMessage("Could not load this downloaded playlist for offline playback.");
       setMessageTone("error");
       return;
     }
 
-    console.info("[offline-inspect] playlist inspection", inspection);
-    setMessage(`Inspection logged for playlist ${inspection.playlistId}.`);
+    if (!playbackQueue.tracks.length) {
+      setMessage("No playable offline audio files were found for this playlist.");
+      setMessageTone("error");
+      return;
+    }
+
+    playQueue(playbackQueue.tracks, 0);
+    navigate("/player");
+
+    if (playbackQueue.missingTrackIds.length > 0) {
+      setMessage(
+        `Playing offline with ${playbackQueue.tracks.length} tracks. ${playbackQueue.missingTrackIds.length} missing files were skipped.`,
+      );
+      setMessageTone("warning");
+      return;
+    }
+
+    setMessage(`Playing ${playbackQueue.playlistName || "downloaded playlist"} offline.`);
     setMessageTone("success");
   }
 
@@ -320,19 +338,10 @@ export default function DownloadedPage() {
                     <button
                       type="button"
                       className="downloaded-page__button downloaded-page__button--secondary"
-                      disabled
+                      onClick={() => handlePlayOffline(playlist.id)}
                     >
                       Play Offline
                     </button>
-                    {canInspectNativeDownloads ? (
-                      <button
-                        type="button"
-                        className="downloaded-page__button downloaded-page__button--secondary"
-                        onClick={() => handleInspectPlaylist(playlist.id)}
-                      >
-                        Inspect Download
-                      </button>
-                    ) : null}
                     <button
                       type="button"
                       className="downloaded-page__button downloaded-page__button--ghost-danger"

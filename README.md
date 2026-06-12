@@ -287,10 +287,9 @@ $env:ALLOWED_SCAN_ROOTS = '["S:/Music"]'
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Runtime browser entry is the supported LAN token path. Normal API requests use
-the `Authorization` header, and only `/tracks/{id}/stream` and
-`/tracks/{id}/art` use `api_token` query parameters for browser media and image
-requests.
+Runtime browser entry is the supported LAN token path. Normal API requests,
+streaming, and artwork requests use the `Authorization` header. The frontend no
+longer puts `api_token` values into media URLs.
 
 For Docker Compose, use the explicit LAN override:
 
@@ -321,3 +320,33 @@ http://192.168.1.25:8000
 
 The server computer must stay awake, connected to Wi-Fi, and have the launcher
 or backend terminal window open while using the app.
+
+## Capacitor Android Shell
+
+The React frontend can also be wrapped in a Capacitor Android app while still
+talking to the PC backend over trusted same-Wi-Fi LAN mode.
+
+Important rules:
+
+- Do not use `http://localhost:8000` inside the Android app when the backend is
+  running on your PC. On Android, `localhost` means the phone itself.
+- Build the frontend with `VITE_API_BASE_URL` set to the PC's LAN address, for
+  example `http://192.168.1.25:8000`.
+- Keep the PC backend running in LAN mode and connect the phone to the same
+  Wi-Fi network.
+- Enter the LAN API token in the app when prompted. Do not put the token into
+  URLs.
+
+Suggested workflow:
+
+```powershell
+Start Smart Music Organizer LAN.bat
+cd frontend
+$env:VITE_API_BASE_URL = "http://192.168.1.25:8000"
+npm.cmd run build
+npx.cmd cap sync android
+npx.cmd cap open android
+```
+
+Capacitor uses `frontend/dist` as `webDir`, so the Android wrapper ships the
+same built frontend that the browser uses.

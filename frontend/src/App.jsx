@@ -5,7 +5,6 @@ import { API_AUTH_REQUIRED_EVENT } from "./api/apiBase";
 import {
   API_TOKEN_UPDATED_EVENT,
   clearApiToken,
-  hasRuntimeApiToken,
 } from "./api/authToken";
 import ApiTokenPrompt from "./components/ApiTokenPrompt";
 import LibraryPage from "./pages/LibraryPage";
@@ -26,10 +25,6 @@ export default function App() {
 
   useEffect(() => {
     // runAndroidOfflineFoundationSmokeTest({ allowInProduction: true });
-    console.log(
-      "[auth-debug] app token configured: yes/no",
-      hasRuntimeApiToken(),
-    );
 
     function handleApiAuthRequired() {
       clearApiToken();
@@ -38,7 +33,6 @@ export default function App() {
 
     function handleApiTokenUpdated(event) {
       const tokenConfigured = Boolean(event?.detail?.configured);
-      // console.log("[auth-debug] app token configured: yes/no", tokenConfigured);
 
       if (tokenConfigured) {
         setShowApiTokenPrompt(false);

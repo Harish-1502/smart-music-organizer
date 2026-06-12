@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { getTrackStreamBlobUrl } from "../api/apiBase";
+import {
+  resolveTrackArtworkSource,
+  resolveTrackPlaybackSource,
+} from "./playbackSourceResolver";
 
 const PlayerContext = createContext(null);
 
@@ -26,6 +29,17 @@ function createTrackSnapshot(track) {
     artist: track.artist ?? track.display_artist ?? null,
     album: track.album ?? null,
     duration: typeof track.duration === "number" ? track.duration : null,
+    offline: Boolean(track.offline),
+    storageType: track.storageType ?? null,
+    audioSrc: track.offline && typeof track.audioSrc === "string" ? track.audioSrc : null,
+    artworkSrc:
+      track.offline && typeof track.artworkSrc === "string" ? track.artworkSrc : null,
+    audioBlobId:
+      track.offline && typeof track.audioBlobId === "string" ? track.audioBlobId : null,
+    artworkBlobId:
+      track.offline && typeof track.artworkBlobId === "string"
+        ? track.artworkBlobId
+        : null,
   };
 }
 
@@ -103,29 +117,40 @@ export function PlayerProvider({ children }) {
       : null;
   const currentTrackId = getPlayableTrackId(currentTrack);
   const [streamUrl, setStreamUrl] = useState("");
+  const [artworkUrl, setArtworkUrl] = useState("");
   const [streamError, setStreamError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    let objectUrl = "";
+    let releasePlaybackSource = () => {};
+    let releaseArtworkSource = () => {};
 
     setStreamUrl("");
+    setArtworkUrl("");
     setStreamError("");
 
-    if (!currentTrackId) {
+    if (!currentTrack) {
       return () => {};
     }
 
-    async function loadStreamUrl() {
+    async function loadTrackSources() {
       try {
-        objectUrl = await getTrackStreamBlobUrl(currentTrackId);
+        const [playbackSource, artworkSource] = await Promise.all([
+          resolveTrackPlaybackSource(currentTrack),
+          resolveTrackArtworkSource(currentTrack),
+        ]);
+
+        releasePlaybackSource = playbackSource?.revoke ?? (() => {});
+        releaseArtworkSource = artworkSource?.revoke ?? (() => {});
 
         if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
+          releasePlaybackSource();
+          releaseArtworkSource();
           return;
         }
 
-        setStreamUrl(objectUrl);
+        setStreamUrl(playbackSource?.url ?? "");
+        setArtworkUrl(artworkSource?.url ?? "");
       } catch (error) {
         if (!cancelled) {
           setStreamError(
@@ -137,16 +162,22 @@ export function PlayerProvider({ children }) {
       }
     }
 
-    loadStreamUrl();
+    loadTrackSources();
 
     return () => {
       cancelled = true;
-
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+      releasePlaybackSource();
+      releaseArtworkSource();
     };
-  }, [currentTrackId]);
+  }, [
+    currentTrack,
+    currentTrackId,
+    currentTrack?.offline,
+    currentTrack?.audioSrc,
+    currentTrack?.audioBlobId,
+    currentTrack?.artworkSrc,
+    currentTrack?.artworkBlobId,
+  ]);
 
   function playAudioSafely(audioElement) {
     if (!audioElement) {
@@ -539,6 +570,7 @@ export function PlayerProvider({ children }) {
         currentIndex,
         isPlaying,
         streamUrl,
+        artworkUrl,
         streamError,
         shuffleEnabled,
         repeatMode,

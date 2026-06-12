@@ -98,6 +98,7 @@ export default function PlayerPage() {
   const navigate = useNavigate();
   const {
     audioRef,
+    artworkUrl: offlineArtworkUrl,
     currentTrack,
     currentIndex,
     queue,
@@ -345,10 +346,13 @@ export default function PlayerPage() {
   const displayFileName = firstNonEmpty(displayCurrentTrack?.file_name, displayTitle);
   const currentTrackId = currentTrack?.track_id ?? currentTrack?.id ?? null;
   const artPath =
-    shouldHideDemoArtwork() || !currentTrackId ? "" : getTrackArtPath(currentTrackId);
+    shouldHideDemoArtwork() || !currentTrackId || currentTrack?.offline
+      ? ""
+      : getTrackArtPath(currentTrackId);
   const { blobUrl: artUrl } = useAuthenticatedBlobUrl(artPath, {
     enabled: Boolean(artPath),
   });
+  const resolvedArtUrl = offlineArtworkUrl || artUrl;
 
   const playerThemeVars = {
     ...(currentTrack?.accentColor
@@ -714,10 +718,10 @@ export default function PlayerPage() {
           className={`player-page__art${isPlaying ? " player-page__art--playing" : ""}`}
           aria-hidden="true"
         >
-          {artUrl ? (
+          {resolvedArtUrl ? (
             <img
               className="player-page__art-image"
-              src={artUrl}
+              src={resolvedArtUrl}
               alt=""
             />
           ) : (

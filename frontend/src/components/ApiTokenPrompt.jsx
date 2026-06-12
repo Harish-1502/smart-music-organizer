@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   clearApiToken,
-  getApiToken,
   hasRuntimeApiToken,
   setApiToken,
 } from "../api/authToken";

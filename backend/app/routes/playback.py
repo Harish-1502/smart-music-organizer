@@ -39,7 +39,7 @@ def stream_track(track_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Track not found")
 
     try:
-        logging.info("Attempting to resolve audio file path for track ID %d: %s", track_id, track.file_path)
+        # logging.info("Attempting to resolve audio file path for track ID %d: %s", track_id, track.file_path)
         file_path = safe_resolve_path(track.file_path)
     except PathSecurityError:
         raise HTTPException(status_code=403, detail="Audio file path is not allowed")

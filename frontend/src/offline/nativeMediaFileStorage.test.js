@@ -16,6 +16,12 @@ vi.mock("@capacitor/core", () => ({
   Capacitor: {
     isNativePlatform: () => isNativePlatform,
     getPlatform: () => currentPlatform,
+    convertFileSrc: (value) =>
+      typeof value === "string" && value.startsWith("file://")
+        ? value.replace("file://", "http://localhost/_capacitor_file_/")
+        : typeof value === "string" && value.startsWith("content://")
+          ? value.replace("content://", "http://localhost/_capacitor_content_/")
+          : value,
   },
 }));
 
@@ -177,6 +183,51 @@ describe("nativeMediaFileStorage", () => {
     expect(result.relativePath).toBe("media/artwork/cover-55.jpg");
   });
 
+  it("replaces older same-track audio file variants before writing a fresh file", async () => {
+    isNativePlatform = true;
+    currentPlatform = "android";
+    filesystemMocks.readdir.mockResolvedValue({
+      files: [
+        {
+          name: "track-1.bin",
+          type: "file",
+          size: 10,
+          mtime: 1,
+          uri: "file:///app/media/audio/track-1.bin",
+        },
+        {
+          name: "track-1.mp3",
+          type: "file",
+          size: 20,
+          mtime: 2,
+          uri: "file:///app/media/audio/track-1.mp3",
+        },
+      ],
+    });
+
+    const { saveAudioFile } = await loadModule();
+    await saveAudioFile(
+      "track-1",
+      new Blob(["fresh-audio"], { type: "audio/mpeg" }),
+      "audio/mpeg",
+    );
+
+    expect(filesystemMocks.deleteFile).toHaveBeenCalledWith({
+      path: "media/audio/track-1.bin",
+      directory: "DATA",
+    });
+    expect(filesystemMocks.deleteFile).not.toHaveBeenCalledWith({
+      path: "media/audio/track-1.mp3",
+      directory: "DATA",
+    });
+    expect(filesystemMocks.writeFile).toHaveBeenCalledWith({
+      path: "media/audio/track-1.mp3",
+      data: expect.any(String),
+      directory: "DATA",
+      recursive: true,
+    });
+  });
+
   it("rejects unsafe track IDs and raw PC-style path inputs", async () => {
     isNativePlatform = true;
     currentPlatform = "android";
@@ -270,6 +321,46 @@ describe("nativeMediaFileStorage", () => {
     expect(size).toBe(42);
   });
 
+  it("resolves a playable native audio URI from a safe relative path", async () => {
+    isNativePlatform = true;
+    currentPlatform = "android";
+    filesystemMocks.getUri.mockResolvedValue({
+      uri: "file:///app/media/audio/track-1.mp3",
+    });
+
+    const {
+      getPlayableNativeAudioUri,
+      NATIVE_MEDIA_STORAGE_DIRECTORY,
+    } = await loadModule();
+    const uri = await getPlayableNativeAudioUri("media/audio/track-1.mp3");
+
+    expect(filesystemMocks.stat).toHaveBeenCalledWith({
+      path: "media/audio/track-1.mp3",
+      directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
+    });
+    expect(filesystemMocks.getUri).toHaveBeenCalledWith({
+      path: "media/audio/track-1.mp3",
+      directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
+    });
+    expect(uri).toBe("http://localhost/_capacitor_file_//app/media/audio/track-1.mp3");
+    expect(uri.startsWith("file://")).toBe(false);
+  });
+
+  it("converts raw content URIs into WebView-playable artwork URLs", async () => {
+    isNativePlatform = true;
+    currentPlatform = "android";
+    filesystemMocks.getUri.mockResolvedValue({
+      uri: "content://app/media/artwork/track-1.jpg",
+    });
+
+    const { getPlayableNativeArtworkUri } = await loadModule();
+    const uri = await getPlayableNativeArtworkUri("media/artwork/track-1.jpg");
+
+    expect(uri).toBe(
+      "http://localhost/_capacitor_content_/app/media/artwork/track-1.jpg",
+    );
+  });
+
   it("rejects unsafe stat paths and returns false for missing files", async () => {
     isNativePlatform = true;
     currentPlatform = "android";
@@ -337,6 +428,13 @@ describe("nativeMediaFileStorage", () => {
           mtime: 1,
           uri: "file:///app/media/audio/track-9.mp3",
         },
+        {
+          name: "track-9.bin",
+          type: "file",
+          size: 8,
+          mtime: 2,
+          uri: "file:///app/media/audio/track-9.bin",
+        },
       ],
     });
 
@@ -346,6 +444,10 @@ describe("nativeMediaFileStorage", () => {
     expect(deleted).toBe(true);
     expect(filesystemMocks.deleteFile).toHaveBeenCalledWith({
       path: "media/audio/track-9.mp3",
+      directory: "DATA",
+    });
+    expect(filesystemMocks.deleteFile).toHaveBeenCalledWith({
+      path: "media/audio/track-9.bin",
       directory: "DATA",
     });
   });

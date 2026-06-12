@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
+            "http://localhost",
+            "https://localhost",
             "http://127.0.0.1:5173",
         ],
         validation_alias="CORS_ORIGINS",

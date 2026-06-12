@@ -18,6 +18,8 @@ import {
   deleteAudioFile,
   deleteArtworkFile,
   getNativeMediaFileSize,
+  getPlayableNativeAudioUri,
+  getPlayableNativeArtworkUri,
   nativeMediaFileExists,
 } from "./nativeMediaFileStorage";
 
@@ -854,6 +856,8 @@ export async function getOfflineTracksForPlaylist(playlistId) {
           trackOrder: index,
           audioLocalUri: null,
           artworkLocalUri: null,
+          audioBlobId: normalizeOfflineId(track?.audioBlobId),
+          artworkBlobId: normalizeOfflineId(track?.artworkBlobId),
           storageType: "indexeddb_blob",
           downloadStatus: "downloaded",
         };
@@ -886,6 +890,166 @@ export async function getOfflineTracksForPlaylist(playlistId) {
   );
 
   return rows.map(sanitizeOfflineTrackRow).filter(Boolean);
+}
+
+function buildSafePlaybackTrack(track, sourceFields = {}) {
+  const trackId = normalizeOfflineId(track?.id ?? track?.trackId);
+
+  if (!trackId) {
+    return null;
+  }
+
+  return {
+    id: trackId,
+    title: normalizeText(track?.title, "Unknown Title"),
+    artist: normalizeText(track?.artist),
+    album: normalizeText(track?.album),
+    duration: Number.isFinite(Number(track?.duration))
+      ? Math.trunc(Number(track.duration))
+      : null,
+    offline: true,
+    storageType: normalizeStorageType(track?.storageType, "native_file"),
+    ...sourceFields,
+  };
+}
+
+async function buildNativeOfflinePlaybackTrack(track) {
+  if (!isSafeMobileLocalUri(track?.audioLocalUri)) {
+    return null;
+  }
+
+  const audioSrc = await getPlayableNativeAudioUri(track.audioLocalUri);
+
+  if (!audioSrc) {
+    return null;
+  }
+
+  let artworkSrc = null;
+
+  if (isSafeMobileLocalUri(track?.artworkLocalUri)) {
+    try {
+      artworkSrc = await getPlayableNativeArtworkUri(track.artworkLocalUri);
+    } catch {
+      artworkSrc = null;
+    }
+  }
+
+  return buildSafePlaybackTrack(track, {
+    audioSrc,
+    artworkSrc,
+    audioBlobId: null,
+    artworkBlobId: null,
+  });
+}
+
+function buildBrowserOfflinePlaybackTrack(track) {
+  const audioBlobId = normalizeOfflineId(track?.audioBlobId);
+
+  if (!audioBlobId) {
+    return null;
+  }
+
+  return buildSafePlaybackTrack(track, {
+    audioSrc: null,
+    artworkSrc: null,
+    audioBlobId,
+    artworkBlobId: normalizeOfflineId(track?.artworkBlobId),
+  });
+}
+
+export async function getOfflineTrackAudioSource(trackId) {
+  const track = await getOfflineTrack(trackId);
+
+  if (!track) {
+    return null;
+  }
+
+  if (!shouldUseMobileOfflineSqlite()) {
+    const audioBlobId = normalizeOfflineId(track?.audioBlobId);
+
+    return audioBlobId
+      ? {
+          audioSrc: null,
+          audioBlobId,
+          storageType: "indexeddb_blob",
+        }
+      : null;
+  }
+
+  if (!isSafeMobileLocalUri(track?.audioLocalUri)) {
+    return null;
+  }
+
+  const audioSrc = await getPlayableNativeAudioUri(track.audioLocalUri);
+
+  return audioSrc
+    ? {
+        audioSrc,
+        audioBlobId: null,
+        storageType: "native_file",
+      }
+    : null;
+}
+
+export async function getOfflinePlaylistForPlayback(playlistId) {
+  const normalizedPlaylistId = normalizeOfflineId(playlistId);
+
+  if (!normalizedPlaylistId) {
+    return null;
+  }
+
+  const [playlists, tracks] = await Promise.all([
+    getOfflinePlaylists(),
+    getOfflineTracksForPlaylist(normalizedPlaylistId),
+  ]);
+
+  const playlist = playlists.find((entry) => entry.id === normalizedPlaylistId) ?? null;
+
+  if (!playlist) {
+    return null;
+  }
+
+  return {
+    playlist,
+    tracks,
+  };
+}
+
+export async function buildOfflinePlaybackQueue(playlistId) {
+  const offlinePlaylist = await getOfflinePlaylistForPlayback(playlistId);
+
+  if (!offlinePlaylist) {
+    return null;
+  }
+
+  const missingTrackIds = [];
+  const playableTracks = [];
+
+  for (const track of offlinePlaylist.tracks) {
+    const resolvedTrack = shouldUseMobileOfflineSqlite()
+      ? await buildNativeOfflinePlaybackTrack(track)
+      : buildBrowserOfflinePlaybackTrack(track);
+
+    if (!resolvedTrack) {
+      const missingTrackId = normalizeOfflineId(track?.id ?? track?.trackId);
+
+      if (missingTrackId) {
+        missingTrackIds.push(missingTrackId);
+      }
+
+      continue;
+    }
+
+    playableTracks.push(resolvedTrack);
+  }
+
+  return {
+    playlistId: offlinePlaylist.playlist.id,
+    playlistName: offlinePlaylist.playlist.name,
+    totalTracks: offlinePlaylist.tracks.length,
+    tracks: playableTracks,
+    missingTrackIds,
+  };
 }
 
 function countTracksWithLocalUri(tracks, key) {

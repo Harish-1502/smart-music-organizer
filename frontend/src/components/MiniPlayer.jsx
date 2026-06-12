@@ -29,6 +29,7 @@ export default function MiniPlayer() {
   const navigate = useNavigate();
   const {
     currentTrack,
+    artworkUrl: offlineArtworkUrl,
     isPlaying,
     togglePlayPause,
     nextTrack,
@@ -54,10 +55,13 @@ export default function MiniPlayer() {
 
   const currentTrackId = currentTrack?.track_id ?? currentTrack?.id ?? null;
   const artPath =
-    shouldHideDemoArtwork() || !currentTrackId ? "" : getTrackArtPath(currentTrackId);
+    shouldHideDemoArtwork() || !currentTrackId || currentTrack?.offline
+      ? ""
+      : getTrackArtPath(currentTrackId);
   const { blobUrl: artUrl } = useAuthenticatedBlobUrl(artPath, {
     enabled: Boolean(artPath),
   });
+  const resolvedArtUrl = offlineArtworkUrl || artUrl;
 
   if (!currentTrack) {
     return null;
@@ -86,8 +90,8 @@ export default function MiniPlayer() {
           className={`mini-player__art${isPlaying ? " mini-player__art--playing" : ""}`}
           aria-hidden="true"
         >
-          {artUrl ? (
-            <img className="mini-player__art-image" src={artUrl} alt="" />
+          {resolvedArtUrl ? (
+            <img className="mini-player__art-image" src={resolvedArtUrl} alt="" />
           ) : (
             <span className="mini-player__art-fallback">♪</span>
           )}

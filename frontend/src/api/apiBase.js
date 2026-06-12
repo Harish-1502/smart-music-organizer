@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getApiToken, getAuthHeaders } from "./authToken";
+import { getAuthHeaders } from "./authToken";
 
 const DEFAULT_DEV_API_BASE = "http://127.0.0.1:8000";
 export const API_AUTH_REQUIRED_EVENT = "smart-music-organizer:api-auth-required";
@@ -28,11 +28,7 @@ function normalizeApiPath(path) {
 }
 
 api.interceptors.request.use((config) => {
-  const token = getApiToken();
   const authHeaders = getAuthHeaders();
-  const requestUrl = config.baseURL
-    ? `${config.baseURL}${config.url || ""}`
-    : (config.url || "");
 
   // console.log("[auth-debug] axios request url/path", requestUrl);
   // console.log("[auth-debug] axios request has token: yes/no", Boolean(token));
@@ -100,7 +96,6 @@ export async function fetchAuthenticatedBlob(path, options = {}) {
     throw new Error("Missing media path.");
   }
 
-  const token = getApiToken();
   const authHeaders = getAuthHeaders();
   // console.log("[auth-debug] fetch blob url/path", path);
   // console.log("[auth-debug] fetch blob has token: yes/no", Boolean(token));
@@ -115,7 +110,6 @@ export async function fetchAuthenticatedBlob(path, options = {}) {
   });
 
   if (response.status === 401 && typeof window !== "undefined") {
-    console.log("[auth-debug] received 401, clearing token");
     window.dispatchEvent(
       new CustomEvent(API_AUTH_REQUIRED_EVENT, {
         detail: {

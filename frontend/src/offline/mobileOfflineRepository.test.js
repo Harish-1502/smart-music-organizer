@@ -17,6 +17,8 @@ const nativeMediaStorageMocks = {
   deleteAudioFile: vi.fn(),
   deleteArtworkFile: vi.fn(),
   getNativeMediaFileSize: vi.fn(),
+  getPlayableNativeAudioUri: vi.fn(),
+  getPlayableNativeArtworkUri: vi.fn(),
   nativeMediaFileExists: vi.fn(),
 };
 
@@ -70,6 +72,8 @@ describe("mobileOfflineRepository", () => {
     nativeMediaStorageMocks.deleteAudioFile.mockResolvedValue(false);
     nativeMediaStorageMocks.deleteArtworkFile.mockResolvedValue(false);
     nativeMediaStorageMocks.getNativeMediaFileSize.mockResolvedValue(0);
+    nativeMediaStorageMocks.getPlayableNativeAudioUri.mockResolvedValue(null);
+    nativeMediaStorageMocks.getPlayableNativeArtworkUri.mockResolvedValue(null);
     nativeMediaStorageMocks.nativeMediaFileExists.mockResolvedValue(false);
   });
 
@@ -127,12 +131,16 @@ describe("mobileOfflineRepository", () => {
         id: "track-2",
         title: "Two",
         trackOrder: 0,
+        audioBlobId: null,
+        artworkBlobId: null,
         storageType: "indexeddb_blob",
       }),
       expect.objectContaining({
         id: "track-1",
         title: "One",
         trackOrder: 1,
+        audioBlobId: null,
+        artworkBlobId: null,
         storageType: "indexeddb_blob",
       }),
     ]);
@@ -502,6 +510,302 @@ describe("mobileOfflineRepository", () => {
         sizeBytes: 512,
       },
     ]);
+  });
+
+  it("builds an Android offline playback queue with native file URIs and preserves order", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement) => {
+        if (statement.includes("FROM offline_playlists")) {
+          return {
+            values: [
+              {
+                id: "playlist-1",
+                name: "Road Trip",
+                totalTracks: 2,
+              },
+            ],
+          };
+        }
+
+        if (statement.includes("FROM offline_playlist_tracks")) {
+          return {
+            values: [
+              {
+                id: "track-2",
+                title: "Second",
+                artist: "Artist B",
+                album: "Album B",
+                duration: 222,
+                storageType: "native_file",
+                trackOrder: 0,
+                audioLocalUri: "media/audio/track-2.mp3",
+                artworkLocalUri: null,
+              },
+              {
+                id: "track-1",
+                title: "First",
+                artist: "Artist A",
+                album: "Album A",
+                duration: 111,
+                storageType: "native_file",
+                trackOrder: 1,
+                audioLocalUri: "media/audio/track-1.mp3",
+                artworkLocalUri: "media/artwork/track-1.jpg",
+              },
+            ],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+    nativeMediaStorageMocks.getPlayableNativeAudioUri.mockImplementation(async (relativePath) =>
+      `http://localhost/_capacitor_file_/${relativePath}`,
+    );
+    nativeMediaStorageMocks.getPlayableNativeArtworkUri.mockResolvedValue(
+      "http://localhost/_capacitor_file_/media/artwork/track-1.jpg",
+    );
+
+    const { buildOfflinePlaybackQueue } = await loadRepository();
+    const queue = await buildOfflinePlaybackQueue("playlist-1");
+
+    expect(queue).toEqual({
+      playlistId: "playlist-1",
+      playlistName: "Road Trip",
+      totalTracks: 2,
+      missingTrackIds: [],
+      tracks: [
+        {
+          id: "track-2",
+          title: "Second",
+          artist: "Artist B",
+          album: "Album B",
+          duration: 222,
+          offline: true,
+          storageType: "native_file",
+          audioSrc: "http://localhost/_capacitor_file_/media/audio/track-2.mp3",
+          artworkSrc: null,
+          audioBlobId: null,
+          artworkBlobId: null,
+        },
+        {
+          id: "track-1",
+          title: "First",
+          artist: "Artist A",
+          album: "Album A",
+          duration: 111,
+          offline: true,
+          storageType: "native_file",
+          audioSrc: "http://localhost/_capacitor_file_/media/audio/track-1.mp3",
+          artworkSrc: "http://localhost/_capacitor_file_/media/artwork/track-1.jpg",
+          audioBlobId: null,
+          artworkBlobId: null,
+        },
+      ],
+    });
+    expect(queue?.tracks.every((track) => !track.audioSrc?.startsWith("file://"))).toBe(true);
+  });
+
+  it("rebuilds the Android offline playback queue from SQLite/native refs after a module reload", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement) => {
+        if (statement.includes("FROM offline_playlists")) {
+          return {
+            values: [
+              {
+                id: "playlist-1",
+                name: "Recovered Offline Playlist",
+                totalTracks: 1,
+              },
+            ],
+          };
+        }
+
+        if (statement.includes("FROM offline_playlist_tracks")) {
+          return {
+            values: [
+              {
+                id: "track-1",
+                title: "Recovered Track",
+                artist: "Artist A",
+                album: "Album A",
+                duration: 180,
+                storageType: "native_file",
+                trackOrder: 0,
+                audioLocalUri: "media/audio/track-1.mp3",
+                artworkLocalUri: null,
+              },
+            ],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+    nativeMediaStorageMocks.getPlayableNativeAudioUri.mockResolvedValue(
+      "http://localhost/_capacitor_file_/media/audio/track-1.mp3",
+    );
+
+    let repository = await loadRepository();
+    let queue = await repository.buildOfflinePlaybackQueue("playlist-1");
+
+    expect(queue?.tracks).toEqual([
+      expect.objectContaining({
+        id: "track-1",
+        audioSrc: "http://localhost/_capacitor_file_/media/audio/track-1.mp3",
+      }),
+    ]);
+
+    vi.resetModules();
+    repository = await loadRepository();
+    queue = await repository.buildOfflinePlaybackQueue("playlist-1");
+
+    expect(queue).toEqual({
+      playlistId: "playlist-1",
+      playlistName: "Recovered Offline Playlist",
+      totalTracks: 1,
+      missingTrackIds: [],
+      tracks: [
+        {
+          id: "track-1",
+          title: "Recovered Track",
+          artist: "Artist A",
+          album: "Album A",
+          duration: 180,
+          offline: true,
+          storageType: "native_file",
+          audioSrc: "http://localhost/_capacitor_file_/media/audio/track-1.mp3",
+          artworkSrc: null,
+          audioBlobId: null,
+          artworkBlobId: null,
+        },
+      ],
+    });
+  });
+
+  it("skips Android offline tracks with missing native audio files", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement) => {
+        if (statement.includes("FROM offline_playlists")) {
+          return {
+            values: [{ id: "playlist-1", name: "Road Trip", totalTracks: 2 }],
+          };
+        }
+
+        if (statement.includes("FROM offline_playlist_tracks")) {
+          return {
+            values: [
+              {
+                id: "track-1",
+                title: "Playable",
+                audioLocalUri: "media/audio/track-1.mp3",
+              },
+              {
+                id: "track-2",
+                title: "Missing",
+                audioLocalUri: "media/audio/track-2.mp3",
+              },
+            ],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+    nativeMediaStorageMocks.getPlayableNativeAudioUri.mockImplementation(async (relativePath) =>
+      relativePath === "media/audio/track-1.mp3"
+        ? "http://localhost/_capacitor_file_/media/audio/track-1.mp3"
+        : null,
+    );
+
+    const { buildOfflinePlaybackQueue } = await loadRepository();
+    const queue = await buildOfflinePlaybackQueue("playlist-1");
+
+    expect(queue?.tracks).toEqual([
+      expect.objectContaining({
+        id: "track-1",
+        audioSrc: "http://localhost/_capacitor_file_/media/audio/track-1.mp3",
+      }),
+    ]);
+    expect(queue?.missingTrackIds).toEqual(["track-2"]);
+  });
+
+  it("builds a browser offline playback queue without raw PC paths", async () => {
+    offlineStorageMocks.getDownloadedPlaylists.mockResolvedValue([
+      {
+        id: "playlist-1",
+        name: "Browser Playlist",
+      },
+    ]);
+    offlineStorageMocks.getDownloadedPlaylist.mockResolvedValue({
+      id: "playlist-1",
+      trackIds: ["track-2", "track-1"],
+    });
+    offlineStorageMocks.getDownloadedTracks.mockResolvedValue([
+      {
+        id: "track-1",
+        title: "One",
+        artist: "Artist A",
+        album: "Album A",
+        duration: 111,
+        audioBlobId: "track:track-1:audio",
+        artworkBlobId: "track:track-1:artwork",
+        file_path: "S:\\Music\\one.mp3",
+      },
+      {
+        id: "track-2",
+        title: "Two",
+        artist: "Artist B",
+        album: "Album B",
+        duration: 222,
+        audioBlobId: "track:track-2:audio",
+        artworkBlobId: null,
+        folder_path: "S:\\Music",
+      },
+    ]);
+
+    const { buildOfflinePlaybackQueue } = await loadRepository();
+    const queue = await buildOfflinePlaybackQueue("playlist-1");
+
+    expect(queue).toEqual({
+      playlistId: "playlist-1",
+      playlistName: "Browser Playlist",
+      totalTracks: 2,
+      missingTrackIds: [],
+      tracks: [
+        {
+          id: "track-2",
+          title: "Two",
+          artist: "Artist B",
+          album: "Album B",
+          duration: 222,
+          offline: true,
+          storageType: "indexeddb_blob",
+          audioSrc: null,
+          artworkSrc: null,
+          audioBlobId: "track:track-2:audio",
+          artworkBlobId: null,
+        },
+        {
+          id: "track-1",
+          title: "One",
+          artist: "Artist A",
+          album: "Album A",
+          duration: 111,
+          offline: true,
+          storageType: "indexeddb_blob",
+          audioSrc: null,
+          artworkSrc: null,
+          audioBlobId: "track:track-1:audio",
+          artworkBlobId: "track:track-1:artwork",
+        },
+      ],
+    });
+    expect(queue?.tracks[0]).not.toHaveProperty("file_path");
+    expect(queue?.tracks[1]).not.toHaveProperty("folder_path");
   });
 
   it("saves playlist track order to SQLite", async () => {
