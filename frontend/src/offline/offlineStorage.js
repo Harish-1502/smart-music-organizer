@@ -129,6 +129,16 @@ async function createBlobUrlFromStore(storeName, recordId) {
   return URL.createObjectURL(record.blob);
 }
 
+async function getBlobSizeFromStore(storeName, recordId) {
+  const record = await readRecordFromStore(storeName, recordId);
+
+  if (!(record?.blob instanceof Blob)) {
+    return 0;
+  }
+
+  return getByteSize(record.blob.size);
+}
+
 function getTransactionStores(transaction) {
   return {
     playlistStore: transaction.objectStore(OFFLINE_PLAYLISTS_STORE),
@@ -186,6 +196,22 @@ export async function getDownloadedTracks() {
 
 export async function getDownloadedTrack(trackId) {
   return readRecordFromStore(OFFLINE_TRACKS_STORE, trackId);
+}
+
+export async function hasVerifiedDownloadedTrack(trackId) {
+  const track = await getDownloadedTrack(trackId);
+  const audioBlobId = normalizeOfflineId(track?.audioBlobId);
+
+  if (audioBlobId === null) {
+    return false;
+  }
+
+  const audioBlobSize = await getBlobSizeFromStore(
+    OFFLINE_AUDIO_BLOBS_STORE,
+    audioBlobId,
+  );
+
+  return audioBlobSize > 0;
 }
 
 export async function createOfflineAudioBlobUrl(blobId) {

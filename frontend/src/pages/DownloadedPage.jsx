@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  getAppMode,
+  isLanMode,
+  subscribeToAppModeChanges,
+} from "../appMode/appMode";
+import { usePlayer } from "../context/PlayerContext";
+import {
+  downloadFullLibraryForOffline,
+  getFullLibraryDownloadStatus,
+} from "../offline/downloadLibrary";
 import {
   buildOfflinePlaybackQueue,
   clearOfflineData,
@@ -7,7 +17,6 @@ import {
   getOfflinePlaylists,
   getOfflineStorageSummary,
 } from "../offline/mobileOfflineRepository";
-import { usePlayer } from "../context/PlayerContext";
 import "../styles/DownloadedPage.css";
 
 export function formatStorageSize(totalBytes) {
@@ -85,14 +94,76 @@ function sortPlaylistsByDownloadedDate(playlists) {
   });
 }
 
-export default function DownloadedPage() {
+function createEmptyLibraryProgress() {
+  return {
+    totalLibraryTracks: 0,
+    totalMissingTracks: 0,
+    processedMissingTracks: 0,
+    downloadedCount: 0,
+    skippedCount: 0,
+    failedCount: 0,
+    downloadedBytes: 0,
+    currentTrackTitle: "",
+  };
+}
+
+export function sanitizeLibraryProgressTitle(value) {
+  const normalizedValue =
+    typeof value === "string" ? value.trim().replaceAll("\\", "/") : "";
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  if (
+    /^[a-zA-Z]:\//.test(normalizedValue) ||
+    normalizedValue.startsWith("//") ||
+    normalizedValue.startsWith("file://") ||
+    normalizedValue.startsWith("content://") ||
+    normalizedValue.startsWith("http://") ||
+    normalizedValue.startsWith("https://") ||
+    normalizedValue.startsWith("../") ||
+    normalizedValue.includes("/../")
+  ) {
+    return "Current track hidden for privacy.";
+  }
+
+  return normalizedValue;
+}
+
+export default function DownloadedPage({
+  initialAppMode = null,
+  initialSummary = null,
+  initialPlaylists = null,
+  initialLibraryStatus = null,
+  initialLoading = null,
+  initialIsLibraryDownloading = false,
+  initialLibraryProgress = null,
+}) {
   const navigate = useNavigate();
   const { playQueue } = usePlayer();
-  const [summary, setSummary] = useState(null);
-  const [playlists, setPlaylists] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const fullLibraryAbortRef = useRef(null);
+  const [appMode, setAppMode] = useState(() => initialAppMode ?? getAppMode());
+  const lanModeEnabled = isLanMode(appMode);
+  const [summary, setSummary] = useState(() => initialSummary);
+  const [playlists, setPlaylists] = useState(() => initialPlaylists ?? []);
+  const [libraryStatus, setLibraryStatus] = useState(() => initialLibraryStatus);
+  const [loading, setLoading] = useState(() =>
+    initialLoading ?? initialSummary === null,
+  );
+  const [libraryLoading, setLibraryLoading] = useState(() =>
+    initialLoading ?? initialLibraryStatus === null,
+  );
+  const [isLibraryDownloading, setIsLibraryDownloading] = useState(
+    initialIsLibraryDownloading,
+  );
+  const [libraryProgress, setLibraryProgress] = useState(
+    () => initialLibraryProgress ?? createEmptyLibraryProgress(),
+  );
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("success");
+
+  useEffect(() => subscribeToAppModeChanges(setAppMode), []);
 
   useEffect(() => {
     let isMounted = true;
@@ -140,10 +211,70 @@ export default function DownloadedPage() {
     };
   }, []);
 
-  async function reloadOfflineData(nextMessage = "") {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLibraryStatus() {
+      if (!lanModeEnabled) {
+        if (isMounted) {
+          setLibraryStatus({
+            available: false,
+            blockedByMode: true,
+            totalLibraryTracks: 0,
+            alreadyDownloadedCount: 0,
+            missingDownloadCount: 0,
+            estimatedSizeAvailable: false,
+          });
+          setLibraryLoading(false);
+        }
+        return;
+      }
+
+      setLibraryLoading(true);
+
+      try {
+        const nextLibraryStatus = await getFullLibraryDownloadStatus({
+          mode: appMode,
+        });
+
+        if (isMounted) {
+          setLibraryStatus(nextLibraryStatus);
+        }
+      } catch {
+        if (isMounted) {
+          setLibraryStatus({
+            available: false,
+            blockedByMode: false,
+            totalLibraryTracks: 0,
+            alreadyDownloadedCount: 0,
+            missingDownloadCount: 0,
+            estimatedSizeAvailable: false,
+          });
+        }
+      } finally {
+        if (isMounted) {
+          setLibraryLoading(false);
+        }
+      }
+    }
+
+    loadLibraryStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [appMode, lanModeEnabled]);
+
+  useEffect(() => {
+    return () => {
+      fullLibraryAbortRef.current?.abort();
+    };
+  }, []);
+
+  async function reloadOfflineData(nextMessage = "", nextMessageTone = "success") {
     setLoading(true);
     setMessage(nextMessage);
-    setMessageTone("success");
+    setMessageTone(nextMessageTone);
 
     try {
       const [nextSummary, nextPlaylists] = await Promise.all([
@@ -168,6 +299,41 @@ export default function DownloadedPage() {
     }
   }
 
+  async function reloadLibraryStatus() {
+    if (!lanModeEnabled) {
+      setLibraryStatus({
+        available: false,
+        blockedByMode: true,
+        totalLibraryTracks: 0,
+        alreadyDownloadedCount: 0,
+        missingDownloadCount: 0,
+        estimatedSizeAvailable: false,
+      });
+      setLibraryLoading(false);
+      return;
+    }
+
+    setLibraryLoading(true);
+
+    try {
+      const nextLibraryStatus = await getFullLibraryDownloadStatus({
+        mode: appMode,
+      });
+      setLibraryStatus(nextLibraryStatus);
+    } catch {
+      setLibraryStatus({
+        available: false,
+        blockedByMode: false,
+        totalLibraryTracks: 0,
+        alreadyDownloadedCount: 0,
+        missingDownloadCount: 0,
+        estimatedSizeAvailable: false,
+      });
+    } finally {
+      setLibraryLoading(false);
+    }
+  }
+
   async function handleDeletePlaylist(playlistId) {
     const playlist = playlists.find((entry) => entry.id === playlistId);
     const confirmed = window.confirm(
@@ -186,7 +352,8 @@ export default function DownloadedPage() {
       return;
     }
 
-    await reloadOfflineData("Downloaded playlist removed.");
+    await reloadOfflineData("Downloaded playlist removed.", "success");
+    await reloadLibraryStatus();
   }
 
   async function handleClearAll() {
@@ -206,7 +373,8 @@ export default function DownloadedPage() {
       return;
     }
 
-    await reloadOfflineData("Offline downloads cleared.");
+    await reloadOfflineData("Offline downloads cleared.", "success");
+    await reloadLibraryStatus();
   }
 
   const hasPlaylists = playlists.length > 0;
@@ -241,6 +409,68 @@ export default function DownloadedPage() {
 
     setMessage(`Playing ${playbackQueue.playlistName || "downloaded playlist"} offline.`);
     setMessageTone("success");
+  }
+
+  async function handleDownloadFullLibrary() {
+    if (!lanModeEnabled || isLibraryDownloading) {
+      return;
+    }
+
+    const controller = new AbortController();
+    fullLibraryAbortRef.current = controller;
+    setIsLibraryDownloading(true);
+    setLibraryProgress(createEmptyLibraryProgress());
+    setMessage("");
+    setMessageTone("success");
+
+    try {
+      const result = await downloadFullLibraryForOffline({
+        mode: appMode,
+        signal: controller.signal,
+        onProgress: setLibraryProgress,
+      });
+
+      let nextMessage = "";
+      let nextTone = "success";
+
+      if (result.blockedByMode) {
+        nextMessage = "Switch to LAN Mode to download from your PC library.";
+        nextTone = "warning";
+      } else if (result.error === "library_unavailable") {
+        nextMessage = "Could not load your PC library for offline download.";
+        nextTone = "error";
+      } else if (result.cancelled) {
+        nextMessage =
+          `Cancelled - ${result.downloadedCount} downloaded, ${result.skippedCount} skipped, ${result.failedCount} failed.`,
+        nextTone = "warning";
+      } else if (result.totalMissingTracks === 0) {
+        nextMessage = result.totalLibraryTracks === 0
+          ? "No tracks are available in your PC library to download right now."
+          : "All library tracks are already downloaded for offline use.";
+        nextTone = "success";
+      } else if (result.failedCount > 0) {
+        nextMessage =
+          `Downloaded ${result.downloadedCount} tracks, skipped ${result.skippedCount} already downloaded, failed ${result.failedCount}.`,
+        nextTone = "warning";
+      } else {
+        nextMessage =
+          `Downloaded ${result.downloadedCount} tracks, skipped ${result.skippedCount} already downloaded, failed 0.`,
+        nextTone = "success";
+      }
+
+      await reloadOfflineData(nextMessage, nextTone);
+    } catch {
+      setMessage("Could not download the full library for offline use.");
+      setMessageTone("error");
+    } finally {
+      setIsLibraryDownloading(false);
+      fullLibraryAbortRef.current = null;
+      await reloadLibraryStatus();
+    }
+  }
+
+  function handleCancelFullLibraryDownload() {
+    fullLibraryAbortRef.current?.abort();
   }
 
   return (
@@ -304,6 +534,123 @@ export default function DownloadedPage() {
           </div>
         </header>
 
+        <section className="downloaded-page__library-card" aria-labelledby="offline-library-title">
+          <div className="downloaded-page__library-copy">
+            <p className="downloaded-page__section-eyebrow">Offline Library</p>
+            <h2 id="offline-library-title" className="downloaded-page__section-title">
+              Full library download
+            </h2>
+            <p className="downloaded-page__state-text">
+              Download your PC music library for Offline Mode browsing and playback.
+            </p>
+          </div>
+
+          <div className="downloaded-page__summary-grid" aria-label="Offline library download summary">
+            <div className="downloaded-page__summary-card">
+              <span className="downloaded-page__summary-label">PC library tracks</span>
+              <span className="downloaded-page__summary-value">
+                {libraryLoading
+                  ? "..."
+                  : libraryStatus?.available
+                    ? libraryStatus.totalLibraryTracks
+                    : 0}
+              </span>
+            </div>
+            <div className="downloaded-page__summary-card">
+              <span className="downloaded-page__summary-label">Already downloaded</span>
+              <span className="downloaded-page__summary-value">
+                {libraryLoading
+                  ? "..."
+                  : libraryStatus?.available
+                    ? libraryStatus.alreadyDownloadedCount
+                    : 0}
+              </span>
+            </div>
+            <div className="downloaded-page__summary-card">
+              <span className="downloaded-page__summary-label">New downloads</span>
+              <span className="downloaded-page__summary-value">
+                {libraryLoading
+                  ? "..."
+                  : libraryStatus?.available
+                    ? libraryStatus.missingDownloadCount
+                    : 0}
+              </span>
+            </div>
+            <div className="downloaded-page__summary-card">
+              <span className="downloaded-page__summary-label">Estimated size</span>
+              <span className="downloaded-page__summary-value downloaded-page__summary-value--compact">
+                Estimated size unavailable
+              </span>
+            </div>
+          </div>
+
+          {!lanModeEnabled ? (
+            <p className="downloaded-page__library-note">
+              Switch to LAN Mode to download from your PC library.
+            </p>
+          ) : null}
+
+          {lanModeEnabled && !libraryLoading && !libraryStatus?.available ? (
+            <p className="downloaded-page__library-note">
+              Connect to your PC backend in LAN Mode to inspect the full library.
+            </p>
+          ) : null}
+
+          {lanModeEnabled &&
+          !libraryLoading &&
+          libraryStatus?.available &&
+          libraryStatus.totalLibraryTracks === 0 ? (
+            <p className="downloaded-page__library-note">
+              No tracks are available in your PC library to download right now.
+            </p>
+          ) : null}
+
+          {isLibraryDownloading ? (
+            <div className="downloaded-page__download-card" aria-live="polite">
+              <p className="downloaded-page__warning-title">
+                Downloading full library
+              </p>
+              <p className="downloaded-page__warning-text">
+                {libraryProgress.processedMissingTracks} / {libraryProgress.totalMissingTracks} missing tracks processed.
+                {" "}Downloaded {libraryProgress.downloadedCount}, skipped {libraryProgress.skippedCount}, failed {libraryProgress.failedCount}.
+                {" "}Fetched {formatStorageSize(libraryProgress.downloadedBytes)} so far.
+              </p>
+              {libraryProgress.currentTrackTitle ? (
+                <p className="downloaded-page__warning-text">
+                  Current track: {sanitizeLibraryProgressTitle(
+                    libraryProgress.currentTrackTitle,
+                  )}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="downloaded-page__library-actions">
+            <button
+              type="button"
+              className="downloaded-page__button"
+              onClick={handleDownloadFullLibrary}
+              disabled={
+                !lanModeEnabled ||
+                isLibraryDownloading ||
+                libraryLoading ||
+                !libraryStatus?.available
+              }
+            >
+              {isLibraryDownloading ? "Downloading library..." : "Download Full Library"}
+            </button>
+            {isLibraryDownloading ? (
+              <button
+                type="button"
+                className="downloaded-page__button downloaded-page__button--secondary"
+                onClick={handleCancelFullLibraryDownload}
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        </section>
+
         {message ? (
           <p
             className={`downloaded-page__message downloaded-page__message--${messageTone}`}
@@ -348,8 +695,7 @@ export default function DownloadedPage() {
               No downloaded playlists yet.
             </p>
             <p className="downloaded-page__state-text">
-              In the next step, you&apos;ll be able to download playlists from
-              the playlist page for offline playback.
+              Download a playlist from the playlist page or use Download Full Library in LAN Mode.
             </p>
           </section>
         ) : null}

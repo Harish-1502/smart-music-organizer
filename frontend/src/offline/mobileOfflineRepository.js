@@ -6,6 +6,7 @@ import {
   getDownloadedTrack,
   getDownloadedTracks,
   getOfflineStorageSummary as getIndexedDbOfflineStorageSummary,
+  hasVerifiedDownloadedTrack,
   hasDownloadedPlaylist as hasIndexedDbDownloadedPlaylist,
 } from "./offlineStorage";
 import {
@@ -415,6 +416,27 @@ export async function getOfflineTrack(trackId) {
   );
 
   return sanitizeOfflineTrackRow(rows?.[0] ?? null);
+}
+
+export async function hasVerifiedOfflineTrack(trackId) {
+  const normalizedTrackId = normalizeOfflineId(trackId);
+
+  if (!normalizedTrackId) {
+    return false;
+  }
+
+  if (!shouldUseMobileOfflineSqlite()) {
+    return hasVerifiedDownloadedTrack(normalizedTrackId);
+  }
+
+  const track = await getOfflineTrack(normalizedTrackId);
+
+  if (!isSafeMobileLocalUri(track?.audioLocalUri)) {
+    return false;
+  }
+
+  const sizeBytes = await getNativeMediaFileSize(track.audioLocalUri);
+  return Number.isFinite(Number(sizeBytes)) && Number(sizeBytes) > 0;
 }
 
 export async function saveOfflineTrackMetadata(track) {
@@ -951,6 +973,87 @@ export async function getOfflineTracksForPlaylist(playlistId) {
   );
 
   return rows.map(sanitizeOfflineTrackRow).filter(Boolean);
+}
+
+function buildSafeOfflineLibraryTrack(track) {
+  const trackId = normalizeOfflineId(track?.id ?? track?.trackId);
+
+  if (!trackId) {
+    return null;
+  }
+
+  const audioLocalUri = isSafeMobileLocalUri(track?.audioLocalUri)
+    ? normalizeNullableText(track.audioLocalUri)
+    : null;
+  const artworkLocalUri = isSafeMobileLocalUri(track?.artworkLocalUri)
+    ? normalizeNullableText(track.artworkLocalUri)
+    : null;
+  const fileNameSource = audioLocalUri ?? artworkLocalUri ?? "";
+  const safeFileName = fileNameSource
+    ? fileNameSource.split("/").pop() || fileNameSource
+    : `offline-${trackId}`;
+
+  return {
+    id: trackId,
+    track_id: trackId,
+    title: normalizeText(track?.title, "Unknown Title"),
+    artist: normalizeText(track?.artist),
+    album: normalizeText(track?.album),
+    duration: Number.isFinite(Number(track?.duration))
+      ? Math.trunc(Number(track.duration))
+      : null,
+    downloadStatus: normalizeDownloadStatus(track?.downloadStatus, "downloaded"),
+    storageType: normalizeStorageType(
+      track?.storageType,
+      shouldUseMobileOfflineSqlite() ? "native_file" : "indexeddb_blob",
+    ),
+    downloadedAt: track?.downloadedAt ?? null,
+    offline: true,
+    file_name: safeFileName,
+    audioSrc: null,
+    artworkSrc: null,
+    audioLocalUri,
+    artworkLocalUri,
+    audioBlobId: normalizeOfflineId(track?.audioBlobId),
+    artworkBlobId: normalizeOfflineId(track?.artworkBlobId),
+  };
+}
+
+export async function getOfflineLibraryTracks() {
+  if (!shouldUseMobileOfflineSqlite()) {
+    const tracks = await getDownloadedTracks();
+
+    return tracks
+      .map((track) =>
+        buildSafeOfflineLibraryTrack({
+          ...track,
+          storageType: "indexeddb_blob",
+          downloadStatus: "downloaded",
+        }),
+      )
+      .filter(Boolean);
+  }
+
+  const rows = await queryRows(
+    `SELECT
+        t.id,
+        t.title,
+        t.artist,
+        t.album,
+        t.duration,
+        t.download_status AS downloadStatus,
+        t.storage_type AS storageType,
+        t.downloaded_at AS downloadedAt,
+        audio.local_uri AS audioLocalUri,
+        artwork.local_uri AS artworkLocalUri
+      FROM offline_tracks t
+      LEFT JOIN offline_media_files audio
+        ON audio.track_id = t.id AND audio.media_type = 'audio'
+      LEFT JOIN offline_media_files artwork
+        ON artwork.track_id = t.id AND artwork.media_type = 'artwork'`,
+  );
+
+  return rows.map(buildSafeOfflineLibraryTrack).filter(Boolean);
 }
 
 function buildSafePlaybackTrack(track, sourceFields = {}) {
