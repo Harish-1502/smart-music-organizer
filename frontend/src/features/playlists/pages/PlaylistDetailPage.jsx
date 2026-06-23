@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  getPlaylistDetail,
-  removeTrackFromPlaylist,
-} from "../../../api/playlistApi";
+  getAppMode,
+  isOfflineMode,
+  subscribeToAppModeChanges,
+} from "../../../appMode/appMode";
 import PlaylistTrackRow from "../components/PlaylistTrackRow";
 import AddTracksModal from "../components/AddTracksModal";
 import ReorderTracksModal from "../components/ReorderTracksModal";
 import { usePlayer } from "../../../context/PlayerContext";
 import { downloadPlaylistForOffline } from "../../../offline/downloadPlaylist";
 import { hasOfflinePlaylist } from "../../../offline/mobileOfflineRepository";
+import { getPlaylistSourceForMode } from "../../../playlists/playlistSource";
 import "../../../styles/PlaylistDetailPage.css";
 
 function formatDownloadBytes(totalBytes) {
@@ -29,19 +31,37 @@ function formatDownloadBytes(totalBytes) {
   return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-export default function PlaylistDetailPage() {
+export default function PlaylistDetailPage({
+  initialAppMode = null,
+  initialPlaylist = null,
+  initialLoading = null,
+  initialMessage = "",
+  initialDownloaded = false,
+  initialCheckingDownloadStatus = null,
+  sourceOverride = null,
+}) {
   const { playlistId } = useParams();
   const navigate = useNavigate();
   const { playQueue } = usePlayer();
   const downloadAbortRef = useRef(null);
+  const [appMode, setAppMode] = useState(() => initialAppMode ?? getAppMode());
+  const offlineModeEnabled = isOfflineMode(appMode);
+  const playlistSource =
+    sourceOverride ?? getPlaylistSourceForMode(initialAppMode ?? appMode);
 
-  const [playlist, setPlaylist] = useState(null);
+  const [playlist, setPlaylist] = useState(() => initialPlaylist);
   const [showAddTracksModal, setShowAddTracksModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(() =>
+    initialLoading ?? initialPlaylist === null,
+  );
+  const [message, setMessage] = useState(() => initialMessage);
   const [showReorderModal, setShowReorderModal] = useState(false);
-  const [isDownloaded, setIsDownloaded] = useState(false);
-  const [checkingDownloadStatus, setCheckingDownloadStatus] = useState(true);
+  const [isDownloaded, setIsDownloaded] = useState(() =>
+    offlineModeEnabled ? true : initialDownloaded,
+  );
+  const [checkingDownloadStatus, setCheckingDownloadStatus] = useState(() =>
+    initialCheckingDownloadStatus ?? !offlineModeEnabled,
+  );
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState("");
   const [downloadMessageTone, setDownloadMessageTone] = useState("success");
@@ -54,14 +74,24 @@ export default function PlaylistDetailPage() {
     currentTrackTitle: "",
   });
 
+  useEffect(() => subscribeToAppModeChanges(setAppMode), []);
+
   useEffect(() => {
     loadPlaylist();
-  }, [playlistId]);
+  }, [playlistId, playlistSource]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadDownloadStatus() {
+      if (offlineModeEnabled) {
+        if (isMounted) {
+          setIsDownloaded(true);
+          setCheckingDownloadStatus(false);
+        }
+        return;
+      }
+
       setCheckingDownloadStatus(true);
 
       try {
@@ -82,7 +112,7 @@ export default function PlaylistDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [playlistId]);
+  }, [offlineModeEnabled, playlistId]);
 
   useEffect(() => {
     return () => {
@@ -95,9 +125,16 @@ export default function PlaylistDetailPage() {
     setMessage("");
 
     try {
-      const data = await getPlaylistDetail(playlistId);
+      const data = await playlistSource.getPlaylistDetail(playlistId);
+
+      if (!data) {
+        setPlaylist(null);
+        setMessage("Playlist not found.");
+        return;
+      }
+
       setPlaylist(data);
-    } catch (error) {
+    } catch {
       setMessage("Failed to load playlist.");
     } finally {
       setLoading(false);
@@ -105,29 +142,68 @@ export default function PlaylistDetailPage() {
   }
 
   async function handleRemoveTrack(playlistTrackId) {
+    if (!playlistSource.supportsTrackRemoval) {
+      return;
+    }
+
     try {
-      await removeTrackFromPlaylist(playlistId, playlistTrackId);
+      await playlistSource.removeTrackFromPlaylist(playlistId, playlistTrackId);
 
       setPlaylist((prev) => ({
         ...prev,
         tracks: prev.tracks.filter(
-          (track) => track.playlist_track_id !== playlistTrackId
+          (track) => track.playlist_track_id !== playlistTrackId,
         ),
       }));
-    } catch (error) {
+    } catch {
       setMessage("Failed to remove track.");
     }
   }
 
-  function handleTrackPlay(startIndex) {
+  async function handleTrackPlay(startIndex) {
     if (!playlist?.tracks?.length) return;
+
+    if (offlineModeEnabled) {
+      const playbackQueue = await playlistSource.buildPlaybackQueue(playlistId);
+
+      if (!playbackQueue?.tracks?.length) {
+        setMessage("No playable offline audio files were found for this playlist.");
+        return;
+      }
+
+      const selectedTrack = playlist.tracks[startIndex];
+      const selectedTrackId = selectedTrack?.track_id ?? selectedTrack?.id ?? null;
+      const queueStartIndex = playbackQueue.tracks.findIndex(
+        (track) => (track.track_id ?? track.id) === selectedTrackId,
+      );
+
+      if (queueStartIndex < 0) {
+        setMessage(
+          "This downloaded track is missing local audio and cannot be played offline.",
+        );
+        return;
+      }
+
+      playQueue(playbackQueue.tracks, queueStartIndex);
+
+      if (playbackQueue.missingTrackIds.length > 0) {
+        setMessage(
+          `Playing offline with ${playbackQueue.tracks.length} tracks. ${playbackQueue.missingTrackIds.length} missing files were skipped.`,
+        );
+      } else {
+        setMessage("");
+      }
+
+      navigate("/player");
+      return;
+    }
 
     playQueue(playlist.tracks, startIndex);
     navigate("/player");
   }
 
   async function handleDownloadForOffline() {
-    if (!playlist || !playlist.tracks?.length || isDownloading) {
+    if (!playlist || !playlist.tracks?.length || isDownloading || offlineModeEnabled) {
       return;
     }
 
@@ -241,6 +317,9 @@ export default function PlaylistDetailPage() {
                   >
                     {playlist.name}
                   </h1>
+                  {offlineModeEnabled ? (
+                    <p className="playlist-detail-page__offline-badge">Offline Mode</p>
+                  ) : null}
                 </div>
 
                 <div
@@ -248,40 +327,51 @@ export default function PlaylistDetailPage() {
                   role="group"
                   aria-label={`Actions for ${playlist.name}`}
                 >
-                  <button
-                    type="button"
-                    className="playlist-detail-page__button playlist-detail-page__button--offline"
-                    onClick={handleDownloadForOffline}
-                    disabled={
-                      checkingDownloadStatus ||
-                      isDownloading ||
-                      isDownloaded ||
-                      playlist.tracks.length === 0
-                    }
-                  >
-                    {checkingDownloadStatus
-                      ? "Checking offline status..."
-                      : isDownloaded
-                        ? "Downloaded"
-                        : isDownloading
-                          ? `Downloading ${downloadProgress.processedTracks}/${downloadProgress.totalTracks || playlist.tracks.length}`
-                          : "Download for offline"}
-                  </button>
-                  <button
-                    type="button"
-                    className="playlist-detail-page__button playlist-detail-page__button--primary"
-                    onClick={() => setShowAddTracksModal(true)}
-                  >
-                    Add Tracks
-                  </button>
-                  <button
-                    type="button"
-                    className="playlist-detail-page__button playlist-detail-page__button--secondary"
-                    onClick={() => setShowReorderModal(true)}
-                  >
-                    Reorder Tracks
-                  </button>
-                  {isDownloading ? (
+                  {!offlineModeEnabled ? (
+                    <>
+                      <button
+                        type="button"
+                        className="playlist-detail-page__button playlist-detail-page__button--offline"
+                        onClick={handleDownloadForOffline}
+                        disabled={
+                          checkingDownloadStatus ||
+                          isDownloading ||
+                          isDownloaded ||
+                          playlist.tracks.length === 0
+                        }
+                      >
+                        {checkingDownloadStatus
+                          ? "Checking offline status..."
+                          : isDownloaded
+                            ? "Downloaded"
+                            : isDownloading
+                              ? `Downloading ${downloadProgress.processedTracks}/${downloadProgress.totalTracks || playlist.tracks.length}`
+                              : "Download for offline"}
+                      </button>
+                      <button
+                        type="button"
+                        className="playlist-detail-page__button playlist-detail-page__button--primary"
+                        onClick={() => setShowAddTracksModal(true)}
+                      >
+                        Add Tracks
+                      </button>
+                      <button
+                        type="button"
+                        className="playlist-detail-page__button playlist-detail-page__button--secondary"
+                        onClick={() => setShowReorderModal(true)}
+                      >
+                        Reorder Tracks
+                      </button>
+                    </>
+                  ) : (
+                    <Link
+                      to="/downloaded"
+                      className="playlist-detail-page__button playlist-detail-page__button--secondary playlist-detail-page__button-link"
+                    >
+                      Manage Downloads
+                    </Link>
+                  )}
+                  {!offlineModeEnabled && isDownloading ? (
                     <button
                       type="button"
                       className="playlist-detail-page__button playlist-detail-page__button--danger"
@@ -302,7 +392,7 @@ export default function PlaylistDetailPage() {
                     {playlist.tracks.length}
                   </span>
                   <span className="playlist-detail-page__hero-stat-label">
-                    Tracks in playlist
+                    {offlineModeEnabled ? "Offline tracks" : "Tracks in playlist"}
                   </span>
                 </div>
               </div>
@@ -351,7 +441,6 @@ export default function PlaylistDetailPage() {
             aria-labelledby="playlist-tracks-title"
           >
             <div className="playlist-detail-page__section-header">
-
               <span
                 className="playlist-detail-page__section-count"
                 aria-label={`${playlist.tracks.length} tracks`}
@@ -366,7 +455,9 @@ export default function PlaylistDetailPage() {
                   This playlist is empty
                 </p>
                 <p className="playlist-detail-page__empty-text">
-                  Add tracks to start building your next listening run.
+                  {offlineModeEnabled
+                    ? "No downloaded tracks are available in this offline playlist yet."
+                    : "Add tracks to start building your next listening run."}
                 </p>
               </div>
             ) : (
@@ -376,6 +467,7 @@ export default function PlaylistDetailPage() {
                     key={track.playlist_track_id}
                     track={track}
                     onRemove={handleRemoveTrack}
+                    canRemove={!offlineModeEnabled}
                     onPlay={() => handleTrackPlay(index)}
                   />
                 ))}
@@ -385,7 +477,7 @@ export default function PlaylistDetailPage() {
         </div>
       </main>
 
-      {showAddTracksModal && (
+      {!offlineModeEnabled && showAddTracksModal && (
         <AddTracksModal
           playlistId={playlistId}
           onClose={() => setShowAddTracksModal(false)}
@@ -393,7 +485,7 @@ export default function PlaylistDetailPage() {
         />
       )}
 
-      {showReorderModal && (
+      {!offlineModeEnabled && showReorderModal && (
         <ReorderTracksModal
           playlistId={playlistId}
           tracks={playlist.tracks}

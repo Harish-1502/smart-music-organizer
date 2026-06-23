@@ -121,6 +121,10 @@
   outline-offset: 2px;
 }
 
+.playlist-detail-page__button-link {
+  text-decoration: none;
+}
+
 .playlist-detail-page__hero-header {
   display: grid;
   gap: 12px;
@@ -148,6 +152,23 @@
   line-height: 1.02;
   letter-spacing: -0.04em;
   color: var(--text-strong);
+}
+
+.playlist-detail-page__offline-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 32px;
+  margin: 6px 0 0;
+  padding: 0 12px;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.12);
+  color: #d1fae5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .playlist-detail-page__state-title {
