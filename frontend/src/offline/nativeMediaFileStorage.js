@@ -5,6 +5,7 @@ export const NATIVE_MEDIA_STORAGE_DIRECTORY = Directory.Data;
 export const NATIVE_MEDIA_ROOT_DIR = "media";
 export const NATIVE_MEDIA_AUDIO_DIR = `${NATIVE_MEDIA_ROOT_DIR}/audio`;
 export const NATIVE_MEDIA_ARTWORK_DIR = `${NATIVE_MEDIA_ROOT_DIR}/artwork`;
+export const NATIVE_MEDIA_WRITE_CHUNK_BYTES = 384 * 1024;
 
 const AUDIO_EXTENSION_BY_MIME = {
   "audio/aac": "aac",
@@ -104,7 +105,41 @@ function getKindPrefix(kind) {
   return kind === "audio" ? "audio" : "artwork";
 }
 
+function yieldForChunkedNativeWrite() {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+async function blobToBase64WithFileReader(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Blob base64 conversion failed."));
+    };
+
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const commaIndex = result.indexOf(",");
+
+      if (commaIndex < 0) {
+        reject(new Error("Blob base64 conversion returned an invalid data URL."));
+        return;
+      }
+
+      resolve(result.slice(commaIndex + 1));
+    };
+
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function blobToBase64(blob) {
+  if (typeof FileReader === "function") {
+    return blobToBase64WithFileReader(blob);
+  }
+
   const bytes = new Uint8Array(await blob.arrayBuffer());
 
   if (typeof Buffer !== "undefined") {
@@ -119,6 +154,60 @@ async function blobToBase64(blob) {
   }
 
   return btoa(binary);
+}
+
+async function writeBlobToRelativePath(relativePath, blob) {
+  const safeRelativePath = ensureSafeRelativePath(relativePath);
+  let wroteAnyData = false;
+
+  try {
+    for (
+      let offset = 0;
+      offset < blob.size || (blob.size === 0 && offset === 0);
+      offset += NATIVE_MEDIA_WRITE_CHUNK_BYTES
+    ) {
+      const chunk =
+        blob.size === 0
+          ? blob
+          : blob.slice(offset, Math.min(offset + NATIVE_MEDIA_WRITE_CHUNK_BYTES, blob.size));
+      const base64Data = await blobToBase64(chunk);
+
+      if (!wroteAnyData) {
+        await Filesystem.writeFile({
+          path: safeRelativePath,
+          data: base64Data,
+          directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
+          recursive: true,
+        });
+        wroteAnyData = true;
+      } else {
+        await Filesystem.appendFile({
+          path: safeRelativePath,
+          data: base64Data,
+          directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
+        });
+      }
+
+      if (blob.size > NATIVE_MEDIA_WRITE_CHUNK_BYTES) {
+        await yieldForChunkedNativeWrite();
+      }
+
+      if (blob.size === 0) {
+        break;
+      }
+    }
+  } catch (error) {
+    if (wroteAnyData) {
+      try {
+        await Filesystem.deleteFile({
+          path: safeRelativePath,
+          directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
+        });
+      } catch {}
+    }
+
+    throw error;
+  }
 }
 
 function ensureNativeSupport() {
@@ -258,12 +347,10 @@ async function saveMediaFile(kind, trackId, blob, mimeType) {
   await initializeNativeMediaStorage();
   await deleteMatchingMediaFiles(kind, safeTrackId, relativePath);
 
-  const base64Data = await blobToBase64(blob);
-  const result = await Filesystem.writeFile({
+  await writeBlobToRelativePath(relativePath, blob);
+  const result = await Filesystem.getUri({
     path: relativePath,
-    data: base64Data,
     directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
-    recursive: true,
   });
 
   return {

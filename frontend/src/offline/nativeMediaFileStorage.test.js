@@ -6,6 +6,7 @@ let currentPlatform = "web";
 const filesystemMocks = {
   mkdir: vi.fn(),
   writeFile: vi.fn(),
+  appendFile: vi.fn(),
   readdir: vi.fn(),
   getUri: vi.fn(),
   stat: vi.fn(),
@@ -46,6 +47,7 @@ describe("nativeMediaFileStorage", () => {
 
     filesystemMocks.mkdir.mockResolvedValue(undefined);
     filesystemMocks.writeFile.mockResolvedValue({ uri: "file:///app/media/audio/track-1.mp3" });
+    filesystemMocks.appendFile.mockResolvedValue(undefined);
     filesystemMocks.readdir.mockResolvedValue({ files: [] });
     filesystemMocks.getUri.mockResolvedValue({ uri: "file:///app/media/audio/track-1.mp3" });
     filesystemMocks.stat.mockResolvedValue({
@@ -153,6 +155,7 @@ describe("nativeMediaFileStorage", () => {
       directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
       recursive: true,
     });
+    expect(filesystemMocks.appendFile).not.toHaveBeenCalled();
     expect(result).toEqual(
       expect.objectContaining({
         relativePath: "media/audio/track_123.mp3",
@@ -225,6 +228,64 @@ describe("nativeMediaFileStorage", () => {
       data: expect.any(String),
       directory: "DATA",
       recursive: true,
+    });
+  });
+
+  it("writes large audio files in smaller chunks to avoid giant bridge payloads", async () => {
+    isNativePlatform = true;
+    currentPlatform = "android";
+
+    const {
+      saveAudioFile,
+      NATIVE_MEDIA_STORAGE_DIRECTORY,
+      NATIVE_MEDIA_WRITE_CHUNK_BYTES,
+    } = await loadModule();
+
+    const largeBlob = new Blob(
+      [new Uint8Array(NATIVE_MEDIA_WRITE_CHUNK_BYTES + 32)],
+      { type: "audio/mpeg" },
+    );
+
+    await saveAudioFile("track-large", largeBlob, "audio/mpeg");
+
+    expect(filesystemMocks.writeFile).toHaveBeenCalledTimes(1);
+    expect(filesystemMocks.writeFile).toHaveBeenCalledWith({
+      path: "media/audio/track-large.mp3",
+      data: expect.any(String),
+      directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
+      recursive: true,
+    });
+    expect(filesystemMocks.appendFile).toHaveBeenCalledTimes(1);
+    expect(filesystemMocks.appendFile).toHaveBeenCalledWith({
+      path: "media/audio/track-large.mp3",
+      data: expect.any(String),
+      directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
+    });
+  });
+
+  it("cleans up partial native files when a later chunk append fails", async () => {
+    isNativePlatform = true;
+    currentPlatform = "android";
+    filesystemMocks.appendFile.mockRejectedValueOnce(new Error("append failed"));
+
+    const {
+      saveAudioFile,
+      NATIVE_MEDIA_STORAGE_DIRECTORY,
+      NATIVE_MEDIA_WRITE_CHUNK_BYTES,
+    } = await loadModule();
+
+    const largeBlob = new Blob(
+      [new Uint8Array(NATIVE_MEDIA_WRITE_CHUNK_BYTES + 32)],
+      { type: "audio/mpeg" },
+    );
+
+    await expect(saveAudioFile("track-cleanup", largeBlob, "audio/mpeg")).rejects.toThrow(
+      "append failed",
+    );
+
+    expect(filesystemMocks.deleteFile).toHaveBeenCalledWith({
+      path: "media/audio/track-cleanup.mp3",
+      directory: NATIVE_MEDIA_STORAGE_DIRECTORY,
     });
   });
 

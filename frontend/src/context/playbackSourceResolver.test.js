@@ -9,8 +9,14 @@ const offlineStorageMocks = {
   createOfflineArtworkBlobUrl: vi.fn(),
 };
 
+const nativeMediaStorageMocks = {
+  getPlayableNativeAudioUri: vi.fn(),
+  getPlayableNativeArtworkUri: vi.fn(),
+};
+
 vi.mock("../api/apiBase", () => apiBaseMocks);
 vi.mock("../offline/offlineStorage", () => offlineStorageMocks);
+vi.mock("../offline/nativeMediaFileStorage", () => nativeMediaStorageMocks);
 
 async function loadModule() {
   return import("./playbackSourceResolver.js");
@@ -24,6 +30,12 @@ describe("playbackSourceResolver", () => {
     apiBaseMocks.getTrackStreamBlobUrl.mockResolvedValue("blob:online-stream");
     offlineStorageMocks.createOfflineAudioBlobUrl.mockResolvedValue("blob:offline-audio");
     offlineStorageMocks.createOfflineArtworkBlobUrl.mockResolvedValue("blob:offline-art");
+    nativeMediaStorageMocks.getPlayableNativeAudioUri.mockResolvedValue(
+      "http://localhost/_capacitor_file_/media/audio/track-1.mp3",
+    );
+    nativeMediaStorageMocks.getPlayableNativeArtworkUri.mockResolvedValue(
+      "http://localhost/_capacitor_file_/media/artwork/track-1.jpg",
+    );
   });
 
   it("uses WebView-playable native offline sources without calling backend stream helpers", async () => {
@@ -68,6 +80,30 @@ describe("playbackSourceResolver", () => {
     expect(offlineStorageMocks.createOfflineArtworkBlobUrl).toHaveBeenCalledWith(
       "track:track-1:artwork",
     );
+    expect(apiBaseMocks.getTrackStreamBlobUrl).not.toHaveBeenCalled();
+  });
+
+  it("resolves native offline local URIs without calling backend stream helpers", async () => {
+    const { resolveTrackPlaybackSource, resolveTrackArtworkSource } = await loadModule();
+    const playback = await resolveTrackPlaybackSource({
+      id: "track-1",
+      offline: true,
+      audioLocalUri: "media/audio/track-1.mp3",
+    });
+    const artwork = await resolveTrackArtworkSource({
+      id: "track-1",
+      offline: true,
+      artworkLocalUri: "media/artwork/track-1.jpg",
+    });
+
+    expect(nativeMediaStorageMocks.getPlayableNativeAudioUri).toHaveBeenCalledWith(
+      "media/audio/track-1.mp3",
+    );
+    expect(nativeMediaStorageMocks.getPlayableNativeArtworkUri).toHaveBeenCalledWith(
+      "media/artwork/track-1.jpg",
+    );
+    expect(playback.url).toBe("http://localhost/_capacitor_file_/media/audio/track-1.mp3");
+    expect(artwork.url).toBe("http://localhost/_capacitor_file_/media/artwork/track-1.jpg");
     expect(apiBaseMocks.getTrackStreamBlobUrl).not.toHaveBeenCalled();
   });
 

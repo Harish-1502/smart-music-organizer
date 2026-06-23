@@ -54,6 +54,12 @@ export function normalizeTrackForOffline(track) {
   };
 }
 
+function yieldForNativeMemoryRelief() {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 async function hasVerifiedNativeAudio(trackId) {
   const track = await getOfflineTrack(trackId);
 
@@ -117,6 +123,7 @@ export async function downloadTrackForOffline(
     downloadedAt = new Date().toISOString(),
     signal,
     abortDuringTrack = true,
+    existingTrackState = null,
   } = {},
 ) {
   if (signal?.aborted) {
@@ -135,8 +142,11 @@ export async function downloadTrackForOffline(
     };
   }
 
-  const { verified, existingTrack, sizeBytes: existingSizeBytes } =
-    await getExistingOfflineTrackState(normalizedTrack.id);
+  const {
+    verified,
+    existingTrack,
+    sizeBytes: existingSizeBytes,
+  } = existingTrackState ?? (await getExistingOfflineTrackState(normalizedTrack.id));
   const hasExistingArtwork = shouldUseMobileOfflineSqlite()
     ? Boolean(existingTrack?.artworkLocalUri)
     : Boolean(existingTrack?.artworkBlobId);
@@ -210,6 +220,7 @@ export async function downloadTrackForOffline(
 
       createdNativeAudio = true;
       audioBlob = null;
+      await yieldForNativeMemoryRelief();
     }
   } catch (error) {
     if (isAbortError(error)) {
@@ -246,6 +257,7 @@ export async function downloadTrackForOffline(
         }
 
         artworkBlob = null;
+        await yieldForNativeMemoryRelief();
       }
     } catch (error) {
       if (isAbortError(error)) {

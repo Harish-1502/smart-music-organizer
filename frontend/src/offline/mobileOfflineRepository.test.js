@@ -6,6 +6,7 @@ let mobileDatabase = null;
 const offlineStorageMocks = {
   clearOfflineDownloads: vi.fn(),
   deleteDownloadedPlaylist: vi.fn(),
+  getBulkDownloadedTrackVerification: vi.fn(),
   getDownloadedPlaylist: vi.fn(),
   getDownloadedPlaylists: vi.fn(),
   getDownloadedTrack: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("./mobileSqliteDb", () => ({
   getMobileOfflineDb: vi.fn(async () => mobileDatabase),
   initializeMobileOfflineDb: vi.fn(async () => Boolean(mobileDatabase)),
   isNativeAndroidMobileOfflineSupported: vi.fn(() => nativeAndroidSupported),
+  ensureMobileOfflineDbReady: vi.fn(async () => mobileDatabase),
 }));
 
 async function loadRepository() {
@@ -63,6 +65,9 @@ describe("mobileOfflineRepository", () => {
 
     offlineStorageMocks.clearOfflineDownloads.mockResolvedValue(true);
     offlineStorageMocks.deleteDownloadedPlaylist.mockResolvedValue(true);
+    offlineStorageMocks.getBulkDownloadedTrackVerification.mockResolvedValue(
+      new Map(),
+    );
     offlineStorageMocks.getDownloadedPlaylist.mockResolvedValue(null);
     offlineStorageMocks.getDownloadedPlaylists.mockResolvedValue([]);
     offlineStorageMocks.getDownloadedTrack.mockResolvedValue(null);
@@ -290,6 +295,86 @@ describe("mobileOfflineRepository", () => {
     );
   });
 
+  it("verifies large Android track sets in chunked bulk SQLite queries instead of one query per track", async () => {
+    nativeAndroidSupported = true;
+    const queriedChunks = [];
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement, values) => {
+        if (statement.includes("WHERE t.id IN")) {
+          queriedChunks.push(values);
+          return {
+            values: values
+              .filter((trackId) => Number(String(trackId).replace("track-", "")) % 2 === 0)
+              .map((trackId) => ({
+                id: trackId,
+                audioLocalUri: `media/audio/${trackId}.mp3`,
+                artworkLocalUri: null,
+              })),
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+    nativeMediaStorageMocks.getNativeMediaFileSize.mockResolvedValue(1024);
+    const trackIds = Array.from({ length: 500 }, (_, index) => `track-${index + 1}`);
+
+    const { getBulkOfflineTrackVerification } = await loadRepository();
+    const verificationMap = await getBulkOfflineTrackVerification(trackIds, {
+      chunkSize: 200,
+    });
+
+    expect(queriedChunks).toHaveLength(3);
+    expect(queriedChunks[0]).toHaveLength(200);
+    expect(queriedChunks[1]).toHaveLength(200);
+    expect(queriedChunks[2]).toHaveLength(100);
+    expect(verificationMap.get("track-2")).toEqual(
+      expect.objectContaining({
+        verified: true,
+        hasTrackRow: true,
+        hasAudioRef: true,
+        sizeBytes: 1024,
+      }),
+    );
+    expect(verificationMap.get("track-1")).toEqual(
+      expect.objectContaining({
+        verified: false,
+        hasTrackRow: false,
+        hasAudioRef: false,
+      }),
+    );
+  });
+
+  it("uses the IndexedDB bulk verification fallback in the browser", async () => {
+    offlineStorageMocks.getBulkDownloadedTrackVerification.mockResolvedValue(
+      new Map([
+        [
+          "track-1",
+          {
+            trackId: "track-1",
+            verified: true,
+            hasTrackRow: true,
+            hasAudioRef: true,
+            sizeBytes: 2048,
+          },
+        ],
+      ]),
+    );
+
+    const { getBulkOfflineTrackVerification } = await loadRepository();
+    const verificationMap = await getBulkOfflineTrackVerification(["track-1"]);
+
+    expect(verificationMap.get("track-1")).toEqual(
+      expect.objectContaining({
+        verified: true,
+        sizeBytes: 2048,
+      }),
+    );
+    expect(offlineStorageMocks.getBulkDownloadedTrackVerification).toHaveBeenCalledWith([
+      "track-1",
+    ]);
+  });
+
   it("builds playlist tracks from the IndexedDB fallback path in the browser", async () => {
     offlineStorageMocks.getDownloadedPlaylist.mockResolvedValue({
       id: "playlist-1",
@@ -434,10 +519,10 @@ describe("mobileOfflineRepository", () => {
 
     await expect(
       saveOfflineMediaFileRef("track-1", "audio", "C:\\Music\\song.mp3"),
-    ).resolves.toBeNull();
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
     await expect(
       saveOfflineMediaFileRef("track-1", "audio", "S:\\Music\\song.mp3"),
-    ).resolves.toBeNull();
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
 
     expect(mobileDatabase.beginTransaction).not.toHaveBeenCalled();
   });
@@ -450,13 +535,43 @@ describe("mobileOfflineRepository", () => {
 
     await expect(
       saveOfflineMediaFileRef("track-1", "audio", "\\\\DESKTOP\\Music\\song.mp3"),
-    ).resolves.toBeNull();
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
     await expect(
       saveOfflineMediaFileRef("track-1", "audio", "../media/audio/123.mp3"),
-    ).resolves.toBeNull();
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
     await expect(
       saveOfflineMediaFileRef("track-1", "audio", "media/../audio/123.mp3"),
-    ).resolves.toBeNull();
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
+
+    expect(mobileDatabase.beginTransaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects raw backend URLs for media refs", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase();
+
+    const { saveOfflineMediaFileRef } = await loadRepository();
+
+    await expect(
+      saveOfflineMediaFileRef("track-1", "audio", "http://192.168.1.5:8000/tracks/1/stream"),
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
+
+    expect(mobileDatabase.beginTransaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects raw Android private file URIs for media refs", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase();
+
+    const { saveOfflineMediaFileRef } = await loadRepository();
+
+    await expect(
+      saveOfflineMediaFileRef(
+        "track-1",
+        "audio",
+        "file:///data/user/0/com.harish.smartmusicorganizer/files/media/audio/track-1.mp3",
+      ),
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
 
     expect(mobileDatabase.beginTransaction).not.toHaveBeenCalled();
   });
@@ -565,6 +680,230 @@ describe("mobileOfflineRepository", () => {
       expect.arrayContaining(["S:\\Music\\cover.jpg"]),
       false,
     );
+  });
+
+  it("normalizes numeric IDs, undefined artist/album, and NaN duration before SQLite save", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement, values) => {
+        if (statement.includes("SELECT * FROM offline_tracks")) {
+          return {
+            values: [
+              {
+                id: values[0],
+                title: "Unknown Title",
+                artist: "",
+                album: "",
+                duration: null,
+                download_status: "downloaded",
+              },
+            ],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+
+    const { saveOfflineTrackMetadata } = await loadRepository();
+    const track = await saveOfflineTrackMetadata({
+      id: 370,
+      title: undefined,
+      artist: undefined,
+      album: undefined,
+      duration: Number.NaN,
+      downloadStatus: "downloaded",
+    });
+
+    expect(track).toEqual(
+      expect.objectContaining({
+        id: "370",
+        title: "Unknown Title",
+        artist: "",
+        album: "",
+        downloadStatus: "downloaded",
+      }),
+    );
+    const insertCall = mobileDatabase.run.mock.calls.find(([statement]) =>
+      statement.includes("INSERT INTO offline_tracks"),
+    );
+    expect(insertCall[1]).toEqual([
+      "370",
+      "Unknown Title",
+      "",
+      "",
+      null,
+      "downloaded",
+      "native_file",
+      null,
+      expect.any(String),
+    ]);
+    expect(insertCall[1]).not.toContain(undefined);
+  });
+
+  it("writes native track metadata and safe media refs in one transaction", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement, values) => {
+        if (statement.includes("WHERE t.id = ?")) {
+          return {
+            values: [
+              {
+                id: values[0],
+                title: "Song A",
+                artist: "Artist A",
+                album: "Album A",
+                duration: 245,
+                downloadStatus: "downloaded",
+                storageType: "native_file",
+                downloadedAt: "2026-06-22T10:00:00.000Z",
+                audioLocalUri: "media/audio/track-1.mp3",
+                artworkLocalUri: "media/artwork/track-1.jpg",
+                file_path: "S:\\Music\\song-a.mp3",
+              },
+            ],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+
+    const { saveOfflineTrackWithMediaRefs } = await loadRepository();
+    const track = await saveOfflineTrackWithMediaRefs({
+      id: "track-1",
+      title: "Song A",
+      artist: "Artist A",
+      album: "Album A",
+      duration: 245,
+      downloadStatus: "downloaded",
+      storageType: "native_file",
+      downloadedAt: "2026-06-22T10:00:00.000Z",
+      audioLocalUri: "media/audio/track-1.mp3",
+      artworkLocalUri: "media/artwork/track-1.jpg",
+      file_path: "S:\\Music\\song-a.mp3",
+    });
+
+    expect(track).toEqual(
+      expect.objectContaining({
+        id: "track-1",
+        audioLocalUri: "media/audio/track-1.mp3",
+        artworkLocalUri: "media/artwork/track-1.jpg",
+      }),
+    );
+    expect(track).not.toHaveProperty("file_path");
+    expect(mobileDatabase.beginTransaction).toHaveBeenCalledTimes(1);
+    expect(mobileDatabase.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(mobileDatabase.run).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO offline_tracks"),
+      expect.arrayContaining(["track-1", "Song A", "Artist A", "Album A", 245]),
+      false,
+    );
+    expect(mobileDatabase.run).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO offline_media_files"),
+      expect.arrayContaining([
+        "track-1",
+        "audio",
+        "media/audio/track-1.mp3",
+        "native_file",
+      ]),
+      false,
+    );
+    expect(mobileDatabase.run).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining(["S:\\Music\\song-a.mp3"]),
+      false,
+    );
+  });
+
+  it("saves full-library style backend track shapes safely", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement, values) => {
+        if (statement.includes("WHERE t.id = ?")) {
+          return {
+            values: [
+              {
+                id: values[0],
+                title: "Unknown Title",
+                artist: values[2],
+                album: values[3],
+                duration: values[4],
+                downloadStatus: values[5],
+                storageType: values[6],
+                downloadedAt: values[7],
+                audioLocalUri: "media/audio/370.mp3",
+                artworkLocalUri: null,
+                file_path: "S:\\Music\\secret.mp3",
+              },
+            ],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+
+    const { saveOfflineTrackWithMediaRefs } = await loadRepository();
+    const track = await saveOfflineTrackWithMediaRefs({
+      id: 370,
+      title: undefined,
+      artist: undefined,
+      album: undefined,
+      duration: undefined,
+      downloadStatus: "downloaded",
+      storageType: "native_file",
+      downloadedAt: "2026-06-22T10:00:00.000Z",
+      audioLocalUri: "media/audio/370.mp3",
+      file_path: "S:\\Music\\secret.mp3",
+    });
+
+    expect(track).toEqual(
+      expect.objectContaining({
+        id: "370",
+        title: "Unknown Title",
+        artist: "",
+        album: "",
+        duration: null,
+        audioLocalUri: "media/audio/370.mp3",
+      }),
+    );
+    expect(track).not.toHaveProperty("file_path");
+  });
+
+  it("throws a safe metadata error when audio media ref is invalid for native track saves", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase();
+
+    const { saveOfflineTrackWithMediaRefs } = await loadRepository();
+
+    await expect(
+      saveOfflineTrackWithMediaRefs({
+        id: 370,
+        title: "Song A",
+        downloadStatus: "downloaded",
+        storageType: "native_file",
+        audioLocalUri: "http://192.168.1.5:8000/tracks/370/stream",
+      }),
+    ).rejects.toThrow("Track 370 could not be saved: audio media ref was invalid.");
+  });
+
+  it("rejects raw Android private audio URIs when saving native track metadata", async () => {
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase();
+
+    const { saveOfflineTrackWithMediaRefs } = await loadRepository();
+
+    await expect(
+      saveOfflineTrackWithMediaRefs({
+        id: "track-1",
+        title: "Song A",
+        downloadStatus: "downloaded",
+        storageType: "native_file",
+        audioLocalUri:
+          "file:///data/user/0/com.harish.smartmusicorganizer/files/media/audio/track-1.mp3",
+      }),
+    ).rejects.toThrow("Track track-1 could not be saved: audio media ref was invalid.");
   });
 
   it("writes offline playlist metadata to SQLite", async () => {

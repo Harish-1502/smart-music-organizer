@@ -1,11 +1,75 @@
 import { Capacitor } from "@capacitor/core";
+import { formatSafeError } from "../utils/formatSafeError";
 
 export const MOBILE_OFFLINE_DB_NAME = "smart_music_organizer_mobile_offline";
 export const MOBILE_OFFLINE_DB_VERSION = 1;
+const MOBILE_OFFLINE_DB_FAILURE_COOLDOWN_MS = 1500;
 
 let sqlitePluginPromise = null;
+let sqliteManagerPromise = null;
 let sqliteConnectionPromise = null;
+let sqliteInitPromise = null;
 let initialized = false;
+let lastInitFailure = null;
+let lastInitSuccessAt = null;
+
+function logOfflineDbInit(phase, details = {}) {
+  console.info(`[offline-db:init:${phase}] ${JSON.stringify(details, null, 2)}`);
+}
+
+function recordInitSuccess() {
+  lastInitFailure = null;
+  lastInitSuccessAt = Date.now();
+}
+
+function recordInitFailure(phase, error, extra = {}) {
+  const safeError = formatSafeError(error);
+
+  lastInitFailure = {
+    phase,
+    at: Date.now(),
+    error: safeError,
+    ...extra,
+  };
+
+  logOfflineDbInit("error", {
+    phase,
+    ...extra,
+    error: safeError,
+  });
+}
+
+function getRecentFailureAgeMs() {
+  if (!lastInitFailure?.at) {
+    return null;
+  }
+
+  return Date.now() - lastInitFailure.at;
+}
+
+function shouldCooldownFailedInit() {
+  const ageMs = getRecentFailureAgeMs();
+
+  return (
+    Number.isFinite(ageMs) &&
+    ageMs >= 0 &&
+    ageMs < MOBILE_OFFLINE_DB_FAILURE_COOLDOWN_MS
+  );
+}
+
+export function getMobileOfflineDbDebugSnapshot() {
+  return {
+    supported: isNativeAndroidMobileOfflineSupported(),
+    platform: Capacitor.getPlatform?.() ?? "unknown",
+    initialized,
+    hasPluginPromise: Boolean(sqlitePluginPromise),
+    hasManagerPromise: Boolean(sqliteManagerPromise),
+    hasConnectionPromise: Boolean(sqliteConnectionPromise),
+    hasInitPromise: Boolean(sqliteInitPromise),
+    lastInitSuccessAt,
+    lastInitFailure,
+  };
+}
 
 const SCHEMA_STATEMENTS = `
   PRAGMA foreign_keys = ON;
@@ -81,10 +145,90 @@ export function isNativeAndroidMobileOfflineSupported() {
 
 async function getSqliteExports() {
   if (!sqlitePluginPromise) {
-    sqlitePluginPromise = import("@capacitor-community/sqlite").catch(() => null);
+    sqlitePluginPromise = import("@capacitor-community/sqlite").catch((error) => {
+      recordInitFailure("import", error, {
+        nativePlatform: Capacitor.isNativePlatform(),
+        platform: Capacitor.getPlatform?.() ?? "unknown",
+      });
+      return null;
+    });
   }
 
   return sqlitePluginPromise;
+}
+
+function resetMobileOfflineConnectionState() {
+  sqliteManagerPromise = null;
+  sqliteConnectionPromise = null;
+  sqliteInitPromise = null;
+  initialized = false;
+}
+
+function isAlreadyOpenError(error) {
+  const message =
+    typeof error?.message === "string" ? error.message.toLowerCase() : "";
+
+  return message.includes("already open");
+}
+
+async function openConnectionIfNeeded(connection) {
+  try {
+    await connection.open();
+  } catch (error) {
+    if (!isAlreadyOpenError(error)) {
+      throw error;
+    }
+  }
+}
+
+async function verifyMobileOfflineDbConnection(connection) {
+  if (!connection?.query) {
+    return false;
+  }
+
+  try {
+    const result = await connection.query("SELECT 1 AS ready");
+    return Array.isArray(result?.values) && Number(result.values?.[0]?.ready) === 1;
+  } catch {
+    return false;
+  }
+}
+
+async function getSqliteManager() {
+  if (!isNativeAndroidMobileOfflineSupported()) {
+    return null;
+  }
+
+  if (!sqliteManagerPromise) {
+    sqliteManagerPromise = (async () => {
+      const sqliteExports = await getSqliteExports();
+
+      if (!sqliteExports?.CapacitorSQLite || !sqliteExports?.SQLiteConnection) {
+        recordInitFailure("manager-missing-exports", new Error("SQLite plugin exports were unavailable."), {
+          hasCapacitorSQLite: Boolean(sqliteExports?.CapacitorSQLite),
+          hasSQLiteConnection: Boolean(sqliteExports?.SQLiteConnection),
+        });
+        return null;
+      }
+
+      logOfflineDbInit("manager-ready", {
+        hasCapacitorSQLite: true,
+        hasSQLiteConnection: true,
+      });
+      return new sqliteExports.SQLiteConnection(sqliteExports.CapacitorSQLite);
+    })().catch((error) => {
+      recordInitFailure("manager-create", error);
+      return null;
+    });
+  }
+
+  const manager = await sqliteManagerPromise;
+
+  if (!manager) {
+    sqliteManagerPromise = null;
+  }
+
+  return manager;
 }
 
 async function createSqliteConnection() {
@@ -92,19 +236,24 @@ async function createSqliteConnection() {
     return null;
   }
 
-  const sqliteExports = await getSqliteExports();
+  const sqlite = await getSqliteManager();
 
-  if (!sqliteExports?.CapacitorSQLite || !sqliteExports?.SQLiteConnection) {
+  if (!sqlite) {
     return null;
   }
 
-  const sqlite = new sqliteExports.SQLiteConnection(
-    sqliteExports.CapacitorSQLite,
-  );
+  logOfflineDbInit("start", {
+    supported: true,
+  });
 
   try {
-    await sqlite.checkConnectionsConsistency();
-  } catch {}
+    const consistency = await sqlite.checkConnectionsConsistency();
+    logOfflineDbInit("opening", {
+      consistency: consistency ?? null,
+    });
+  } catch (error) {
+    recordInitFailure("consistency-check", error);
+  }
 
   let connection = null;
 
@@ -124,9 +273,19 @@ async function createSqliteConnection() {
           false,
         );
 
-    await connection.open();
+    if (!connection) {
+      return null;
+    }
+
+    await openConnectionIfNeeded(connection);
+    logOfflineDbInit("created-or-opened", {
+      usedExistingConnection: Boolean(existingConnection?.result),
+    });
     return connection;
-  } catch {
+  } catch (error) {
+    recordInitFailure("create-or-open", error, {
+      usedExistingConnection: Boolean(existingConnection?.result),
+    });
     return null;
   }
 }
@@ -136,36 +295,149 @@ async function getMobileOfflineConnection() {
     sqliteConnectionPromise = createSqliteConnection().catch(() => null);
   }
 
-  return sqliteConnectionPromise;
+  const connection = await sqliteConnectionPromise;
+
+  if (!connection) {
+    sqliteConnectionPromise = null;
+  }
+
+  return connection;
 }
 
 export async function initializeMobileOfflineDb() {
-  const connection = await getMobileOfflineConnection();
+  if (!sqliteInitPromise) {
+    sqliteInitPromise = (async () => {
+      const connection = await getMobileOfflineConnection();
 
-  if (!connection) {
-    return false;
-  }
+      if (!connection) {
+        return false;
+      }
 
-  if (initialized) {
-    return true;
+      const alreadyInitialized = initialized;
+
+      if (!initialized) {
+        try {
+          await connection.execute(SCHEMA_STATEMENTS, true);
+          logOfflineDbInit("schema-ready", {
+            version: MOBILE_OFFLINE_DB_VERSION,
+          });
+          initialized = true;
+        } catch (error) {
+          recordInitFailure("schema-or-verify", error, {
+            stage: "schema",
+          });
+          resetMobileOfflineConnectionState();
+          return false;
+        }
+      }
+
+      const verified = await verifyMobileOfflineDbConnection(connection);
+
+      if (!verified) {
+        recordInitFailure(
+          "schema-or-verify",
+          new Error("SQLite SELECT 1 verification failed."),
+          {
+            stage: "verify",
+          },
+        );
+        resetMobileOfflineConnectionState();
+        return false;
+      }
+
+      recordInitSuccess();
+      logOfflineDbInit("verified", {
+        alreadyInitialized,
+      });
+      return true;
+    })().finally(() => {
+      sqliteInitPromise = null;
+    });
   }
 
   try {
-    await connection.execute(SCHEMA_STATEMENTS, true);
-    initialized = true;
-    return true;
+    return await sqliteInitPromise;
   } catch {
+    resetMobileOfflineConnectionState();
     return false;
   }
 }
 
-export async function getMobileOfflineDb() {
-  const ready = await initializeMobileOfflineDb();
+export async function ensureMobileOfflineDbReady() {
+  if (!isNativeAndroidMobileOfflineSupported()) {
+    return false;
+  }
 
-  if (!ready) {
+  if (shouldCooldownFailedInit()) {
+    logOfflineDbInit("cooldown", {
+      ageMs: getRecentFailureAgeMs(),
+      lastFailurePhase: lastInitFailure?.phase ?? null,
+    });
+    return null;
+  }
+
+  if (await initializeMobileOfflineDb()) {
+    return getMobileOfflineConnection();
+  }
+
+  resetMobileOfflineConnectionState();
+
+  if (!(await initializeMobileOfflineDb())) {
+    recordInitFailure(
+      "ensure",
+      new Error("SQLite connection could not be initialized."),
+      {
+        previousFailurePhase: lastInitFailure?.phase ?? null,
+      },
+    );
     return null;
   }
 
   return getMobileOfflineConnection();
 }
 
+export async function probeMobileOfflineDbHealth({ forceRetry = false } = {}) {
+  if (forceRetry) {
+    resetMobileOfflineConnectionState();
+  }
+
+  const snapshot = getMobileOfflineDbDebugSnapshot();
+  const result = {
+    ...snapshot,
+    importLoaded: false,
+    managerReady: false,
+    connectionReady: false,
+    schemaReady: false,
+    verified: false,
+  };
+
+  const sqliteExports = await getSqliteExports();
+  result.importLoaded = Boolean(sqliteExports);
+  result.hasCapacitorSQLite = Boolean(sqliteExports?.CapacitorSQLite);
+  result.hasSQLiteConnection = Boolean(sqliteExports?.SQLiteConnection);
+
+  const manager = await getSqliteManager();
+  result.managerReady = Boolean(manager);
+
+  const connection = await getMobileOfflineConnection();
+  result.connectionReady = Boolean(connection);
+
+  const schemaReady = await initializeMobileOfflineDb();
+  result.schemaReady = Boolean(schemaReady);
+  result.verified = Boolean(schemaReady && (await getMobileOfflineConnection()));
+  result.lastInitFailure = lastInitFailure;
+  result.lastInitSuccessAt = lastInitSuccessAt;
+
+  logOfflineDbInit("probe", result);
+  return result;
+}
+
+export async function getMobileOfflineDb() {
+  const connection = await ensureMobileOfflineDbReady();
+
+  if (!connection) {
+    return null;
+  }
+
+  return connection;
+}

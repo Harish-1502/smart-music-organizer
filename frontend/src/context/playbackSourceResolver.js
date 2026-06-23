@@ -1,5 +1,9 @@
 import { getTrackStreamBlobUrl } from "../api/apiBase";
 import {
+  getPlayableNativeAudioUri,
+  getPlayableNativeArtworkUri,
+} from "../offline/nativeMediaFileStorage";
+import {
   createOfflineAudioBlobUrl,
   createOfflineArtworkBlobUrl,
 } from "../offline/offlineStorage";
@@ -27,6 +31,14 @@ export async function resolveTrackPlaybackSource(track) {
   if (track.offline) {
     if (typeof track.audioSrc === "string" && track.audioSrc.trim()) {
       return createResolvedSource(track.audioSrc.trim(), false);
+    }
+
+    if (typeof track.audioLocalUri === "string" && track.audioLocalUri.trim()) {
+      const audioSrc = await getPlayableNativeAudioUri(track.audioLocalUri.trim());
+
+      if (audioSrc) {
+        return createResolvedSource(audioSrc, false);
+      }
     }
 
     if (typeof track.audioBlobId === "string" && track.audioBlobId.trim()) {
@@ -57,6 +69,14 @@ export async function resolveTrackArtworkSource(track) {
 
   if (typeof track.artworkSrc === "string" && track.artworkSrc.trim()) {
     return createResolvedSource(track.artworkSrc.trim(), false);
+  }
+
+  if (typeof track.artworkLocalUri === "string" && track.artworkLocalUri.trim()) {
+    const artworkSrc = await getPlayableNativeArtworkUri(track.artworkLocalUri.trim());
+
+    if (artworkSrc) {
+      return createResolvedSource(artworkSrc, false);
+    }
   }
 
   if (typeof track.artworkBlobId === "string" && track.artworkBlobId.trim()) {

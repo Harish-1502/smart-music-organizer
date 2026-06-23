@@ -34,6 +34,14 @@ function createTrackSnapshot(track) {
     audioSrc: track.offline && typeof track.audioSrc === "string" ? track.audioSrc : null,
     artworkSrc:
       track.offline && typeof track.artworkSrc === "string" ? track.artworkSrc : null,
+    audioLocalUri:
+      track.offline && typeof track.audioLocalUri === "string"
+        ? track.audioLocalUri
+        : null,
+    artworkLocalUri:
+      track.offline && typeof track.artworkLocalUri === "string"
+        ? track.artworkLocalUri
+        : null,
     audioBlobId:
       track.offline && typeof track.audioBlobId === "string" ? track.audioBlobId : null,
     artworkBlobId:
@@ -174,8 +182,10 @@ export function PlayerProvider({ children }) {
     currentTrackId,
     currentTrack?.offline,
     currentTrack?.audioSrc,
+    currentTrack?.audioLocalUri,
     currentTrack?.audioBlobId,
     currentTrack?.artworkSrc,
+    currentTrack?.artworkLocalUri,
     currentTrack?.artworkBlobId,
   ]);
 
