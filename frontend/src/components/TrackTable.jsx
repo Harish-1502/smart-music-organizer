@@ -125,7 +125,7 @@ export default function TrackTable({
                 data-label="Duration"
               >
                 <span className="track-table__text track-table__text--duration">
-                  {track.duration || "-"}
+                  {track.durationLabel ?? track.duration ?? "-"}
                 </span>
               </td>
 

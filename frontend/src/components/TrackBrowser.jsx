@@ -10,6 +10,7 @@ export default function TrackBrowser({
   selectedTrackIds = [],
   onToggleTrack,
   onPlayTrack,
+  emptyStateMessage = "No tracks found.",
 }) {
   const {
     tracks,
@@ -104,7 +105,7 @@ export default function TrackBrowser({
       {tracksLoading ? (
         <p className="track-browser__state">Loading tracks...</p>
       ) : tracks.length === 0 ? (
-        <p className="track-browser__state">No tracks found.</p>
+        <p className="track-browser__state">{emptyStateMessage}</p>
       ) : (
         <>
           <TrackTable

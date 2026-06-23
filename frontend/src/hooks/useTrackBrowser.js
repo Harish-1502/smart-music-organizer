@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { getTracks } from "../api/libraryApi";
+import { backendLibrarySource } from "../library/backendLibrarySource";
 
-export default function useTrackBrowser() {
+export default function useTrackBrowser(source = backendLibrarySource) {
     const maxQueuePageSize = 100;
 
     const [tracks, setTracks] = useState([]);
@@ -38,18 +38,18 @@ export default function useTrackBrowser() {
       {
         setTracksLoading(true);
         try {
-          const data = await getTracks(
-            currentPage,
+          const data = await source.getTracks({
+            page: currentPage,
             pageSize,
-            currentSearch,
-            currentSortBy,
-            currentOrder,
-            currentArtist,
-            currentExactArtist,
-            currentAlbum,
-            currentExactAlbum,
-            currentExtension
-          );
+            search: currentSearch,
+            sortBy: currentSortBy,
+            order: currentOrder,
+            artist: currentArtist,
+            exactArtist: currentExactArtist,
+            album: currentAlbum,
+            exactAlbum: currentExactAlbum,
+            extension: currentExtension,
+          });
     
           // DEBUG
           // console.log("TRACKS FROM API:", data);
@@ -72,35 +72,35 @@ export default function useTrackBrowser() {
             : maxQueuePageSize;
 
         try {
-          const firstPage = await getTracks(
-            1,
-            queuePageSize,
-            appliedSearch,
+          const firstPage = await source.getTracks({
+            page: 1,
+            pageSize: queuePageSize,
+            search: appliedSearch,
             sortBy,
             order,
-            artistFilter,
-            exactArtistFilter,
-            albumFilter,
-            exactAlbumFilter,
-            extensionFilter
-          );
+            artist: artistFilter,
+            exactArtist: exactArtistFilter,
+            album: albumFilter,
+            exactAlbum: exactAlbumFilter,
+            extension: extensionFilter,
+          });
 
           const queue = [...(firstPage.items || [])];
           const queueTotalPages = firstPage.total_pages || 1;
 
           for (let currentPage = 2; currentPage <= queueTotalPages; currentPage += 1) {
-            const pageData = await getTracks(
-              currentPage,
-              maxQueuePageSize,
-              appliedSearch,
+            const pageData = await source.getTracks({
+              page: currentPage,
+              pageSize: maxQueuePageSize,
+              search: appliedSearch,
               sortBy,
               order,
-              artistFilter,
-              exactArtistFilter,
-              albumFilter,
-              exactAlbumFilter,
-              extensionFilter
-            );
+              artist: artistFilter,
+              exactArtist: exactArtistFilter,
+              album: albumFilter,
+              exactAlbum: exactAlbumFilter,
+              extension: extensionFilter,
+            });
 
             queue.push(...(pageData.items || []));
           }
@@ -145,6 +145,7 @@ export default function useTrackBrowser() {
     useEffect(() => {
         loadTracks();
     }, [
+        source,
         page,
         appliedSearch,
         sortBy,

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import { getArtists, getAlbums } from "../api/libraryApi";
+import { backendLibrarySource } from "../library/backendLibrarySource";
 
-export default function useLibraryViews({ setMessage }) {
+export default function useLibraryViews({
+  setMessage,
+  source = backendLibrarySource,
+}) {
   const [viewMode, setViewMode] = useState("tracks");
   const [artists, setArtists] = useState([]);
   const [artistsLoading, setArtistsLoading] = useState(false);
@@ -11,7 +14,7 @@ export default function useLibraryViews({ setMessage }) {
   async function loadArtists() {
     setArtistsLoading(true);
     try {
-      const data = await getArtists();
+      const data = await source.getArtists();
       setArtists(data || []);
     } catch (error) {
       console.error("LOAD ARTISTS ERROR:", error);
@@ -24,7 +27,7 @@ export default function useLibraryViews({ setMessage }) {
   async function loadAlbums() {
     setAlbumsLoading(true);
     try {
-      const data = await getAlbums();
+      const data = await source.getAlbums();
       setAlbums(data || []);
     } catch (error) {
       console.error("LOAD ALBUMS ERROR:", error);
@@ -40,7 +43,7 @@ export default function useLibraryViews({ setMessage }) {
     } else if (viewMode === "albums") {
       loadAlbums();
     }
-  }, [viewMode]);
+  }, [source, viewMode]);
 
   return {
     viewMode,
