@@ -82,4 +82,42 @@ describe("offlineStorage", () => {
       totalBytes: 10,
     });
   });
+
+  it("verifies browser offline tracks in bulk from IndexedDB blobs", async () => {
+    const { getBulkDownloadedTrackVerification } = await loadModule();
+    const verificationMap = await getBulkDownloadedTrackVerification([
+      "track-1",
+      "track-2",
+      "track-3",
+    ]);
+
+    expect(verificationMap.get("track-1")).toEqual(
+      expect.objectContaining({
+        trackId: "track-1",
+        hasTrackRow: true,
+        hasAudioRef: true,
+        hasArtworkRef: true,
+        sizeBytes: 7,
+        verified: true,
+        brokenLocalRef: false,
+      }),
+    );
+    expect(verificationMap.get("track-2")).toEqual(
+      expect.objectContaining({
+        trackId: "track-2",
+        hasTrackRow: true,
+        hasAudioRef: true,
+        verified: false,
+        brokenLocalRef: true,
+      }),
+    );
+    expect(verificationMap.get("track-3")).toEqual(
+      expect.objectContaining({
+        trackId: "track-3",
+        hasTrackRow: false,
+        hasAudioRef: false,
+        verified: false,
+      }),
+    );
+  });
 });

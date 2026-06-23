@@ -23,6 +23,12 @@ vi.mock("../api/apiErrors", () => ({
   getApiErrorMessage: vi.fn(() => "Unable to load connection details."),
 }));
 
+vi.mock("../appMode/appMode", () => ({
+  getAppMode: vi.fn(() => "lan"),
+  isOfflineMode: vi.fn((mode) => mode === "offline"),
+  setAppMode: vi.fn((mode) => mode),
+}));
+
 describe("ConnectionPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,6 +40,7 @@ describe("ConnectionPage", () => {
     expect(markup).toContain(
       "Do not use localhost for your PC backend. Use your PC LAN IP.",
     );
+    expect(markup).toContain("LAN Mode / Offline Mode");
     expect(markup).toContain("Backend URL");
     expect(markup).toContain("Test Connection");
   });

@@ -104,6 +104,50 @@
   gap: 12px;
 }
 
+.connection-page__mode-toggle {
+  display: grid;
+  gap: 12px;
+}
+
+.connection-page__mode-option {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid var(--action-border);
+  border-radius: 16px;
+  background: rgba(17, 24, 39, 0.72);
+  color: var(--text-strong);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.connection-page__mode-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.26);
+}
+
+.connection-page__mode-option--active {
+  border-color: rgba(52, 211, 153, 0.45);
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(14, 165, 233, 0.08)),
+    rgba(17, 24, 39, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.12);
+}
+
+.connection-page__mode-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.connection-page__mode-copy {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 .connection-page__setting-card {
   display: grid;
   gap: 8px;

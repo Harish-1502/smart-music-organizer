@@ -214,6 +214,75 @@ export async function hasVerifiedDownloadedTrack(trackId) {
   return audioBlobSize > 0;
 }
 
+export async function getBulkDownloadedTrackVerification(trackIds) {
+  const normalizedTrackIds = normalizeOfflineIdList(trackIds);
+  const verificationMap = new Map(
+    normalizedTrackIds.map((trackId) => [
+      trackId,
+      {
+        trackId,
+        hasTrackRow: false,
+        hasAudioRef: false,
+        hasArtworkRef: false,
+        sizeBytes: 0,
+        verified: false,
+        brokenLocalRef: false,
+        existingTrack: null,
+      },
+    ]),
+  );
+
+  if (normalizedTrackIds.length === 0) {
+    return verificationMap;
+  }
+
+  const database = await getOfflineDatabase();
+
+  if (!database) {
+    return verificationMap;
+  }
+
+  try {
+    const [tracks, audioBlobs] = await Promise.all([
+      database.getAll(OFFLINE_TRACKS_STORE),
+      database.getAll(OFFLINE_AUDIO_BLOBS_STORE),
+    ]);
+    const trackMap = new Map(
+      tracks.map((track) => [normalizeOfflineId(track?.id), track]),
+    );
+    const audioBlobMap = new Map(
+      audioBlobs.map((blobRecord) => [normalizeOfflineId(blobRecord?.id), blobRecord]),
+    );
+
+    for (const trackId of normalizedTrackIds) {
+      const existingTrack = trackMap.get(trackId) ?? null;
+
+      if (!existingTrack) {
+        continue;
+      }
+
+      const audioBlobId = normalizeOfflineId(existingTrack?.audioBlobId);
+      const artworkBlobId = normalizeOfflineId(existingTrack?.artworkBlobId);
+      const audioBlobRecord =
+        audioBlobId === null ? null : audioBlobMap.get(audioBlobId) ?? null;
+      const audioBlobSize = getBlobByteSize(audioBlobRecord);
+
+      verificationMap.set(trackId, {
+        trackId,
+        hasTrackRow: true,
+        hasAudioRef: audioBlobId !== null,
+        hasArtworkRef: artworkBlobId !== null,
+        sizeBytes: audioBlobSize,
+        verified: audioBlobSize > 0,
+        brokenLocalRef: audioBlobId !== null && audioBlobSize <= 0,
+        existingTrack,
+      });
+    }
+  } catch {}
+
+  return verificationMap;
+}
+
 export async function createOfflineAudioBlobUrl(blobId) {
   return createBlobUrlFromStore(OFFLINE_AUDIO_BLOBS_STORE, blobId);
 }

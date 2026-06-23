@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, QrCode, Server, ShieldCheck, Wifi } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../api/apiBase";
+import { getAppMode, isOfflineMode, setAppMode } from "../appMode/appMode";
 import {
   clearBackendBaseUrl,
   getBackendBaseUrl,
@@ -40,6 +41,7 @@ function ConnectionUrlCard({ label, url, copiedUrl, onCopy }) {
 }
 
 export default function ConnectionPage() {
+  const [appMode, setAppModeState] = useState(() => getAppMode());
   const [backendUrlInput, setBackendUrlInput] = useState(() => getBackendBaseUrl());
   const [networkInfo, setNetworkInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,7 @@ export default function ConnectionPage() {
   const defaultBackendBaseUrl = getDefaultBackendBaseUrl();
   const currentBackendBaseUrl = getBackendBaseUrl();
   const usingSavedBackendBaseUrl = hasSavedBackendBaseUrl();
+  const offlineModeEnabled = isOfflineMode(appMode);
 
   useEffect(() => {
     let isMounted = true;
@@ -277,6 +280,26 @@ export default function ConnectionPage() {
     setMessageTone("success");
   }
 
+  function handleAppModeChange(nextMode) {
+    try {
+      const normalizedMode = setAppMode(nextMode);
+      setAppModeState(normalizedMode);
+      setMessage(
+        normalizedMode === "offline"
+          ? "Offline Mode enabled. PC-only actions like library scans stay unavailable."
+          : "LAN Mode enabled. The app will use your PC backend for library actions.",
+      );
+      setMessageTone("success");
+    } catch (error) {
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "Could not change app mode.",
+      );
+      setMessageTone("error");
+    }
+  }
+
   return (
     <main className="connection-page">
       <div className="connection-page__inner">
@@ -304,6 +327,9 @@ export default function ConnectionPage() {
               API token configured{" "}
               {formatToggle(Boolean(networkInfo?.api_token_configured))}
             </span>
+            <span className="connection-page__pill">
+              App mode {offlineModeEnabled ? "Offline" : "LAN"}
+            </span>
           </div>
         </section>
 
@@ -315,6 +341,47 @@ export default function ConnectionPage() {
             {message}
           </div>
         ) : null}
+
+        <section className="connection-page__panel">
+          <div className="connection-page__panel-header">
+            <div>
+              <p className="connection-page__panel-eyebrow">App mode</p>
+              <h2>LAN Mode / Offline Mode</h2>
+            </div>
+            <p className="connection-page__panel-note">
+              LAN Mode controls the PC backend. Offline Mode uses downloaded tracks
+              already stored on this device.
+            </p>
+          </div>
+
+          <div className="connection-page__mode-toggle" role="group" aria-label="App mode">
+            <button
+              type="button"
+              className={`connection-page__mode-option${!offlineModeEnabled ? " connection-page__mode-option--active" : ""}`}
+              onClick={() => handleAppModeChange("lan")}
+            >
+              <span className="connection-page__mode-title">LAN Mode</span>
+              <span className="connection-page__mode-copy">
+                Connects to the PC backend and keeps scan, clear, and other PC-only actions available.
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`connection-page__mode-option${offlineModeEnabled ? " connection-page__mode-option--active" : ""}`}
+              onClick={() => handleAppModeChange("offline")}
+            >
+              <span className="connection-page__mode-title">Offline Mode</span>
+              <span className="connection-page__mode-copy">
+                Uses downloaded tracks on this device. PC-only actions like scan folders stay unavailable.
+              </span>
+            </button>
+          </div>
+
+          <p className="connection-page__setting-note">
+            Current app mode: <strong>{offlineModeEnabled ? "Offline Mode" : "LAN Mode"}</strong>
+          </p>
+        </section>
 
         <section className="connection-page__panel">
           <div className="connection-page__panel-header">

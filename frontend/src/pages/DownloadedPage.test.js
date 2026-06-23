@@ -34,8 +34,15 @@ vi.mock("../offline/mobileOfflineRepository", () => ({
 }));
 
 vi.mock("../offline/downloadLibrary", () => ({
+  cancelFullLibraryDownload: vi.fn(),
   downloadFullLibraryForOffline: vi.fn(),
+  getFullLibraryDownloadRuntimeState: vi.fn(() => ({
+    isRunning: false,
+    progress: null,
+    lastResult: null,
+  })),
   getFullLibraryDownloadStatus: vi.fn(),
+  subscribeToFullLibraryDownloadState: vi.fn(() => () => {}),
 }));
 
 describe("DownloadedPage", () => {
@@ -70,6 +77,7 @@ describe("DownloadedPage", () => {
             alreadyDownloadedCount: 5,
             missingDownloadCount: 20,
             estimatedSizeAvailable: false,
+            error: null,
           },
         }),
       ),
@@ -109,6 +117,7 @@ describe("DownloadedPage", () => {
             alreadyDownloadedCount: 0,
             missingDownloadCount: 0,
             estimatedSizeAvailable: false,
+            error: null,
           },
         }),
       ),
@@ -145,13 +154,14 @@ describe("DownloadedPage", () => {
             alreadyDownloadedCount: 0,
             missingDownloadCount: 0,
             estimatedSizeAvailable: false,
+            error: null,
           },
         }),
       ),
     );
 
     expect(markup).toContain(
-      "No tracks are available in your PC library to download right now.",
+      "No tracks found in your PC library right now.",
     );
   });
 
@@ -181,6 +191,7 @@ describe("DownloadedPage", () => {
             alreadyDownloadedCount: 0,
             missingDownloadCount: 0,
             estimatedSizeAvailable: false,
+            error: "library_unavailable",
           },
         }),
       ),
@@ -189,6 +200,45 @@ describe("DownloadedPage", () => {
     expect(markup).toContain(
       "Connect to your PC backend in LAN Mode to inspect the full library.",
     );
+  });
+
+  it("shows a database-unavailable note without claiming the PC library is empty", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(DownloadedPage, {
+          initialAppMode: "lan",
+          initialLoading: false,
+          initialSummary: {
+            available: true,
+            playlistCount: 0,
+            trackCount: 0,
+            totalAudioBytes: 0,
+            totalArtworkBytes: 0,
+            totalBytes: 0,
+            storageType: "native_file",
+            missingAudioFileCount: 0,
+          },
+          initialPlaylists: [],
+          initialLibraryStatus: {
+            available: false,
+            blockedByMode: false,
+            totalLibraryTracks: 476,
+            alreadyDownloadedCount: 0,
+            missingDownloadCount: 0,
+            estimatedSizeAvailable: false,
+            error: "offline_database_unavailable",
+          },
+        }),
+      ),
+    );
+
+    expect(markup).toContain(
+      "Offline database is unavailable. The library was found, but the phone database could not be opened. Try clearing app storage or reinstalling if this continues.",
+    );
+    expect(markup).toContain("476");
+    expect(markup).not.toContain("No tracks found in your PC library right now.");
   });
 
   it("keeps downloaded playlist management UI alongside the new full-library section", () => {
@@ -225,6 +275,7 @@ describe("DownloadedPage", () => {
             alreadyDownloadedCount: 5,
             missingDownloadCount: 20,
             estimatedSizeAvailable: false,
+            error: null,
           },
         }),
       ),
@@ -251,6 +302,7 @@ describe("DownloadedPage", () => {
             totalLibraryTracks: 20,
             totalMissingTracks: 10,
             processedMissingTracks: 2,
+            verifiedExistingCount: 4,
             downloadedCount: 1,
             skippedCount: 0,
             failedCount: 1,
@@ -275,6 +327,7 @@ describe("DownloadedPage", () => {
             alreadyDownloadedCount: 0,
             missingDownloadCount: 10,
             estimatedSizeAvailable: false,
+            error: null,
           },
         }),
       ),
@@ -283,8 +336,62 @@ describe("DownloadedPage", () => {
     expect(markup).toContain("Downloading full library");
     expect(markup).toContain("2 / 10 missing tracks processed.");
     expect(markup).toContain("Cancel");
+    expect(markup).toContain(
+      "Verified existing 4, newly downloaded 1, skipped during this run 0, failed 1.",
+    );
     expect(markup).toContain("Current track hidden for privacy.");
     expect(markup).not.toContain("S:\\Music\\secret.mp3");
+  });
+
+  it("shows live full-library counters from in-progress download state", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(DownloadedPage, {
+          initialAppMode: "lan",
+          initialLoading: false,
+          initialIsLibraryDownloading: true,
+          initialLibraryProgress: {
+            totalLibraryTracks: 20,
+            totalMissingTracks: 10,
+            processedMissingTracks: 4,
+            verifiedExistingCount: 4,
+            downloadedCount: 3,
+            skippedCount: 2,
+            failedCount: 1,
+            downloadedBytes: 2048,
+            currentTrackTitle: "Live Counter Track",
+          },
+          initialSummary: {
+            available: true,
+            playlistCount: 0,
+            trackCount: 0,
+            totalAudioBytes: 0,
+            totalArtworkBytes: 0,
+            totalBytes: 0,
+            storageType: "native_file",
+            missingAudioFileCount: 0,
+          },
+          initialPlaylists: [],
+          initialLibraryStatus: {
+            available: true,
+            blockedByMode: false,
+            totalLibraryTracks: 20,
+            alreadyDownloadedCount: 1,
+            missingDownloadCount: 10,
+            estimatedSizeAvailable: false,
+            error: null,
+          },
+        }),
+      ),
+    );
+
+    expect(markup).toContain("Already downloaded</span><span class=\"downloaded-page__summary-value\">9");
+    expect(markup).toContain("New downloads</span><span class=\"downloaded-page__summary-value\">6");
+    expect(markup).toContain(
+      "Verified existing 4, newly downloaded 3, skipped during this run 2, failed 1.",
+    );
   });
 
   it("does not render the temporary inspect action in the normal UI", () => {
@@ -313,6 +420,7 @@ describe("DownloadedPage", () => {
             alreadyDownloadedCount: 0,
             missingDownloadCount: 0,
             estimatedSizeAvailable: false,
+            error: null,
           },
         }),
       ),
