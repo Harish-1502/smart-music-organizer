@@ -1,43 +1,96 @@
 # Smart Music Organizer
 
-Smart Music Organizer is a local personal server app. One computer runs the
-FastAPI server and serves the built React app. By default the backend binds to
-`127.0.0.1`, so it is only reachable from the same computer.
+Smart Music Organizer is a local-first music organizer and AI playlist app built with React, FastAPI, SQLite, and SQLAlchemy.
 
-This is not a public hosted website setup.
-LAN/mobile access is an explicit opt-in mode, requires an API token, and should
-not be exposed to the internet.
+The app scans a local music library, stores track metadata, supports playlist management, streams local audio files, applies tag-based organization, and is being extended toward LAN/mobile access and offline playback.
 
-## Docker Local-Server Mode
+This is not a public hosted music service. It is designed as a personal local server app where one computer runs the backend and serves the frontend.
 
-Use Docker when you want to run the app without installing Python, Node, React,
-or opening the project in an editor.
+## Project Goals
 
-From the project root, create host folders for persistent data and the default
-music mount:
+I built this project to create a useful personal music organizer while practicing full-stack development, backend API design, database modeling, local-first architecture, testing, LAN/mobile connectivity, and maintainable project documentation.
+
+The long-term goal is to support a desktop music server that can sync playlists and tracks to a mobile device for offline playback.
+
+## Core Features
+
+* Local music folder scanning
+* SQLite-based track metadata storage
+* Browser-based music playback
+* Playlist creation and management
+* Tag-based music organization
+* AI-style playlist generation using track metadata and tags
+* LAN/mobile access mode for trusted local networks
+* API-token protection in LAN mode
+* Path-safety checks for local file access
+* Docker local-server mode
+* Capacitor Android shell planning
+* Backend test coverage with Pytest
+
+## Tech Stack
+
+### Frontend
+
+* React
+* Vite
+* JavaScript
+* Capacitor for Android/mobile direction
+
+### Backend
+
+* FastAPI
+* Python
+* SQLite
+* SQLAlchemy
+* Pytest
+
+### Deployment / Local Runtime
+
+* Docker
+* Docker Compose
+* Local FastAPI server
+* Built React frontend served by FastAPI
+
+## Engineering Highlights
+
+### Local-First Architecture
+
+The app is designed around local music files instead of depending on a cloud music provider or streaming API.
+
+### FastAPI Backend
+
+The backend handles scanning folders, validating paths, storing metadata, serving audio files, managing playlists, and protecting LAN mode routes.
+
+### SQLite Database Design
+
+SQLite is used because the app is personal and local-first. SQLAlchemy models organize tracks, playlists, tags, and relationships between them.
+
+### LAN Mode With API Protection
+
+By default, the backend binds to `127.0.0.1`, so it is only reachable from the same computer.
+
+LAN/mobile mode is an explicit opt-in mode. It binds to `0.0.0.0`, requires an API token, and should only be used on trusted local networks.
+
+### Path Safety
+
+The backend includes path validation so library scanning and file access stay within allowed roots, especially when LAN mode is enabled.
+
+### Testing
+
+The backend uses Pytest to cover important behavior such as settings, environment overrides, scanning, tag logic, and route behavior.
+
+## Quick Start
+
+### Option 1: Docker Local-Server Mode
+
+Use this when you want to run the app without manually installing Python, Node, or frontend dependencies.
+
+From the project root:
 
 ```powershell
 mkdir data
 mkdir music
-```
-
-Copy the example environment file:
-
-```powershell
 copy .env.example .env
-```
-
-Set `MUSIC_PATH` in `.env` to the real music folder on your computer. Examples:
-
-```text
-MUSIC_PATH=./music
-MUSIC_PATH=C:/Users/Alex/Music
-MUSIC_PATH=S:/Music
-```
-
-Start the app:
-
-```powershell
 docker compose up --build
 ```
 
@@ -47,96 +100,25 @@ Then open:
 http://localhost:8000
 ```
 
-Docker builds the React/Vite frontend inside the image, then runs FastAPI from
-the final Python container. The final runtime container does not need Node.
-
-Docker Compose publishes the app to `127.0.0.1:8000` on the host by default.
-
-### Docker V1 Limitations
-
-Docker v1 is focused on reliable core local-server usage: FastAPI starts,
-the React frontend is served, SQLite persists through `./data`, `/music` is
-mounted, and the library, playlist, player, and streaming routes are available.
-
-Deep scan, audio fingerprinting, AcoustID fallback, and deeper audio analysis
-may require optional system packages such as `ffmpeg` and
-`fpcalc`/`libchromaprint-tools`. Those packages are not installed in the
-default Docker image yet because they make builds depend on Debian package
-mirror availability. They will be handled later in a Docker-full image or an
-optional Compose profile.
-
-### Docker Music Path
-
-In Docker mode, the app runs inside a Linux container. Windows paths such as:
-
-```text
-C:\Users\Name\Music
-```
-
-do not exist inside the container.
-
-Docker Compose mounts the host folder from `MUSIC_PATH` as:
+In Docker mode, the app mounts your music folder as:
 
 ```text
 /music
 ```
 
-When scanning in the app, enter:
+When scanning music from the app, use:
 
 ```text
 /music
 ```
 
-Do not enter your Windows music path in Docker mode.
-
-### Docker Data And Database
-
-Docker stores SQLite data, uploaded artwork, and app data in the root `data`
-folder through this volume:
+For full Docker setup details, see:
 
 ```text
-./data:/app/backend/data
+docs/setup.md
 ```
 
-That means the Docker database is:
-
-```text
-data/app.db
-```
-
-The development database is still:
-
-```text
-backend/data/app.db
-```
-
-To reuse an existing development database in Docker, copy:
-
-```text
-backend/data/app.db
-```
-
-to:
-
-```text
-data/app.db
-```
-
-The Docker image does not copy your music files or bake your SQLite database
-into the image.
-
-### Optional Deep Scan Key
-
-Deep scan fingerprint lookup can use an AcoustID API key. Copy `.env.example`
-to `.env` and set:
-
-```text
-ACOUSTID_API_KEY=your-key-here
-```
-
-Docker Compose reads `.env` automatically for variable substitution.
-
-## Development Mode
+### Option 2: Development Mode
 
 Use this when editing the app.
 
@@ -148,7 +130,7 @@ cd backend
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Start the frontend dev server in another terminal:
+Start the frontend in another terminal:
 
 ```powershell
 cd frontend
@@ -162,21 +144,11 @@ Open the Vite URL, usually:
 http://localhost:5173
 ```
 
-In Vite development, frontend API calls use `http://127.0.0.1:8000` by
-default. You can override this with `VITE_API_BASE_URL`.
+### Option 3: Production Local-Server Mode
 
-For privacy-safe local or LAN use, set `EXPOSE_LOCAL_PATHS=false` on the
-backend. That hides `file_path`, `folder_path`, and raw `art_path` values from
-API JSON, but real album art still works through `/tracks/{id}/art` for tracks
-that have an `id` or `track_id`.
+Use this for normal personal desktop use without running the Vite dev server.
 
-The frontend only falls back to raw `art_path` when you explicitly enable
-`VITE_ALLOW_RAW_ART_PATH_FALLBACK=true` and `VITE_EXPOSE_LOCAL_PATHS=true`
-in a local-debug build, and it should stay off for normal use.
-
-## Build The Frontend
-
-Build the React app once before using production local-server mode:
+Build the frontend:
 
 ```powershell
 cd frontend
@@ -184,17 +156,7 @@ npm install
 npm run build
 ```
 
-The production build is written to:
-
-```text
-frontend/dist
-```
-
-## Production Local-Server Mode
-
-Use this for normal personal use without running `npm run dev`.
-
-After building the frontend, run the backend server:
+Start the backend:
 
 ```powershell
 cd backend
@@ -208,145 +170,116 @@ Then open:
 http://localhost:8000
 ```
 
-FastAPI serves the built React frontend from `frontend/dist` when it exists.
-API routes such as `/tracks`, `/playlists`, `/library`, `/tags`, and
-`/ai_playlists` remain unchanged.
+FastAPI serves the built React frontend from `frontend/dist`.
 
-The safe default is the local launcher:
+## LAN / Mobile Access
 
-```text
-Start Smart Music Organizer.bat
-```
+LAN/mobile mode allows a phone, tablet, or another computer on the same Wi-Fi network to connect to the app.
 
-It forces:
+This mode should only be used on a trusted network.
 
-```text
-APP_LAN_MODE=false
-BACKEND_HOST=127.0.0.1
-```
-
-It does not require an API token and is meant for desktop use on the same PC.
-
-## Tablet Or Phone Access
-
-LAN/mobile mode exposes the API to your local network. Use it only on a trusted
-network, set a long random `API_AUTH_TOKEN`, and do not expose the app to the
-internet.
-
-Use the dedicated LAN launcher:
-
-```text
-Start Smart Music Organizer LAN.bat
-```
-
-Before first use, create `.env.lan` from `.env.lan.example`:
+Before using LAN mode, create `.env.lan`:
 
 ```powershell
 copy .env.lan.example .env.lan
 ```
 
-Set a long random token in `.env.lan`:
+Set a long random API token:
 
 ```text
 API_AUTH_TOKEN=replace-with-a-long-random-token
 ALLOWED_SCAN_ROOTS=["S:/Music"]
 ```
 
-In LAN mode, library scans are allowed only inside `ALLOWED_SCAN_ROOTS`.
-Use a JSON array of absolute folder paths. Subfolders under those roots are
-allowed. If `ALLOWED_SCAN_ROOTS` is missing or empty in LAN mode, scan
-requests are rejected.
-
-For LAN/demo/privacy mode, pair that with `EXPOSE_LOCAL_PATHS=false` so the UI
-keeps using safe ID-based artwork and does not expose raw local paths in API
-responses.
-
-The LAN launcher forces:
+Start the LAN launcher:
 
 ```text
-APP_LAN_MODE=true
-BACKEND_HOST=0.0.0.0
+Start Smart Music Organizer LAN.bat
 ```
 
-It requires `API_AUTH_TOKEN`, opens `http://localhost:8000` on the PC, and
-lets the built frontend ask for the token at runtime in the browser. You do not
-need to rebuild the frontend when the token changes.
-
-The launchers run uvicorn with `--no-access-log` so tokenized stream and art
-request URLs are not printed to the terminal.
-
-For manual backend startup:
-
-```powershell
-cd backend
-.\venv\Scripts\activate
-$env:APP_LAN_MODE = "true"
-$env:BACKEND_HOST = "0.0.0.0"
-$env:API_AUTH_TOKEN = "use-a-long-random-token"
-$env:ALLOWED_SCAN_ROOTS = '["S:/Music"]'
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Runtime browser entry is the supported LAN token path. Normal API requests,
-streaming, and artwork requests use the `Authorization` header. The frontend no
-longer puts `api_token` values into media URLs.
-
-For Docker Compose, use the explicit LAN override:
-
-```powershell
-$env:API_AUTH_TOKEN = "use-a-long-random-token"
-docker compose -f docker-compose.yml -f docker-compose.lan.yml up --build
-```
-
-Make sure the server computer and tablet/phone are on the same Wi-Fi network.
-
-Find the server computer's local IPv4 address:
+Then find the server computer's local IPv4 address:
 
 ```powershell
 ipconfig
 ```
 
-Look for `IPv4 Address`, then open this URL on the tablet/phone:
+Open this on the mobile device:
 
 ```text
 http://<server-ip>:8000
 ```
 
-For example:
+Example:
 
 ```text
 http://192.168.1.25:8000
 ```
 
-The server computer must stay awake, connected to Wi-Fi, and have the launcher
-or backend terminal window open while using the app.
+The server computer must stay awake and connected to the same Wi-Fi network.
 
-## Capacitor Android Shell
+For full LAN and Capacitor setup details, see:
 
-The React frontend can also be wrapped in a Capacitor Android app while still
-talking to the PC backend over trusted same-Wi-Fi LAN mode.
-
-Important rules:
-
-- Do not use `http://localhost:8000` inside the Android app when the backend is
-  running on your PC. On Android, `localhost` means the phone itself.
-- Build the frontend with `VITE_API_BASE_URL` set to the PC's LAN address, for
-  example `http://192.168.1.25:8000`.
-- Keep the PC backend running in LAN mode and connect the phone to the same
-  Wi-Fi network.
-- Enter the LAN API token in the app when prompted. Do not put the token into
-  URLs.
-
-Suggested workflow:
-
-```powershell
-Start Smart Music Organizer LAN.bat
-cd frontend
-$env:VITE_API_BASE_URL = "http://192.168.1.25:8000"
-npm.cmd run build
-npx.cmd cap sync android
-npx.cmd cap open android
+```text
+docs/setup.md
 ```
 
-Capacitor uses `frontend/dist` as `webDir`, so the Android wrapper ships the
-same built frontend that the browser uses.
+## Documentation
+
+More detailed documentation is available in the `docs` folder.
+
+```text
+docs/
+  overview.md
+  setup.md
+  architecture.md
+  backend.md
+  frontend.md
+  database.md
+  testing.md
+  security.md
+  roadmap.md
+  known-issues.md
+  features/
+```
+
+Recommended starting points:
+
+* `docs/overview.md` - project overview
+* `docs/setup.md` - full setup and run instructions
+* `docs/architecture.md` - system architecture
+* `docs/security.md` - LAN mode, API token, and path-safety notes
+* `docs/testing.md` - backend testing guide
+* `docs/roadmap.md` - current and future project direction
+
+## Current Status
+
+The app currently supports local-server desktop usage, backend API routes, music library scanning, playlist management, playback, Docker local-server mode, and LAN/mobile planning.
+
+Offline mobile playback and Capacitor Android support are still being developed and stabilized.
+
+## Roadmap
+
+Near-term priorities:
+
+1. Stabilize offline mobile downloads
+2. Improve downloaded track recovery and deletion
+3. Complete Capacitor Android workflow
+4. Improve AI playlist accuracy
+5. Add better loudness and lyrics-based analysis
+6. Integrate external hardware controller commands
+7. Improve frontend test coverage
+
+## Known Limitations
+
+* Offline mobile mode is still in progress.
+* Full-library download needs stronger progress and error handling.
+* Metadata sync between desktop and mobile needs a clear strategy.
+* AI playlist quality depends on available metadata and tags.
+* Deep scan features may require optional system packages such as `ffmpeg` and `fpcalc`.
+* Frontend test coverage needs improvement.
+
+## Safety Note
+
+This app can access local music folders and optionally expose the backend over a local network.
+
+Do not expose it to the public internet. LAN mode should only be used on trusted networks with a strong API token.
