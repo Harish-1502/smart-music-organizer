@@ -2,34 +2,50 @@
 
 ## Purpose
 
-The purpose of the Library feature is to allow the user to scan music folders, display them in a table and allow the user to edit them without affecting the actual audio file.
+The Library feature lets the user browse tracks, artists, and albums that already exist in the app database.
+
+Folder scanning and track editing are launched from the Library page, but they are documented separately.
 
 ## User Flow
 
 What the user sees:
-  - An input box for where the selected music folder would be in
-  - A table of all the tracks currently inserted into the database (title, artist, album, filename)
-  - Each track as an edit button which shows a window to allow the user to edit title, artist, album, add art, and tags.
-  - The track table has a filter section to allow the user to search for tracks based on title, artist and album. They can also change the order fo which the tracks are displayed
-  - The bottom of the track table there are a next and prev buttons to allow for navigation in the table
+    - view tracks in a table/list
+    - switch between tracks, artists, and albums
+    - search/filter tracks by title, artist, or album
+    - change sorting/order
+    - navigate through paginated track results
+    - select a track for playback
+    - open track editing from a track row
 
-## Execution Flow
+## Execution Flow: Load Library Tracks
 
-User action
+User opens Library page
   ↓
-Frontend page/component
+LibraryPage.jsx renders
   ↓
-Frontend API/helper/storage function
+useTrackBrowser loads track data
   ↓
-Backend route
+library source calls API helper
   ↓
-Backend service/database/filesystem
+backend returns track metadata
   ↓
-Response/result
+frontend stores tracks in state
   ↓
-Frontend state update
+TrackBrowser renders track rows
+
+## Execution Flow: Switch To Artists Or Albums
+
+User clicks Artists or Albums tab
   ↓
-UI changes
+LibraryViewTabs changes viewMode
+  ↓
+useLibraryViews detects viewMode change
+  ↓
+source.getArtists() or source.getAlbums()
+  ↓
+frontend stores artists/albums in state
+  ↓
+ArtistList or AlbumList renders
 
 ## Frontend Implementation
 
@@ -37,12 +53,11 @@ Important files:
 
 - `frontend/src/pages/LibraryPage.jsx`
 
-Explain what each file does.
-
 - `frontend/src/hooks/useLibraryViews.js`
   - 
 - `frontend/src/hooks/useTrackBrowser.js`
 - `frontend/src/library/librarySource.js`
+- `frontend/src/library/backendLibrarySource.js`
 - `frontend/src/api/libraryApi.js`
 - `frontend/src/components/AlbumList.jsx`
 - `frontend/src/components/ArtistList.jsx`
