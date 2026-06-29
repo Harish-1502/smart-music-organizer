@@ -4,23 +4,28 @@ import {
   resolveTrackPlaybackSource,
 } from "./playbackSourceResolver";
 
+// Shared Container for Player state and controls. Provides a single audio element for controlling the various actions (play, pause, shuffle, repeat and queue management). This is meant to be used as a top level provider in the app so all the components can access the same player state and controls. This is also persistence is handled using localStorage to save the current queue, index, and playback position. The session is restored on mount and saved on relevant state changes.
 const PlayerContext = createContext(null);
 
+// Storage keys for shuffle and repeat mode persistence
 const SHUFFLE_STORAGE_KEY = "smart-music-organizer:shuffle-enabled";
 const REPEAT_STORAGE_KEY = "smart-music-organizer:repeat-mode";
 const VALID_REPEAT_MODES = new Set(["off", "track", "playlist"]);
 
 // Session persistence constants and helpers
+// Stores the full playback session
 const PLAYER_SESSION_STORAGE_KEY = "smart-music-player-session";
+// Current version of the persisted session format.
 const PLAYER_SESSION_VERSION = 2;
+// Max number of tracks to persist in the queue.
 const MAX_PERSISTED_QUEUE_SIZE = 500;
+// Used to control how often the current playback session is saved.
 const CURRENT_TIME_SAVE_INTERVAL_MS = 2000; // throttle timeupdate saves
-// const [hasHydratedSession, setHasHydratedSession] = useState(false);
 
+// Strips the track object down to only playback-relevant fields fir persistence.
 function createTrackSnapshot(track) {
   if (!track || typeof track !== "object") return null;
 
-  // Keep persisted sessions limited to playback-relevant metadata.
   return {
     id: track.id ?? null,
     track_id: track.track_id ?? null,
@@ -51,14 +56,18 @@ function createTrackSnapshot(track) {
   };
 }
 
+// Returns the track id of the track object or null if it's not available. This is used to determine if a track is playable or not.
 function getPlayableTrackId(track) {
   return (track && (track.track_id ?? track.id)) || null;
 }
 
+// Make the queue safe to save to LocalStorage
 function sanitizeQueueForStorage(queue, currentIndex) {
   const q = Array.isArray(queue) ? queue : [];
+  // Empty queue, return empty snapshot and invalid index
   if (q.length === 0) return { queueSnapshot: [], currentIndex: -1 };
 
+  // Save the whole queue if it's small enough (smaller than MAX_PERSISTED_QUEUE_SIZE)
   if (q.length <= MAX_PERSISTED_QUEUE_SIZE) {
     const snap = q.map(createTrackSnapshot).filter(Boolean);
     return {
@@ -71,18 +80,22 @@ function sanitizeQueueForStorage(queue, currentIndex) {
   }
 
   // Slice window around currentIndex to preserve the current track
+  // Why? To prevent the browser from runnning out of storage which can cause it to slow down or crash. This is mean for large playlists with thousands of tracks.
   const half = Math.floor(MAX_PERSISTED_QUEUE_SIZE / 2);
+  // Start of the slice window
   let start = Math.max(
     0,
     (Number.isFinite(currentIndex) ? currentIndex : 0) - half,
   );
+  // End of the slice window
   let end = start + MAX_PERSISTED_QUEUE_SIZE;
   if (end > q.length) {
     end = q.length;
     start = Math.max(0, end - MAX_PERSISTED_QUEUE_SIZE);
   }
-
+  // Create a snapshot of the sliced queue and filter out any invalid tracks
   const slice = q.slice(start, end).map(createTrackSnapshot).filter(Boolean);
+  // Adjust the currentIndex to the new slice window
   const adjustedIndex = Math.min(
     Math.max(Number.isFinite(currentIndex) ? currentIndex - start : 0, 0),
     slice.length - 1,
@@ -90,6 +103,7 @@ function sanitizeQueueForStorage(queue, currentIndex) {
   return { queueSnapshot: slice, currentIndex: adjustedIndex };
 }
 
+// This function defines the actual playback state that the rest of the app uses.
 export function PlayerProvider({ children }) {
   const audioRef = useRef(null);
 
@@ -128,11 +142,13 @@ export function PlayerProvider({ children }) {
   const [artworkUrl, setArtworkUrl] = useState("");
   const [streamError, setStreamError] = useState("");
 
+  // This is triggered whenever the current track changes. This enables to user to switch between tracks in the middle of the track by updating the currentIndex with the next or prev track.
   useEffect(() => {
     let cancelled = false;
     let releasePlaybackSource = () => {};
     let releaseArtworkSource = () => {};
 
+    // Clear state
     setStreamUrl("");
     setArtworkUrl("");
     setStreamError("");
@@ -141,6 +157,7 @@ export function PlayerProvider({ children }) {
       return () => {};
     }
 
+    // This function loads the playback and artwork sources for the current track. Also has a check to see a new track has been selected before the previous track has finished loading. If the new track is selected, the track that was loading will be cancelled the new track will be loaded instead.
     async function loadTrackSources() {
       try {
         const [playbackSource, artworkSource] = await Promise.all([
@@ -189,6 +206,7 @@ export function PlayerProvider({ children }) {
     currentTrack?.artworkBlobId,
   ]);
 
+  // This function plays the audio element
   function playAudioSafely(audioElement) {
     if (!audioElement) {
       setIsPlaying(false);
@@ -205,6 +223,7 @@ export function PlayerProvider({ children }) {
     }
   }
 
+  // This function sets the queue and starts playing from a chosen index
   function playQueue(tracks, startIndex = 0) {
     const normalizedQueue = Array.isArray(tracks) ? tracks : [];
 
@@ -224,12 +243,14 @@ export function PlayerProvider({ children }) {
     setIsPlaying(true);
   }
 
+  // Convenience shortcut to play one track
   function playTrack(track) {
     setQueue([track]);
     setCurrentIndex(0);
     setIsPlaying(true);
   }
 
+  // Pauses if already playing or resumes if paused.
   function togglePlayPause() {
     if (!audioRef.current || !currentTrack) return;
 
@@ -242,6 +263,7 @@ export function PlayerProvider({ children }) {
     }
   }
 
+  // Stops playback and resets the current time to 0. Used when the user reaches the end of the queue and repeat mode is off and to manually stop playback.
   function stop() {
     if (!audioRef.current) return;
 
@@ -250,6 +272,7 @@ export function PlayerProvider({ children }) {
     setIsPlaying(false);
   }
 
+  // Moves to the next track in the queue. If shuffle in enabled, it will select a track at random. If it's on repeat mode, it will reset the current index to 0 and start playing again. If it's at the end of the queue and it's not on repeat mode, it will stop playback.
   function nextTrack() {
     if (queue.length === 0) return;
 
@@ -278,6 +301,7 @@ export function PlayerProvider({ children }) {
     }
   }
 
+  // It's the same as the nextTrack function but it goes to the previous track in the queue.
   function previousTrack() {
     if (queue.length === 0) return;
 
@@ -292,10 +316,12 @@ export function PlayerProvider({ children }) {
     }
   }
 
+  // Shuffle mode
   function toggleShuffle() {
     setShuffleEnabled((prev) => !prev);
   }
 
+  // Repeat mode (off->track->playlist->off)
   function cycleRepeatMode() {
     setRepeatMode((prev) => {
       if (prev === "off") return "track";
@@ -304,6 +330,7 @@ export function PlayerProvider({ children }) {
     });
   }
 
+  // These next two useEffects are used to save the shuffle and repeat mode to LocalStorage when they change. This is used to persist user preference when there is no saved session.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -332,6 +359,7 @@ export function PlayerProvider({ children }) {
   const hasHydratedSessionRef = useRef(false);
   const [hasHydratedSession, setHasHydratedSession] = useState(false);
 
+  // Clear the stored session from LocalStorage. This is used when the stored session is invalid or when playback fails for restored tracks. Used to unstuck the player in a broken state.
   function clearStoredSession() {
     if (typeof window === "undefined") return;
     try {
@@ -339,6 +367,7 @@ export function PlayerProvider({ children }) {
     } catch {}
   }
 
+  // Saves the current queue, index, playback time, shuffle state, and repeat state in a session.
   function saveSession(forceTime) {
     if (typeof window === "undefined") return;
     // Do not write session until initial hydration/restore has completed.

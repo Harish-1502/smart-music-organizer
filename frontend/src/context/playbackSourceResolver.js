@@ -22,7 +22,7 @@ function createResolvedSource(url, shouldRevoke = false) {
     },
   };
 }
-
+// Return the best playable audio source for a track, in priority order
 export async function resolveTrackPlaybackSource(track) {
   if (!track) {
     return createResolvedSource("", false);
@@ -62,6 +62,7 @@ export async function resolveTrackPlaybackSource(track) {
   return createResolvedSource(blobUrl, true);
 }
 
+// Same as the above function but for artwork. Returns the best playable artwork source for a track, in priority order.
 export async function resolveTrackArtworkSource(track) {
   if (!track?.offline) {
     return createResolvedSource("", false);
