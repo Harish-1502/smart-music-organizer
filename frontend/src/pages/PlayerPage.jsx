@@ -18,6 +18,7 @@ import useAuthenticatedBlobUrl from "../hooks/useAuthenticatedBlobUrl";
 import { maskTrack, shouldHideDemoArtwork } from "../utils/demoMode";
 import "../styles/PlayerPage.css";
 
+// Used to format time into a human-readable string (ex: "3:45")
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return "--:--";
@@ -37,6 +38,7 @@ function formatTime(seconds) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
+// Used to clamp a volume percentage value to a range of 0-100, rounding to the nearest integer
 function clampVolumePercent(value) {
   if (!Number.isFinite(value)) {
     return 100;
@@ -45,6 +47,7 @@ function clampVolumePercent(value) {
   return Math.min(100, Math.max(0, Math.round(value)));
 }
 
+// Returns the first non-empty string because the track title is might be stored in 2 different fields
 function firstNonEmpty(...values) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) {
@@ -55,6 +58,7 @@ function firstNonEmpty(...values) {
   return null;
 }
 
+// Error handling for audio playback issues by returning a user-friendly message
 function getPlaybackErrorMessage(error, audioElement) {
   const errorName =
     error && typeof error === "object" && "name" in error ? error.name : "";
@@ -131,7 +135,10 @@ export default function PlayerPage() {
   const [isAudioReady, setIsAudioReady] = useState(false);
   const [playbackError, setPlaybackError] = useState("");
 
+  // Resets playback state and shows the new loading state to prevent the old state from staying
   useEffect(() => {
+
+    // Resets states when there is no current track
     if (!currentTrack) {
       setIsLoading(false);
       setIsBuffering(false);
@@ -140,27 +147,34 @@ export default function PlayerPage() {
       return;
     }
 
+    // Checks if the audio element has enough date to play
     const audioElement = audioRef.current;
     const hasPlaybackData = audioElement?.readyState >= 2;
 
+    // Updates the playback state
     setIsLoading(!hasPlaybackData);
     setIsBuffering(false);
     setIsAudioReady(hasPlaybackData);
     setPlaybackError(
       audioElement?.error ? getPlaybackErrorMessage(null, audioElement) : "",
     );
+
+    // Occurs when the current track changes
   }, [audioRef, currentTrack]);
 
+  // Acts as the bridge between the app's PlayerContext and the browser's audio element
   useEffect(() => {
     const audioElement = audioRef.current;
     let cancelled = false;
 
+    // Check if there is an audio element or a current track
     if (!audioElement || !currentTrack) {
       return () => {
         cancelled = true;
       };
     }
 
+    // Tries to play the audio element and displays an error if it fails
     if (isPlaying && streamUrl) {
       try {
         const playPromise = audioElement.play();
@@ -191,8 +205,11 @@ export default function PlayerPage() {
     return () => {
       cancelled = true;
     };
+
+    // Occurs when the audio element, current track, isPlaying state, or stream URL changes
   }, [audioRef, currentTrack, isPlaying, streamUrl]);
 
+  // Provides live updates of the current playback time and duration
   useEffect(() => {
     const audioElement = audioRef.current;
     const fallbackDuration = Number.isFinite(currentTrack?.duration)
@@ -212,6 +229,7 @@ export default function PlayerPage() {
       );
     }
 
+    // Reads the current time and duration from the audio element and updates the state accordingly
     setCurrentTime(
       Number.isFinite(audioElement?.currentTime) ? audioElement.currentTime : 0,
     );
@@ -236,8 +254,11 @@ export default function PlayerPage() {
       audioElement.removeEventListener("durationchange", syncProgress);
       audioElement.removeEventListener("emptied", syncProgress);
     };
+
+    // Occurs when the audio element or current track changes
   }, [audioRef, currentTrack]);
 
+  // Keeps the volume and mute state in sync with the audio element
   useEffect(() => {
     const audioElement = audioRef.current;
 
@@ -271,11 +292,13 @@ export default function PlayerPage() {
     };
   }, [audioRef, currentTrack]);
 
+  // The keyboard shortcuts for the player page to control playback easily and faster
   useEffect(() => {
     function handleGlobalKeyDown(event) {
       const activeElement = document.activeElement;
       const tag = activeElement?.tagName;
 
+      // To avoid triggering player controls when the user is typing, editing, using sliders, or using keyboard shortcuts for something else 
       if (
         event.defaultPrevented ||
         event.altKey ||
@@ -289,6 +312,7 @@ export default function PlayerPage() {
         return;
       }
 
+      // Only space, left arrow and right arrow keys are supported for now
       try {
         if (event.code === "Space") {
           event.preventDefault();
@@ -316,6 +340,8 @@ export default function PlayerPage() {
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown);
     };
+
+    // Occurs when the togglePlayPause, nextTrack, or previousTrack are triggered 
   }, [togglePlayPause, nextTrack, previousTrack]);
 
   const effectiveCurrentTime =
@@ -372,15 +398,20 @@ export default function PlayerPage() {
     </div>
   );
 
+  // Makes the back button behave sensibly by checking if the user has a previous page in their history, otherwise it will navigate to the playlists page
   function handleBackNavigation() {
+
+    // Checks if the user has a previous page in their history
     if (window.history.state?.idx > 0) {
       navigate(-1);
       return;
     }
 
+    // Go the playlists page if there is no previous page in the history
     navigate("/playlists");
   }
 
+  // Used to let the user seek to a specific time in the track by clicking or dragging on the progress bar
   function getTimeFromClientX(clientX) {
     if (seekDisabled || !progressBarRef.current) {
       return 0;
@@ -396,6 +427,7 @@ export default function PlayerPage() {
     return (clampedX / rect.width) * duration;
   }
 
+  // Commits the seek to the audio element and updates the current time state
   function commitSeek(nextTime) {
     if (!audioRef.current || seekDisabled || !Number.isFinite(nextTime)) {
       return;
@@ -407,6 +439,7 @@ export default function PlayerPage() {
     setCurrentTime(clampedTime);
   }
 
+  // Makes the progress bar usable with mouse, touch, and keyboard
   function handleProgressPointerDown(event) {
     if (seekDisabled || (event.pointerType === "mouse" && event.button !== 0)) {
       return;
@@ -485,6 +518,7 @@ export default function PlayerPage() {
     commitSeek(nextTime);
   }
 
+  // Connect the UI slider and mute button to the real audio element
   function handleVolumeChange(event) {
     const audioElement = audioRef.current;
     const rawValue = Number(event.target.value);
@@ -517,6 +551,7 @@ export default function PlayerPage() {
     audioElement.muted = !audioElement.muted;
   }
 
+  // This is the displayed logic. The duplication is intentional enough to keep the display logic readable, though some of these could probably be consolidated later.
   function getQueueTrackTitle(track) {
     return (
       firstNonEmpty(
@@ -566,6 +601,7 @@ export default function PlayerPage() {
     );
   }
 
+  // Gives users direct control over where playback starts
   function handleQueueItemClick(index) {
     if (
       !canJumpQueue ||
@@ -579,6 +615,7 @@ export default function PlayerPage() {
     playQueue(queueItems, index);
   }
 
+  // Handlers to update the status. This allows real-time status events
   function handleLoadStart() {
     setIsLoading(true);
     setIsBuffering(false);
@@ -624,6 +661,8 @@ export default function PlayerPage() {
       ),
     );
   }
+
+  // Attaches the audio event listeners above to the actual audio element
   useEffect(() => {
     const audioElement = audioRef.current;
     if (!audioElement || !currentTrack) {
@@ -656,6 +695,7 @@ export default function PlayerPage() {
     handleAudioError,
   ]);
 
+  // There’s an old playback error, it clears it before retrying
   function handleTogglePlayback() {
     if (playbackError) {
       setPlaybackError("");
