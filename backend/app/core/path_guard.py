@@ -58,7 +58,7 @@ def validate_scan_root(path: str | Path, allowed_roots: Iterable[str | Path]) ->
 
     allowed_roots = list(allowed_roots)
     if allowed_roots and not is_within_any_directory(resolved_path, allowed_roots):
-        raise PathSecurityError("Folder is outside the allowed scan roots.")
+        raise PathSecurityError("Scan folder is outside the allowed scan roots.")
 
     return resolved_path
 

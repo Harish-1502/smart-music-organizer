@@ -1,8 +1,10 @@
 # Environment / secrets
 .env
+.env.lan
 .env.*
 !.env.example
 !**/.env.example
+!.env.lan.example
 
 # Python / backend generated files
 __pycache__/

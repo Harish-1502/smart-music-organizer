@@ -1,0 +1,10 @@
+# WARNING: This exposes the API on your local network.
+# Use only on a trusted network with API_AUTH_TOKEN set.
+services:
+  smart-music-organizer:
+    ports: !override
+      - "0.0.0.0:8000:8000"
+    environment:
+      APP_LAN_MODE: "true"
+      BACKEND_HOST: "0.0.0.0"
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN:?Set API_AUTH_TOKEN for LAN mode}

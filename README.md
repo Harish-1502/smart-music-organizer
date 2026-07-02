@@ -178,6 +178,8 @@ http://<server-ip>:8000
 
 Docker builds the React/Vite frontend inside the image, then runs FastAPI from the final Python container. The final runtime container does not need Node.
 
+Docker Compose publishes the app to `127.0.0.1:8000` on the host by default.
+
 ### Docker V1 Limitations
 
 Docker v1 is focused on reliable core local-server usage:
@@ -319,7 +321,7 @@ After building the frontend, run the backend server:
 ```powershell
 cd backend
 .\venv\Scripts\activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Then open:
@@ -330,12 +332,91 @@ http://localhost:8000
 
 FastAPI serves the built React frontend from `frontend/dist` when it exists. API routes such as `/tracks`, `/playlists`, `/library`, `/tags`, and `/ai_playlists` remain unchanged.
 
-You can also use the Windows launcher:
+The safe default is the local launcher:
 
 ```text
 Start Smart Music Organizer.bat
 ```
 
+It forces:
+
+```text
+APP_LAN_MODE=false
+BACKEND_HOST=127.0.0.1
+```
+
+It does not require an API token and is meant for desktop use on the same PC.
+
+## Tablet Or Phone Access
+
+LAN/mobile mode exposes the API to your local network. Use it only on a trusted
+network, set a long random `API_AUTH_TOKEN`, and do not expose the app to the
+internet.
+
+Use the dedicated LAN launcher:
+
+```text
+Start Smart Music Organizer LAN.bat
+```
+
+Before first use, create `.env.lan` from `.env.lan.example`:
+
+```powershell
+copy .env.lan.example .env.lan
+```
+
+Set a long random token in `.env.lan`:
+
+```text
+API_AUTH_TOKEN=replace-with-a-long-random-token
+ALLOWED_SCAN_ROOTS=["S:/Music"]
+```
+
+In LAN mode, library scans are allowed only inside `ALLOWED_SCAN_ROOTS`.
+Use a JSON array of absolute folder paths. Subfolders under those roots are
+allowed. If `ALLOWED_SCAN_ROOTS` is missing or empty in LAN mode, scan
+requests are rejected.
+
+The LAN launcher forces:
+
+```text
+APP_LAN_MODE=true
+BACKEND_HOST=0.0.0.0
+```
+
+It requires `API_AUTH_TOKEN`, opens `http://localhost:8000` on the PC, and
+lets the built frontend ask for the token at runtime in the browser. You do not
+need to rebuild the frontend when the token changes.
+
+For manual backend startup:
+
+```powershell
+cd backend
+.\venv\Scripts\activate
+$env:APP_LAN_MODE = "true"
+$env:BACKEND_HOST = "0.0.0.0"
+$env:API_AUTH_TOKEN = "use-a-long-random-token"
+$env:ALLOWED_SCAN_ROOTS = '["S:/Music"]'
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+If you are using the Vite dev server and want a build-time fallback token for
+development only, you can still set:
+
+```powershell
+$env:VITE_API_AUTH_TOKEN = "use-a-long-random-token"
+```
+
+Runtime browser entry remains the primary LAN token path.
+
+For Docker Compose, use the explicit LAN override:
+
+```powershell
+$env:API_AUTH_TOKEN = "use-a-long-random-token"
+docker compose -f docker-compose.yml -f docker-compose.lan.yml up --build
+```
+
+Make sure the server computer and tablet/phone are on the same Wi-Fi network.
 The launcher starts the FastAPI server on `0.0.0.0:8000`, opens `http://localhost:8000`, and prints tablet access instructions.
 
 ---

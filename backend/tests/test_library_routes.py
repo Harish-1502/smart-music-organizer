@@ -7,7 +7,9 @@ from app.models.tag import Tag
 from app.models.track_tag import TrackTag
 from app.models.track_tag_suggestion import TrackTagSuggestion
 from app.routes import library as library_route
+from app.services import scanner as scanner_service
 from app.services.scanner import reset_scan_state, scan_state
+from app.core import auth
 
 client = TestClient(app)
 CLEAR_LIBRARY_CONFIRMATION = "CLEAR LIBRARY"
@@ -113,6 +115,56 @@ def test_post_scan_valid_folder_starts_scan(client, tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.json()["message"] == "Scan started"
 
+
+def test_post_scan_lan_mode_without_allowed_roots_returns_400(
+    client,
+    tmp_path,
+    monkeypatch,
+):
+    music_dir = tmp_path / "Music"
+    music_dir.mkdir()
+
+    monkeypatch.setattr(scanner_service.settings, "app_lan_mode", True)
+    monkeypatch.setattr(scanner_service.settings, "api_auth_token", "test-token")
+    monkeypatch.setattr(scanner_service.settings, "allowed_scan_roots", [])
+
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": str(music_dir)},
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "LAN mode requires ALLOWED_SCAN_ROOTS. Set at least one allowed music folder before scanning."
+    )
+
+
+def test_post_scan_lan_mode_outside_allowed_roots_returns_403(
+    client,
+    tmp_path,
+    monkeypatch,
+):
+    allowed_root = tmp_path / "Allowed"
+    blocked_root = tmp_path / "Blocked"
+    allowed_root.mkdir()
+    blocked_root.mkdir()
+
+    monkeypatch.setattr(scanner_service.settings, "app_lan_mode", True)
+    monkeypatch.setattr(scanner_service.settings, "api_auth_token", "test-token")
+    monkeypatch.setattr(scanner_service.settings, "allowed_scan_roots", [allowed_root])
+
+    # Also patch the auth module's settings if auth uses a separate imported settings reference.
+    monkeypatch.setattr(auth.settings, "app_lan_mode", True)
+    monkeypatch.setattr(auth.settings, "api_auth_token", "test-token")
+
+    response = client.post(
+        "/library/scan",
+        json={"folder_path": str(blocked_root)},
+        headers={"Authorization": "Bearer test-token"}, 
+    )
+
+    assert response.status_code == 403
 
 def test_post_scan_invalid_folder_returns_400(client):
     """

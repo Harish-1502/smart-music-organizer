@@ -24,7 +24,6 @@ function createTrackSnapshot(track) {
     artist: track.artist ?? track.display_artist ?? null,
     album: track.album ?? null,
     duration: typeof track.duration === "number" ? track.duration : null,
-    art_path: track.art_path ?? null,
   };
 }
 

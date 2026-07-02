@@ -39,6 +39,8 @@ def start_library_scan(payload: LibraryScanRequest):
 
         # To be replaced 
         # return {"message": "Scan completed"}
+    except PathSecurityError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
