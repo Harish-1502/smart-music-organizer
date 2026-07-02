@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
-// import { runAndroidOfflineFoundationSmokeTest } from "./offline/androidOfflineFoundationSmokeTest";
+// import { runAndroidOfflineFoundationSmokeTest } from "./features/offline/services/androidOfflineFoundationSmokeTest";
 import { Link, Routes, Route, Navigate } from "react-router-dom";
 import { API_AUTH_REQUIRED_EVENT } from "./api/apiBase";
 import {
   API_TOKEN_UPDATED_EVENT,
   clearApiToken,
 } from "./api/authToken";
-import ApiTokenPrompt from "./components/ApiTokenPrompt";
-import LibraryPage from "./pages/LibraryPage";
+import ApiTokenPrompt from "./shared/components/ApiTokenPrompt";
+import LibraryPage from "./features/library/pages/LibraryPage";
 import ConnectionPage from "./pages/ConnectionPage";
-import DownloadedPage from "./pages/DownloadedPage";
+import DownloadedPage from "./features/offline/pages/DownloadedPage";
 import PlaylistsPage from "./features/playlists/pages/PlaylistsPage";
 import PlaylistDetailPage from "./features/playlists/pages/PlaylistDetailPage";
-import PlayerPage from "./pages/PlayerPage.jsx";
+import PlayerPage from "./features/player/pages/PlayerPage.jsx";
 import TagCalibrationPage from "./pages/TagCalibrationPage.jsx";
-import MiniPlayer from "./components/MiniPlayer";
-import { usePlayer } from "./context/PlayerContext";
+import MiniPlayer from "./features/player/components/MiniPlayer";
+import { usePlayer } from "./features/player/context/PlayerContext";
 
 export default function App() {
   const { currentTrack, audioRef, isPlaying, streamUrl, handleEnded } = usePlayer();

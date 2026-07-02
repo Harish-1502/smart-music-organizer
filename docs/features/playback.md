@@ -14,20 +14,20 @@ What the user sees:
     - The current tracks name, artist and album
     - The show queue button to show the current queue
 
-## Execution Flow: Load Library Tracks
+## Execution Flow: Load track for playback
 
-User opens Library page
-  ↓
-LibraryPage.jsx renders
-  ↓
+User selects a tracks
+            ↓
+PlayerPage.jsx renders
+            ↓
 useTrackBrowser loads track data
-  ↓
+            ↓
 library source calls API helper
-  ↓
+            ↓
 backend returns track metadata
-  ↓
+            ↓
 frontend stores tracks in state
-  ↓
+            ↓
 TrackBrowser renders track rows
 
 ## Frontend Implementation

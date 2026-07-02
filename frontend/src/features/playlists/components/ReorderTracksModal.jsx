@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { maskTrack } from "../../../utils/demoMode";
-import "../../../styles/playlist/ReorderPlaylistModal.css";
+import "../styles/ReorderPlaylistModal.css";
 
 function SortableTrackRow({ track }) {
   const {

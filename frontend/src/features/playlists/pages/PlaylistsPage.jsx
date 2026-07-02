@@ -8,8 +8,8 @@ import {
 import CreatePlaylistModal from "../components/CreatePlaylistModal";
 import GenerateAiPlaylistModal from "../components/GenerateAiPlaylistModal";
 import { featureFlags } from "../../../config/featureFlags";
-import { getPlaylistSourceForMode } from "../../../playlists/playlistSource";
-import "../../../styles/PlaylistsPage.css";
+import { getPlaylistSourceForMode } from "../sources/playlistSource";;
+import "../styles/PlaylistsPage.css";
 
 export default function PlaylistsPage({
   initialAppMode = null,

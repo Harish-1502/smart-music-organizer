@@ -8,11 +8,11 @@ import {
 import PlaylistTrackRow from "../components/PlaylistTrackRow";
 import AddTracksModal from "../components/AddTracksModal";
 import ReorderTracksModal from "../components/ReorderTracksModal";
-import { usePlayer } from "../../../context/PlayerContext";
-import { downloadPlaylistForOffline } from "../../../offline/downloadPlaylist";
-import { hasOfflinePlaylist } from "../../../offline/mobileOfflineRepository";
-import { getPlaylistSourceForMode } from "../../../playlists/playlistSource";
-import "../../../styles/PlaylistDetailPage.css";
+import { usePlayer } from "../../player/context/PlayerContext";
+import { downloadPlaylistForOffline } from "../../offline/services/downloadPlaylist";
+import { hasOfflinePlaylist } from "../../offline/storage/mobileOfflineRepository";
+import { getPlaylistSourceForMode } from "../sources/playlistSource";
+import "../styles/PlaylistDetailPage.css";
 
 function formatDownloadBytes(totalBytes) {
   const size = Number(totalBytes);
