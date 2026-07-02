@@ -1,20 +1,143 @@
 # Smart Music Organizer
 
-Smart Music Organizer is a local personal server app. One computer runs the
-FastAPI server and serves the built React app. By default the backend binds to
-`127.0.0.1`, so it is only reachable from the same computer.
+Smart Music Organizer is a full-stack, local-first music organizer and playlist app built with React, FastAPI, SQLite, and SQLAlchemy.
 
-This is not a public hosted website setup.
-LAN/mobile access is an explicit opt-in mode, requires an API token, and should
-not be exposed to the internet.
+One computer runs the FastAPI server and serves the built React app. Other devices on the same Wi-Fi, such as a tablet or phone, can open the app in a browser.
+
+This is meant for personal local-server use. It is not a public hosted website setup.
+
+---
+
+## Features
+
+- Local music library scanning
+- Track browsing with search, sorting, filtering, and pagination
+- Metadata extraction from audio files
+- Album art display
+- Music playback through the frontend player
+- Mini player with playback persistence
+- Track metadata editing
+- Playlist creation, renaming, and deletion
+- Add tracks to playlists
+- Playlist track reordering
+- Duplicate playlist entries supported
+- FastAPI backend API
+- SQLite local database
+- SQLAlchemy models and Alembic migrations
+- React frontend with reusable hooks and components
+- Pytest backend testing
+- Playwright end-to-end testing
+- Early AI playlist generation foundation
+
+---
+
+## Architecture Overview
+
+### Library Input Layer
+
+The user provides a local folder containing supported music files such as MP3, FLAC, WAV, M4A, AAC, or OGG.
+
+### Scan Layer
+
+The backend scans the selected folder, detects supported audio files, extracts metadata, and stores track information in the database.
+
+### Database Layer
+
+SQLite stores track metadata, file paths, playlist records, playlist-track relationships, and playlist ordering.
+
+### Backend API Layer
+
+FastAPI exposes endpoints for scanning, browsing tracks, editing metadata, loading album art, managing playlists, and reordering playlist tracks.
+
+### Frontend Layer
+
+React displays the music library, filters, track table, player controls, playlist pages, and add-track modal.
+
+### Playback Layer
+
+The frontend player manages audio playback, mini player state, progress tracking, and restored playback state after refresh.
+
+### Playlist Layer
+
+Users can create playlists, rename playlists, delete playlists, add tracks, remove tracks, and reorder tracks.
+
+### AI Playlist Layer
+
+Prompt parsing, tag inference, rule-based scoring, and playlist generation logic provide the foundation for AI-assisted playlists.
+
+---
+
+## Design Decisions
+
+- Local-first design keeps the user's music library private and available without cloud services.
+- SQLite was chosen because it is lightweight, simple to ship, and ideal for a personal local app.
+- FastAPI was used to create a clean backend API with Python typing and easy testing support.
+- SQLAlchemy separates database models from route logic.
+- Alembic manages database migrations as the schema grows.
+- React was used to build a responsive frontend with reusable hooks and components.
+- Playlist tracks use separate playlist-track IDs so the same song can appear multiple times in one playlist.
+- Playlist ordering is stored explicitly to support reliable reordering.
+- Album art is served from the backend instead of being embedded directly into the frontend.
+- Playwright was added to test real user flows such as route loading and player persistence.
+- The AI playlist system starts with rule-based logic before moving toward smarter recommendations.
+
+---
+
+## Tech Stack
+
+### Frontend
+
+- React
+- Vite
+- JavaScript
+- CSS
+- React Router
+- Axios
+
+### Backend
+
+- Python
+- FastAPI
+- SQLAlchemy
+- Alembic
+- SQLite
+
+### Audio / Metadata
+
+- Local audio file scanning
+- Metadata extraction
+- Album art extraction
+
+### Testing
+
+- Pytest
+- Playwright
+
+---
+
+## Requirements
+
+For development mode:
+
+- Python 3.10+
+- Node.js
+- npm
+- SQLite
+- Git
+- A local folder containing music files
+
+For Docker local-server mode:
+
+- Docker Desktop
+- A local folder containing music files
+
+---
 
 ## Docker Local-Server Mode
 
-Use Docker when you want to run the app without installing Python, Node, React,
-or opening the project in an editor.
+Use Docker when you want to run the app without installing Python, Node, React, or opening the project in an editor.
 
-From the project root, create host folders for persistent data and the default
-music mount:
+From the project root, create host folders for persistent data and the default music mount:
 
 ```powershell
 mkdir data
@@ -47,23 +170,29 @@ Then open:
 http://localhost:8000
 ```
 
-Docker builds the React/Vite frontend inside the image, then runs FastAPI from
-the final Python container. The final runtime container does not need Node.
+From a tablet or phone on the same Wi-Fi, open:
+
+```text
+http://<server-ip>:8000
+```
+
+Docker builds the React/Vite frontend inside the image, then runs FastAPI from the final Python container. The final runtime container does not need Node.
 
 Docker Compose publishes the app to `127.0.0.1:8000` on the host by default.
 
 ### Docker V1 Limitations
 
-Docker v1 is focused on reliable core local-server usage: FastAPI starts,
-the React frontend is served, SQLite persists through `./data`, `/music` is
-mounted, and the library, playlist, player, and streaming routes are available.
+Docker v1 is focused on reliable core local-server usage:
 
-Deep scan, audio fingerprinting, AcoustID fallback, and deeper audio analysis
-may require optional system packages such as `ffmpeg` and
-`fpcalc`/`libchromaprint-tools`. Those packages are not installed in the
-default Docker image yet because they make builds depend on Debian package
-mirror availability. They will be handled later in a Docker-full image or an
-optional Compose profile.
+- FastAPI starts.
+- The React frontend is served.
+- SQLite persists through `./data`.
+- `/music` is mounted.
+- The library, playlist, player, and streaming routes are available.
+
+Deep scan, audio fingerprinting, AcoustID fallback, and deeper audio analysis may require optional system packages such as `ffmpeg` and `fpcalc` / `libchromaprint-tools`.
+
+Those packages are not installed in the default Docker image yet because they make builds depend on Debian package mirror availability. They can be handled later in a Docker-full image or an optional Compose profile.
 
 ### Docker Music Path
 
@@ -91,8 +220,7 @@ Do not enter your Windows music path in Docker mode.
 
 ### Docker Data And Database
 
-Docker stores SQLite data, uploaded artwork, and app data in the root `data`
-folder through this volume:
+Docker stores SQLite data, uploaded artwork, and app data in the root `data` folder through this volume:
 
 ```text
 ./data:/app/backend/data
@@ -122,19 +250,19 @@ to:
 data/app.db
 ```
 
-The Docker image does not copy your music files or bake your SQLite database
-into the image.
+The Docker image does not copy your music files or bake your SQLite database into the image.
 
 ### Optional Deep Scan Key
 
-Deep scan fingerprint lookup can use an AcoustID API key. Copy `.env.example`
-to `.env` and set:
+Deep scan fingerprint lookup can use an AcoustID API key. Copy `.env.example` to `.env` and set:
 
 ```text
 ACOUSTID_API_KEY=your-key-here
 ```
 
 Docker Compose reads `.env` automatically for variable substitution.
+
+---
 
 ## Development Mode
 
@@ -162,8 +290,9 @@ Open the Vite URL, usually:
 http://localhost:5173
 ```
 
-In Vite development, frontend API calls use `http://127.0.0.1:8000` by
-default. You can override this with `VITE_API_BASE_URL`.
+In Vite development, frontend API calls use `http://127.0.0.1:8000` by default. You can override this with `VITE_API_BASE_URL`.
+
+---
 
 ## Build The Frontend
 
@@ -180,6 +309,8 @@ The production build is written to:
 ```text
 frontend/dist
 ```
+
+---
 
 ## Production Local-Server Mode
 
@@ -199,9 +330,7 @@ Then open:
 http://localhost:8000
 ```
 
-FastAPI serves the built React frontend from `frontend/dist` when it exists.
-API routes such as `/tracks`, `/playlists`, `/library`, `/tags`, and
-`/ai_playlists` remain unchanged.
+FastAPI serves the built React frontend from `frontend/dist` when it exists. API routes such as `/tracks`, `/playlists`, `/library`, `/tags`, and `/ai_playlists` remain unchanged.
 
 The safe default is the local launcher:
 
@@ -288,6 +417,13 @@ docker compose -f docker-compose.yml -f docker-compose.lan.yml up --build
 ```
 
 Make sure the server computer and tablet/phone are on the same Wi-Fi network.
+The launcher starts the FastAPI server on `0.0.0.0:8000`, opens `http://localhost:8000`, and prints tablet access instructions.
+
+---
+
+## Tablet Or Phone Access
+
+Make sure the server computer and tablet or phone are on the same Wi-Fi network.
 
 Find the server computer's local IPv4 address:
 
@@ -295,7 +431,7 @@ Find the server computer's local IPv4 address:
 ipconfig
 ```
 
-Look for `IPv4 Address`, then open this URL on the tablet/phone:
+Look for `IPv4 Address`, then open this URL on the tablet or phone:
 
 ```text
 http://<server-ip>:8000
@@ -307,5 +443,13 @@ For example:
 http://192.168.1.25:8000
 ```
 
-The server computer must stay awake, connected to Wi-Fi, and have the launcher
-or backend terminal window open while using the app.
+The server computer must stay awake, connected to Wi-Fi, and have the launcher or backend terminal window open while using the app.
+
+---
+
+## Notes
+
+- Docker mode scans `/music`, not the original Windows path.
+- Development mode uses separate frontend and backend dev servers.
+- Production local-server mode serves the built React app through FastAPI.
+- The app is designed for private local use, not public hosting.
