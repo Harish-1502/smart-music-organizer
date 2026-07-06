@@ -16,18 +16,18 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock("../appMode/appMode", () => ({
+vi.mock("../../../appMode/appMode", () => ({
   getAppMode: () => currentAppMode,
   isOfflineMode: (mode) => mode === "offline",
   subscribeToAppModeChanges: () => () => {},
 }));
 
-vi.mock("../library/librarySource", () => ({
+vi.mock("../sources/librarySource", () => ({
   getLibrarySourceForMode: (mode) =>
     mode === "offline" ? sourceMocks.offline : sourceMocks.backend,
 }));
 
-vi.mock("../hooks/useTrackBrowser", () => ({
+vi.mock("../../../shared/hooks/useTrackBrowser", () => ({
   default: (source) => {
     lastTrackBrowserSource = source;
 
@@ -82,13 +82,13 @@ vi.mock("../hooks/useLibraryViews", () => ({
   },
 }));
 
-vi.mock("../context/PlayerContext", () => ({
+vi.mock("../../player/context/PlayerContext", () => ({
   usePlayer: () => ({
     playQueue: vi.fn(),
   }),
 }));
 
-vi.mock("../utils/demoMode", () => ({
+vi.mock("../../../utils/demoMode", () => ({
   isDemoMode: () => false,
 }));
 
@@ -108,7 +108,7 @@ vi.mock("../components/AlbumList", () => ({
   default: () => React.createElement("div", null, "AlbumList"),
 }));
 
-vi.mock("../components/TrackBrowser", () => ({
+vi.mock("../../../shared/components/TrackBrowser", () => ({
   default: ({ mode, emptyStateMessage }) =>
     React.createElement(
       "div",
