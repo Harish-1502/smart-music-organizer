@@ -14,9 +14,9 @@ const nativeMediaStorageMocks = {
   getPlayableNativeArtworkUri: vi.fn(),
 };
 
-vi.mock("../api/apiBase", () => apiBaseMocks);
-vi.mock("../offline/offlineStorage", () => offlineStorageMocks);
-vi.mock("../offline/nativeMediaFileStorage", () => nativeMediaStorageMocks);
+vi.mock("../../../api/apiBase", () => apiBaseMocks);
+vi.mock("../../offline/storage/offlineStorage", () => offlineStorageMocks);
+vi.mock("../../offline/storage/nativeMediaFileStorage", () => nativeMediaStorageMocks);
 
 async function loadModule() {
   return import("./playbackSourceResolver.js");
