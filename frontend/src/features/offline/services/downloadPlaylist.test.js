@@ -19,8 +19,8 @@ const offlineTrackDownloadMocks = {
   downloadTrackForOffline: vi.fn(),
 };
 
-vi.mock("./offlineStorage", () => offlineStorageMocks);
-vi.mock("./mobileOfflineRepository", () => mobileOfflineRepositoryMocks);
+vi.mock("../storage/offlineStorage", () => offlineStorageMocks);
+vi.mock("../storage/mobileOfflineRepository", () => mobileOfflineRepositoryMocks);
 vi.mock("./offlineTrackDownload", () => offlineTrackDownloadMocks);
 
 async function loadModule() {
