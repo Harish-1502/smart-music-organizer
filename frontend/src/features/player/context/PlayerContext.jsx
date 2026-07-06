@@ -3,6 +3,11 @@ import {
   resolveTrackArtworkSource,
   resolveTrackPlaybackSource,
 } from "./playbackSourceResolver";
+import { useCallback } from "react";
+import { PLAYER_COMMANDS } from "../controls/playerCommandNames";
+import { useKeyboardPlayerControls } from "../hooks/useKeyboardPlayerControls";
+import { useMp3ControllerControls } from "../hooks/useMp3ControllerControls";
+import { createPlayerActions } from "../controls/playerCommandActions";
 
 // Shared Container for Player state and controls. Provides a single audio element for controlling the various actions (play, pause, shuffle, repeat and queue management). This is meant to be used as a top level provider in the app so all the components can access the same player state and controls. This is also persistence is handled using localStorage to save the current queue, index, and playback position. The session is restored on mount and saved on relevant state changes.
 const PlayerContext = createContext(null);
@@ -110,6 +115,14 @@ function sanitizeQueueForStorage(queue, currentIndex) {
   return { queueSnapshot: slice, currentIndex: adjustedIndex };
 }
 
+function clampVolumePercent(value) {
+  if (!Number.isFinite(value)) {
+    return 100;
+  }
+
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
 // This function defines the actual playback state that the rest of the app uses.
 export function PlayerProvider({ children }) {
   const audioRef = useRef(null);
@@ -148,6 +161,8 @@ export function PlayerProvider({ children }) {
   const [streamUrl, setStreamUrl] = useState("");
   const [artworkUrl, setArtworkUrl] = useState("");
   const [streamError, setStreamError] = useState("");
+  const [volume, setVolume] = useState(100);
+  const [isMuted, setIsMuted] = useState(false);
 
   // This is triggered whenever the current track changes. This enables to user to switch between tracks in the middle of the track by updating the currentIndex with the next or prev track.
   useEffect(() => {
@@ -213,6 +228,39 @@ export function PlayerProvider({ children }) {
     currentTrack?.artworkBlobId,
   ]);
 
+  useEffect(() => {
+    const audioElement = audioRef.current;
+
+    function syncVolumeState() {
+      if (!audioElement) {
+        setVolume(100);
+        setIsMuted(false);
+        return;
+      }
+
+      setVolume(
+        clampVolumePercent(
+          Number.isFinite(audioElement.volume)
+            ? audioElement.volume * 100
+            : 100,
+        ),
+      );
+      setIsMuted(Boolean(audioElement.muted));
+    }
+
+    syncVolumeState();
+
+    if (!audioElement) {
+      return;
+    }
+
+    audioElement.addEventListener("volumechange", syncVolumeState);
+
+    return () => {
+      audioElement.removeEventListener("volumechange", syncVolumeState);
+    };
+  }, [audioRef, currentTrack]);
+
   // This function plays the audio element
   function playAudioSafely(audioElement) {
     if (!audioElement) {
@@ -229,6 +277,26 @@ export function PlayerProvider({ children }) {
       setIsPlaying(false);
     }
   }
+
+  const playerDeps = {
+    audioRef,
+    currentTrack,
+    isPlaying,
+    queue,
+    currentIndex,
+    volume,
+    shuffleEnabled,
+    repeatMode,
+    setIsPlaying,
+    setCurrentIndex,
+    setVolume,
+    setIsMuted,
+    setShuffleEnabled,
+    setRepeatMode,
+    playAudioSafely,
+  };
+
+  const actions = createPlayerActions(playerDeps);
 
   // This function sets the queue and starts playing from a chosen index
   function playQueue(tracks, startIndex = 0) {
@@ -257,85 +325,56 @@ export function PlayerProvider({ children }) {
     setIsPlaying(true);
   }
 
-  // Pauses if already playing or resumes if paused.
-  function togglePlayPause() {
-    if (!audioRef.current || !currentTrack) return;
+  const handlePlayerCommand = useCallback(
+    (command) => {
+      switch (command) {
+        case PLAYER_COMMANDS.PLAY_PAUSE:
+          actions.togglePlayPause();
+          break;
 
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      setIsPlaying(true);
-      playAudioSafely(audioRef.current);
-    }
-  }
+        case PLAYER_COMMANDS.NEXT_TRACK:
+          actions.nextTrack();
+          break;
 
-  // Stops playback and resets the current time to 0. Used when the user reaches the end of the queue and repeat mode is off and to manually stop playback.
-  function stop() {
-    if (!audioRef.current) return;
+        case PLAYER_COMMANDS.PREVIOUS_TRACK:
+          actions.previousTrack();
+          break;
 
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-    setIsPlaying(false);
-  }
+        case PLAYER_COMMANDS.VOLUME_UP:
+          actions.adjustVolume(5);
+          break;
 
-  // Moves to the next track in the queue. If shuffle in enabled, it will select a track at random. If it's on repeat mode, it will reset the current index to 0 and start playing again. If it's at the end of the queue and it's not on repeat mode, it will stop playback.
-  function nextTrack() {
-    if (queue.length === 0) return;
+        case PLAYER_COMMANDS.VOLUME_DOWN:
+          actions.adjustVolume(-5);
+          break;
 
-    if (shuffleEnabled && queue.length > 1) {
-      let randomIndex = currentIndex;
+        case PLAYER_COMMANDS.SEEK_FORWARD:
+          actions.seekBy(10);
+          break;
 
-      while (randomIndex === currentIndex) {
-        randomIndex = Math.floor(Math.random() * queue.length);
+        case PLAYER_COMMANDS.SEEK_BACKWARD:
+          actions.seekBy(-10);
+          break;
+
+        default:
+          break;
       }
+    },
+    [
+      actions,
+    ]
+  );
 
-      setCurrentIndex(randomIndex);
-      setIsPlaying(true);
-      return;
-    }
+  useKeyboardPlayerControls({
+    enabled: true,
+    onCommand: handlePlayerCommand, 
+  });
 
-    const nextIndex = currentIndex + 1;
+  useMp3ControllerControls({
+    enabled: true,
+    onCommand: handlePlayerCommand,
+  });
 
-    if (nextIndex < queue.length) {
-      setCurrentIndex(nextIndex);
-      setIsPlaying(true);
-    } else if (repeatMode === "playlist") {
-      setCurrentIndex(0);
-      setIsPlaying(true);
-    } else {
-      stop();
-    }
-  }
-
-  // It's the same as the nextTrack function but it goes to the previous track in the queue.
-  function previousTrack() {
-    if (queue.length === 0) return;
-
-    const previousIndex = currentIndex - 1;
-
-    if (previousIndex >= 0) {
-      setCurrentIndex(previousIndex);
-      setIsPlaying(true);
-    } else if (repeatMode === "playlist") {
-      setCurrentIndex(queue.length - 1);
-      setIsPlaying(true);
-    }
-  }
-
-  // Shuffle mode
-  function toggleShuffle() {
-    setShuffleEnabled((prev) => !prev);
-  }
-
-  // Repeat mode (off->track->playlist->off)
-  function cycleRepeatMode() {
-    setRepeatMode((prev) => {
-      if (prev === "off") return "track";
-      if (prev === "track") return "playlist";
-      return "off";
-    });
-  }
 
   // These next two useEffects are used to save the shuffle and repeat mode to LocalStorage when they change. This is used to persist user preference when there is no saved session.
   useEffect(() => {
@@ -604,7 +643,7 @@ export function PlayerProvider({ children }) {
       return;
     }
 
-    nextTrack();
+    actions.nextTrack();
   }
 
   return (
@@ -618,18 +657,24 @@ export function PlayerProvider({ children }) {
         streamUrl,
         artworkUrl,
         streamError,
+        volume,
+        isMuted,
         shuffleEnabled,
         repeatMode,
 
         getStreamUrl: () => streamUrl,
         playQueue,
         playTrack,
-        togglePlayPause,
-        stop,
-        nextTrack,
-        previousTrack,
-        toggleShuffle,
-        cycleRepeatMode,
+        setVolumeLevel: actions.setVolumeLevel,
+        toggleMute: actions.toggleMute,
+        seekTo: actions.seekTo,
+        seekBy: actions.seekBy,
+        togglePlayPause: actions.togglePlayPause,
+        stop: actions.stop,
+        nextTrack: actions.nextTrack,
+        previousTrack: actions.previousTrack,
+        toggleShuffle: actions.toggleShuffle,
+        cycleRepeatMode: actions.cycleRepeatMode,
         handleEnded,
       }}
     >
