@@ -1,76 +1,65 @@
 # Setup Guide
 
-This guide explains how to run Smart Music Organizer in local development, local production, Docker, LAN/mobile, and Capacitor Android modes.
+This guide explains how to run Smart Music Organizer in the correct mode for your use case.
 
 Smart Music Organizer is a local personal server app. One computer runs the FastAPI backend and serves the React frontend. By default, the backend binds to `127.0.0.1`, so it is only reachable from the same computer.
 
-LAN/mobile access is an explicit opt-in mode. It requires an API token and should only be used on trusted local networks. Do not expose this app to the public internet.
+LAN/mobile mode is optional. It exposes the app to devices on the same Wi-Fi network, requires an API token, and should only be used on trusted networks.
 
-## Run Modes
+Do not expose this app to the public internet.
 
-The app supports several run modes:
+---
 
-| Mode                         | Use Case                                                                           |
-| ---------------------------- | ---------------------------------------------------------------------------------- |
-| Docker Local-Server Mode     | Run the app without manually installing Python, Node, or frontend dependencies     |
-| Development Mode             | Edit frontend/backend code during development                                      |
-| Production Local-Server Mode | Run the built app locally without the Vite dev server                              |
-| LAN/Mobile Mode              | Access the app from a phone, tablet, or another computer on the same Wi-Fi network |
-| Capacitor Android Mode       | Wrap the React frontend in an Android shell that talks to the PC backend over LAN  |
+## Recommended Run Modes
 
-## Requirements
+| Mode                   | Best For                              | Main Command                          |
+| ---------------------- | ------------------------------------- | ------------------------------------- |
+| Desktop Launcher Mode  | Normal personal use on the same PC    | `Start Smart Music Organizer.bat`     |
+| LAN Launcher Mode      | Phone/tablet/another PC on same Wi-Fi | `Start Smart Music Organizer LAN.bat` |
+| Development Mode       | Editing frontend/backend code         | Backend terminal + Vite terminal      |
+| Docker Mode            | Containerized local-server setup      | `docker compose up --build`           |
+| Capacitor Android Mode | Android app shell testing             | LAN backend + Capacitor build         |
 
-For Docker mode:
+---
 
-* Docker Desktop
-* Docker Compose
+## Project Root Files
 
-For development mode:
+Run the launcher files from the project root.
 
-* Python
-* Node.js
-* npm
-* Git
-* A Python virtual environment for the backend
-
-For Android/Capacitor mode:
-
-* Node.js
-* npm
-* Android Studio
-* Capacitor dependencies already installed in the frontend project
-
-## Docker Local-Server Mode
-
-Use Docker when you want to run the app without manually installing backend or frontend dependencies.
-
-From the project root, create host folders for persistent app data and the default music mount:
-
-```powershell
-mkdir data
-mkdir music
-```
-
-Copy the example environment file:
-
-```powershell
-copy .env.example .env
-```
-
-Set `MUSIC_PATH` in `.env` to the real music folder on your computer.
-
-Examples:
+Expected important files:
 
 ```text
-MUSIC_PATH=./music
-MUSIC_PATH=C:/Users/Alex/Music
-MUSIC_PATH=S:/Music
+smart-music-organizer/
+  Start Smart Music Organizer.bat
+  Start Smart Music Organizer LAN.bat
+  .env.example
+  .env.lan.example
+  docker-compose.yml
+  docker-compose.lan.yml
+  backend/
+  frontend/
+  docs/
 ```
 
-Start the app:
+The launcher files are the easiest way to run the app without opening the project in a code editor.
 
-```powershell
-docker compose up --build
+---
+
+## Desktop Launcher Mode
+
+Use this mode for normal desktop use on the same computer.
+
+From the project root, run:
+
+```text
+Start Smart Music Organizer.bat
+```
+
+This mode should force local-only settings:
+
+```text
+APP_LAN_MODE=false
+BACKEND_HOST=127.0.0.1
 ```
 
 Then open:
@@ -79,65 +68,169 @@ Then open:
 http://localhost:8000
 ```
 
-In Docker mode, the app runs inside a Linux container. Your Windows music path is mounted into the container as:
+This mode does not require an API token.
 
-```text
-/music
+Use this mode when:
+
+* you are using the app on the same PC
+* you do not need phone/tablet access
+* you want the safest default run mode
+
+---
+
+## First-Time Desktop Setup
+
+If this is the first time running the app locally, make sure backend dependencies and the frontend build exist.
+
+### Backend virtual environment
+
+From the project root:
+
+```powershell
+cd backend
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-When scanning music from inside the app, enter:
+Return to the project root:
 
-```text
-/music
+```powershell
+cd ..
 ```
 
-Do not enter a Windows path such as this inside the app when using Docker:
+### Build the frontend
 
-```text
-C:\Users\Name\Music
+From the project root:
+
+```powershell
+cd frontend
+npm install
+npm run build
 ```
 
-That path exists on Windows, but it does not exist inside the Linux container.
+Return to the project root:
 
-## Docker Data And Database
-
-Docker stores persistent app data through this volume:
-
-```text
-./data:/app/backend/data
+```powershell
+cd ..
 ```
 
-That means the Docker SQLite database is stored on the host at:
+The production frontend build is written to:
 
 ```text
-data/app.db
+frontend/dist
 ```
 
-The development database may be stored separately at:
+The launcher uses the FastAPI backend to serve the built React frontend when `frontend/dist` exists.
+
+After setup, run:
 
 ```text
-backend/data/app.db
+Start Smart Music Organizer.bat
 ```
 
-If you want Docker to reuse an existing development database, copy:
+---
+
+## LAN Launcher Mode
+
+Use LAN mode when you want to access the app from a phone, tablet, or another computer on the same Wi-Fi network.
+
+Use LAN mode only on a trusted network.
+
+Do not expose the app to the public internet.
+
+### First-time LAN setup
+
+From the project root, create `.env.lan`:
+
+```powershell
+copy .env.lan.example .env.lan
+```
+
+Edit `.env.lan` and set a long random API token:
 
 ```text
-backend/data/app.db
+API_AUTH_TOKEN=replace-with-a-long-random-token
 ```
 
-to:
+Set allowed scan roots:
 
 ```text
-data/app.db
+ALLOWED_SCAN_ROOTS=["S:/Music"]
 ```
 
-The Docker image does not copy your music files into the image. It only mounts the folder you provide through `MUSIC_PATH`.
+`ALLOWED_SCAN_ROOTS` should be a JSON array of absolute folder paths. In LAN mode, scan requests should only be allowed inside these roots.
+
+### Start LAN mode
+
+From the project root, run:
+
+```text
+Start Smart Music Organizer LAN.bat
+```
+
+The LAN launcher should force:
+
+```text
+APP_LAN_MODE=true
+BACKEND_HOST=0.0.0.0
+```
+
+The app will be reachable from other devices on the same Wi-Fi network.
+
+### Find the server PC IP address
+
+On the server computer, run:
+
+```powershell
+ipconfig
+```
+
+Look for the local `IPv4 Address`.
+
+On the phone/tablet/other PC, open:
+
+```text
+http://<server-ip>:8000
+```
+
+Example:
+
+```text
+http://192.168.1.25:8000
+```
+
+The server computer must stay awake, connected to Wi-Fi, and running the app while other devices use it.
+
+---
+
+## LAN Token Behavior
+
+In LAN mode, the frontend should ask for the API token at runtime.
+
+Normal API requests should send the token using the supported authorization flow.
+
+Avoid putting API tokens in URLs.
+
+Recommended LAN privacy setting:
+
+```text
+EXPOSE_LOCAL_PATHS=false
+```
+
+This helps avoid exposing raw local file paths in API responses.
+
+---
 
 ## Development Mode
 
 Use development mode when editing the app.
 
-Start the backend:
+In this mode, the backend and frontend run in separate terminals.
+
+### Start the backend
+
+Terminal 1:
 
 ```powershell
 cd backend
@@ -145,7 +238,15 @@ cd backend
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Start the frontend dev server in another terminal:
+The backend runs at:
+
+```text
+http://127.0.0.1:8000
+```
+
+### Start the frontend dev server
+
+Terminal 2:
 
 ```powershell
 cd frontend
@@ -159,40 +260,26 @@ Open the Vite URL, usually:
 http://localhost:5173
 ```
 
-In Vite development, frontend API calls should point to the backend at:
+In development mode, frontend API calls should point to:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-If needed, override the frontend API base URL with:
+If needed, override the frontend API base URL:
 
 ```powershell
 $env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
 npm run dev
 ```
 
-## Build The Frontend
+---
 
-Build the React frontend before running production local-server mode:
+## Production Local-Server Mode Without Launcher
 
-```powershell
-cd frontend
-npm install
-npm run build
-```
+The launcher is the recommended normal run path.
 
-The production build is written to:
-
-```text
-frontend/dist
-```
-
-## Production Local-Server Mode
-
-Use production local-server mode when you want normal desktop use without running the Vite dev server.
-
-First build the frontend:
+If you want to run production local-server mode manually, build the frontend first:
 
 ```powershell
 cd frontend
@@ -203,7 +290,7 @@ npm run build
 Then start the backend:
 
 ```powershell
-cd backend
+cd ..\backend
 .\venv\Scripts\activate
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
@@ -216,111 +303,97 @@ http://localhost:8000
 
 When `frontend/dist` exists, FastAPI serves the built React frontend. API routes remain available from the same server.
 
-The local launcher can also be used if available:
+---
 
-```text
-Start Smart Music Organizer.bat
-```
+## Docker Mode
 
-The local launcher should use:
+Docker is available as an alternative runtime, but it is not the primary quick-start path.
 
-```text
-APP_LAN_MODE=false
-BACKEND_HOST=127.0.0.1
-```
+Use Docker when you want a containerized local-server setup.
 
-This mode does not require an API token and is meant for desktop use on the same computer.
+### Docker requirements
 
-## LAN / Mobile Mode
+* Docker Desktop
+* Docker Compose
 
-LAN/mobile mode allows another device on the same Wi-Fi network to connect to the app.
+### Start Docker local-server mode
 
-Use LAN mode only on a trusted network. Do not expose the app to the public internet.
-
-Before first use, create `.env.lan` from the example file:
+From the project root:
 
 ```powershell
-copy .env.lan.example .env.lan
+mkdir data
+mkdir music
+copy .env.example .env
+docker compose up --build
 ```
 
-Set a long random token:
+Then open:
 
 ```text
-API_AUTH_TOKEN=replace-with-a-long-random-token
+http://localhost:8000
 ```
 
-Set allowed scan roots:
+### Docker music path
+
+In Docker mode, the app runs inside a Linux container.
+
+Your Windows path, such as:
 
 ```text
-ALLOWED_SCAN_ROOTS=["S:/Music"]
+C:\Users\Name\Music
 ```
 
-In LAN mode, scan requests should only be allowed inside `ALLOWED_SCAN_ROOTS`.
+does not exist inside the container.
 
-Use a JSON array of absolute folder paths. Subfolders under those roots are allowed.
-
-Start the LAN launcher if available:
+Docker mounts your configured music folder as:
 
 ```text
-Start Smart Music Organizer LAN.bat
+/music
 ```
 
-The LAN launcher should use:
+When scanning music from inside the app in Docker mode, use:
 
 ```text
-APP_LAN_MODE=true
-BACKEND_HOST=0.0.0.0
+/music
 ```
 
-Manual LAN startup:
+Do not scan the Windows host path directly in Docker mode.
 
-```powershell
-cd backend
-.\venv\Scripts\activate
-$env:APP_LAN_MODE = "true"
-$env:BACKEND_HOST = "0.0.0.0"
-$env:API_AUTH_TOKEN = "use-a-long-random-token"
-$env:ALLOWED_SCAN_ROOTS = '["S:/Music"]'
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
+### Docker data and database
 
-Find the server computer's local IPv4 address:
-
-```powershell
-ipconfig
-```
-
-Look for `IPv4 Address`.
-
-On the phone, tablet, or second computer, open:
+Docker stores persistent app data through this volume:
 
 ```text
-http://<server-ip>:8000
+./data:/app/backend/data
 ```
 
-Example:
+That means the Docker SQLite database is stored at:
 
 ```text
-http://192.168.1.25:8000
+data/app.db
 ```
 
-The server computer must stay awake, connected to Wi-Fi, and running the backend while another device is using the app.
-
-## LAN Token Behavior
-
-In LAN mode, the frontend should ask for the API token at runtime.
-
-Normal API requests should send the token using the `Authorization` header.
-
-Avoid putting API tokens in URLs.
-
-For privacy-safe LAN use, keep raw local path exposure disabled unless you are intentionally debugging locally.
-
-Recommended setting:
+Development mode may use:
 
 ```text
-EXPOSE_LOCAL_PATHS=false
+backend/data/app.db
 ```
+
+If Docker looks empty but development mode has tracks, check whether the two modes are using different database files.
+
+To reuse a development database in Docker, copy:
+
+```text
+backend/data/app.db
+```
+
+to:
+
+```text
+data/app.db
+```
+
+---
 
 ## Docker LAN Mode
 
@@ -331,7 +404,7 @@ $env:API_AUTH_TOKEN = "use-a-long-random-token"
 docker compose -f docker-compose.yml -f docker-compose.lan.yml up --build
 ```
 
-Then open the server computer's LAN address from the other device:
+Then open the server computer's LAN address from another device:
 
 ```text
 http://<server-ip>:8000
@@ -339,9 +412,11 @@ http://<server-ip>:8000
 
 Make sure both devices are on the same Wi-Fi network.
 
-## Capacitor Android Shell
+---
 
-The React frontend can be wrapped in a Capacitor Android app while still talking to the PC backend over LAN.
+## Capacitor Android Mode
+
+The React frontend can be wrapped in a Capacitor Android app while still talking to the PC backend over trusted same-Wi-Fi LAN mode.
 
 Important rules:
 
@@ -351,7 +426,7 @@ Important rules:
 * Keep the PC backend running in LAN mode.
 * Connect the Android device to the same Wi-Fi network.
 * Enter the LAN API token in the app when prompted.
-* Do not put the token into URLs.
+* Do not put API tokens into URLs.
 
 Suggested workflow:
 
@@ -364,15 +439,40 @@ npx cap sync android
 npx cap open android
 ```
 
+Replace this example IP:
+
+```text
+192.168.1.25
+```
+
+with the actual IPv4 address of the server computer.
+
 Capacitor uses the built frontend from:
 
 ```text
 frontend/dist
 ```
 
-## Environment Variables
+---
 
-Common backend environment variables:
+## Environment Files
+
+The project may use different environment files depending on run mode.
+
+| File               | Purpose                                                                 |
+| ------------------ | ----------------------------------------------------------------------- |
+| `.env.example`     | Example environment file for normal/local/Docker use                    |
+| `.env`             | Local environment file used by Docker Compose and optional manual setup |
+| `.env.lan.example` | Example LAN mode environment file                                       |
+| `.env.lan`         | LAN mode environment file used by the LAN launcher                      |
+
+Do not commit real secrets or private tokens.
+
+---
+
+## Important Environment Variables
+
+Common backend variables:
 
 | Variable             | Purpose                                                       |
 | -------------------- | ------------------------------------------------------------- |
@@ -384,7 +484,7 @@ Common backend environment variables:
 | `EXPOSE_LOCAL_PATHS` | Controls whether raw local paths are exposed in API responses |
 | `ACOUSTID_API_KEY`   | Optional key for AcoustID/deep scan features                  |
 
-Common frontend environment variables:
+Common frontend variables:
 
 | Variable                           | Purpose                                              |
 | ---------------------------------- | ---------------------------------------------------- |
@@ -394,33 +494,20 @@ Common frontend environment variables:
 
 For normal local or LAN use, raw local path exposure should stay disabled.
 
-## Testing
+---
 
-Run backend tests from the backend folder:
+## Database Locations
 
-```powershell
-cd backend
-.\venv\Scripts\activate
-python -m pytest
-```
+Different run modes may use different database files.
 
-Or, if calling the virtual environment Python directly:
+| Mode             | Database Path         |
+| ---------------- | --------------------- |
+| Development mode | `backend/data/app.db` |
+| Docker mode      | `data/app.db`         |
 
-```powershell
-cd backend
-.\venv\Scripts\python.exe -m pytest
-```
+If the app appears empty in one mode but not another, check which database file is being used.
 
-Run frontend checks if scripts are available:
-
-```powershell
-cd frontend
-npm install
-npm run lint
-npm run test
-```
-
-If the frontend does not currently have lint or test scripts, skip those commands until they are added.
+---
 
 ## Optional Deep Scan Setup
 
@@ -438,7 +525,102 @@ If using AcoustID lookup, set:
 ACOUSTID_API_KEY=your-key-here
 ```
 
+---
+
+## Testing
+
+Run backend tests from the backend folder:
+
+```powershell
+cd backend
+.\venv\Scripts\activate
+python -m pytest
+```
+
+Or call the virtual environment Python directly:
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m pytest
+```
+
+Run frontend checks if scripts are available:
+
+```powershell
+cd frontend
+npm install
+npm run lint
+npm run test
+```
+
+If the frontend does not currently have lint or test scripts, skip those commands until they are added.
+
+---
+
 ## Troubleshooting
+
+### Launcher does not start
+
+Check:
+
+* you are running the `.bat` file from the project root
+* backend virtual environment exists at `backend/venv`
+* backend dependencies are installed
+* frontend has been built into `frontend/dist`
+* port `8000` is not already in use
+
+To check if port `8000` is already in use:
+
+```powershell
+netstat -ano | findstr :8000
+```
+
+### App opens but page is blank
+
+Check:
+
+* `frontend/dist` exists
+* the frontend build completed successfully
+* backend terminal shows no import/startup errors
+* browser console has no frontend errors
+
+Rebuild the frontend:
+
+```powershell
+cd frontend
+npm install
+npm run build
+```
+
+### Frontend cannot reach backend in development mode
+
+Check:
+
+* backend is running at `http://127.0.0.1:8000`
+* frontend is running at `http://localhost:5173`
+* `VITE_API_BASE_URL` points to the backend
+* browser Network tab shows the API request
+* backend CORS settings allow the frontend dev server
+
+### Phone cannot connect in LAN mode
+
+Check:
+
+* backend is running with `BACKEND_HOST=0.0.0.0`
+* LAN mode is enabled
+* phone and PC are on the same Wi-Fi network
+* PC firewall allows the connection
+* phone uses the PC IPv4 address, not `localhost`
+* API token is correct
+
+### API token errors
+
+Check:
+
+* `API_AUTH_TOKEN` is set in LAN mode
+* token entered in the frontend matches the backend token
+* token is not being placed in URLs
+* frontend is sending the token through the expected authorization flow
 
 ### Docker scan path does not work
 
@@ -448,7 +630,7 @@ In Docker mode, scan:
 /music
 ```
 
-Do not scan your Windows path directly.
+Do not scan the Windows path directly.
 
 Wrong:
 
@@ -462,51 +644,9 @@ Correct:
 /music
 ```
 
-### Phone cannot connect in LAN mode
-
-Check that:
-
-* the backend is running with `BACKEND_HOST=0.0.0.0`
-* LAN mode is enabled
-* the phone and PC are on the same Wi-Fi network
-* the PC firewall allows the connection
-* you are using the PC's IPv4 address, not `localhost`
-* the API token is correct
-
-### API token errors
-
-Check that:
-
-* `API_AUTH_TOKEN` is set in LAN mode
-* the token entered in the frontend matches the backend token
-* the token is not being placed in URLs
-* the frontend is sending the token through the expected authorization flow
-
-### Frontend cannot reach backend
-
-Check `VITE_API_BASE_URL`.
-
-For local development:
-
-```text
-http://127.0.0.1:8000
-```
-
-For Android/phone access:
-
-```text
-http://<server-ip>:8000
-```
-
-Example:
-
-```text
-http://192.168.1.25:8000
-```
-
 ### Database looks empty in Docker
 
-Docker and development mode may use different database paths.
+Docker and development mode may use different database files.
 
 Docker database:
 
@@ -520,13 +660,26 @@ Development database:
 backend/data/app.db
 ```
 
-Copy the database if you want to reuse the same data between modes.
+Copy the database if you want both modes to use the same data.
+
+### Android app cannot reach backend
+
+Check:
+
+* backend is running in LAN mode
+* Android device and PC are on the same Wi-Fi network
+* `VITE_API_BASE_URL` uses the PC LAN IP
+* Android app is not using `localhost`
+* API token is correct
+* PC firewall allows the connection
+
+---
 
 ## Safety Notes
 
 This app can scan local folders, stream files, edit metadata, manage playlists, and expose a backend over LAN.
 
-Use the default local mode for normal desktop use.
+Use desktop launcher mode for normal local use.
 
 Use LAN mode only on trusted networks.
 
