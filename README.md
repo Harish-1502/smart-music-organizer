@@ -81,17 +81,21 @@ The backend uses Pytest to cover important behavior such as settings, environmen
 
 ## Quick Start
 
-### Option 1: Docker Local-Server Mode
+The easiest way to run the app on Windows is to use the included launcher files from the project root.
 
-Use this when you want to run the app without manually installing Python, Node, or frontend dependencies.
+### Option 1: Normal Desktop Mode
 
-From the project root:
+Use this mode when running the app on the same computer.
 
-```powershell
-mkdir data
-mkdir music
-copy .env.example .env
-docker compose up --build
+```text
+Start Smart Music Organizer.bat
+```
+
+This starts the app in local mode:
+
+```text
+APP_LAN_MODE=false
+BACKEND_HOST=127.0.0.1
 ```
 
 Then open:
@@ -100,27 +104,56 @@ Then open:
 http://localhost:8000
 ```
 
-In Docker mode, the app mounts your music folder as:
+This mode is the safest default. It does not require an API token and is only reachable from the same computer.
 
-```text
-/music
+### Option 2: LAN / Phone / Tablet Mode
+
+Use this mode when you want to access the app from a phone, tablet, or another computer on the same Wi-Fi network.
+
+Before first use, create `.env.lan`:
+
+```powershell
+copy .env.lan.example .env.lan
 ```
 
-When scanning music from the app, use:
+Set a long random API token and allowed scan roots:
 
 ```text
-/music
+API_AUTH_TOKEN=replace-with-a-long-random-token
+ALLOWED_SCAN_ROOTS=["S:/Music"]
 ```
 
-For full Docker setup details, see:
+Then run:
 
 ```text
-docs/setup.md
+Start Smart Music Organizer LAN.bat
 ```
 
-### Option 2: Development Mode
+Find the server computer's local IPv4 address:
 
-Use this when editing the app.
+```powershell
+ipconfig
+```
+
+Open this on the phone/tablet:
+
+```text
+http://<server-ip>:8000
+```
+
+Example:
+
+```text
+http://192.168.1.25:8000
+```
+
+The server computer must stay awake, connected to Wi-Fi, and running the app.
+
+LAN mode should only be used on trusted networks. Do not expose the app to the public internet.
+
+### Option 3: Development Mode
+
+Use this mode when editing the code.
 
 Start the backend:
 
@@ -144,24 +177,17 @@ Open the Vite URL, usually:
 http://localhost:5173
 ```
 
-### Option 3: Production Local-Server Mode
+### Option 4: Docker Mode
 
-Use this for normal personal desktop use without running the Vite dev server.
+Docker is available as an alternative runtime, but it is not the primary quick-start path for this project.
 
-Build the frontend:
-
-```powershell
-cd frontend
-npm install
-npm run build
-```
-
-Start the backend:
+Use Docker when you want to run the app without manually installing Python, Node, or frontend dependencies.
 
 ```powershell
-cd backend
-.\venv\Scripts\activate
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+mkdir data
+mkdir music
+copy .env.example .env
+docker compose up --build
 ```
 
 Then open:
@@ -170,54 +196,19 @@ Then open:
 http://localhost:8000
 ```
 
-FastAPI serves the built React frontend from `frontend/dist`.
-
-## LAN / Mobile Access
-
-LAN/mobile mode allows a phone, tablet, or another computer on the same Wi-Fi network to connect to the app.
-
-This mode should only be used on a trusted network.
-
-Before using LAN mode, create `.env.lan`:
-
-```powershell
-copy .env.lan.example .env.lan
-```
-
-Set a long random API token:
+In Docker mode, scan:
 
 ```text
-API_AUTH_TOKEN=replace-with-a-long-random-token
-ALLOWED_SCAN_ROOTS=["S:/Music"]
+/music
 ```
 
-Start the LAN launcher:
+Do not scan a Windows path such as:
 
 ```text
-Start Smart Music Organizer LAN.bat
+C:\Users\Name\Music
 ```
 
-Then find the server computer's local IPv4 address:
-
-```powershell
-ipconfig
-```
-
-Open this on the mobile device:
-
-```text
-http://<server-ip>:8000
-```
-
-Example:
-
-```text
-http://192.168.1.25:8000
-```
-
-The server computer must stay awake and connected to the same Wi-Fi network.
-
-For full LAN and Capacitor setup details, see:
+For full setup details, see:
 
 ```text
 docs/setup.md
