@@ -10,7 +10,7 @@ const playlistApiMocks = {
   renamePlaylist: vi.fn(),
 };
 
-vi.mock("../api/playlistApi", () => playlistApiMocks);
+vi.mock("../../../api/playlistApi", () => playlistApiMocks);
 
 async function loadModule() {
   return import("./backendPlaylistSource.js");
@@ -59,4 +59,3 @@ describe("backendPlaylistSource", () => {
     );
   });
 });
-

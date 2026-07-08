@@ -10,8 +10,8 @@ const libraryApiMocks = {
   getAlbums: vi.fn(),
 };
 
-vi.mock("../offline/mobileOfflineRepository", () => repositoryMocks);
-vi.mock("../api/libraryApi", () => libraryApiMocks);
+vi.mock("../../offline/storage/mobileOfflineRepository", () => repositoryMocks);
+vi.mock("../../../api/libraryApi", () => libraryApiMocks);
 
 async function loadModule() {
   return import("./offlineLibrarySource.js");

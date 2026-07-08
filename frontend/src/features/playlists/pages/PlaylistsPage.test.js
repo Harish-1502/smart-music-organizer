@@ -37,7 +37,7 @@ vi.mock("../../../appMode/appMode", () => ({
   subscribeToAppModeChanges: () => () => {},
 }));
 
-vi.mock("../../../playlists/playlistSource", () => ({
+vi.mock("../sources/playlistSource", () => ({
   getPlaylistSourceForMode: (mode) => {
     lastPlaylistSourceMode = mode;
     return mode === "offline" ? sourceMocks.offline : sourceMocks.backend;

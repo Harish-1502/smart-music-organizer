@@ -15,17 +15,17 @@ const playerMocks = {
 
 let currentAppMode = "lan";
 
-vi.mock("../context/PlayerContext", () => ({
+vi.mock("../../player/context/PlayerContext", () => ({
   usePlayer: () => playerMocks,
 }));
 
-vi.mock("../appMode/appMode", () => ({
+vi.mock("../../../appMode/appMode", () => ({
   getAppMode: () => currentAppMode,
   isLanMode: (mode) => mode === "lan",
   subscribeToAppModeChanges: () => () => {},
 }));
 
-vi.mock("../offline/mobileOfflineRepository", () => ({
+vi.mock("../storage/mobileOfflineRepository", () => ({
   buildOfflinePlaybackQueue: vi.fn(),
   clearOfflineData: vi.fn(),
   deleteOfflinePlaylist: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("../offline/mobileOfflineRepository", () => ({
   getOfflineStorageSummary: vi.fn(),
 }));
 
-vi.mock("../offline/downloadLibrary", () => ({
+vi.mock("../services/downloadLibrary", () => ({
   cancelFullLibraryDownload: vi.fn(),
   downloadFullLibraryForOffline: vi.fn(),
   getFullLibraryDownloadRuntimeState: vi.fn(() => ({

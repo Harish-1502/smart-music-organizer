@@ -38,15 +38,6 @@ function formatTime(seconds) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
-// Used to clamp a volume percentage value to a range of 0-100, rounding to the nearest integer
-function clampVolumePercent(value) {
-  if (!Number.isFinite(value)) {
-    return 100;
-  }
-
-  return Math.min(100, Math.max(0, Math.round(value)));
-}
-
 // Returns the first non-empty string because the track title is might be stored in 2 different fields
 function firstNonEmpty(...values) {
   for (const value of values) {
@@ -107,7 +98,6 @@ export default function PlayerPage() {
     currentIndex,
     queue,
     playQueue,
-    handleEnded,
     isPlaying,
     streamUrl,
     shuffleEnabled,
@@ -116,6 +106,12 @@ export default function PlayerPage() {
     nextTrack,
     previousTrack,
     stop,
+    volume,
+    isMuted,
+    setVolumeLevel,
+    toggleMute,
+    seekTo,
+    seekBy,
     toggleShuffle,
     cycleRepeatMode,
     streamError,
@@ -127,8 +123,6 @@ export default function PlayerPage() {
   );
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubTime, setScrubTime] = useState(null);
-  const [volume, setVolume] = useState(100);
-  const [isMuted, setIsMuted] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -257,92 +251,6 @@ export default function PlayerPage() {
     // Occurs when the audio element or current track changes
   }, [audioRef, currentTrack]);
 
-  // Keeps the volume and mute state in sync with the audio element
-  useEffect(() => {
-    const audioElement = audioRef.current;
-
-    function syncVolumeState() {
-      if (!audioElement) {
-        setVolume(100);
-        setIsMuted(false);
-        return;
-      }
-
-      setVolume(
-        clampVolumePercent(
-          Number.isFinite(audioElement.volume)
-            ? audioElement.volume * 100
-            : 100,
-        ),
-      );
-      setIsMuted(Boolean(audioElement.muted));
-    }
-
-    syncVolumeState();
-
-    if (!audioElement) {
-      return;
-    }
-
-    audioElement.addEventListener("volumechange", syncVolumeState);
-
-    return () => {
-      audioElement.removeEventListener("volumechange", syncVolumeState);
-    };
-  }, [audioRef, currentTrack]);
-
-  // The keyboard shortcuts for the player page to control playback easily and faster
-  useEffect(() => {
-    function handleGlobalKeyDown(event) {
-      const activeElement = document.activeElement;
-      const tag = activeElement?.tagName;
-
-      // To avoid triggering player controls when the user is typing, editing, using sliders, or using keyboard shortcuts for something else
-      if (
-        event.defaultPrevented ||
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        activeElement?.isContentEditable ||
-        activeElement?.getAttribute("role") === "slider"
-      ) {
-        return;
-      }
-
-      // Only space, left arrow and right arrow keys are supported for now
-      try {
-        if (event.code === "Space") {
-          event.preventDefault();
-          togglePlayPause();
-          return;
-        }
-
-        if (event.code === "ArrowRight") {
-          event.preventDefault();
-          nextTrack();
-          return;
-        }
-
-        if (event.code === "ArrowLeft") {
-          event.preventDefault();
-          previousTrack();
-        }
-      } catch (error) {
-        console.error("Player keyboard shortcut failed.", error);
-      }
-    }
-
-    window.addEventListener("keydown", handleGlobalKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleGlobalKeyDown);
-    };
-
-    // Occurs when the togglePlayPause, nextTrack, or previousTrack are triggered
-  }, [togglePlayPause, nextTrack, previousTrack]);
-
   const effectiveCurrentTime =
     isScrubbing && Number.isFinite(scrubTime) ? scrubTime : currentTime;
 
@@ -431,13 +339,13 @@ export default function PlayerPage() {
 
   // Commits the seek to the audio element and updates the current time state
   function commitSeek(nextTime) {
-    if (!audioRef.current || seekDisabled || !Number.isFinite(nextTime)) {
+    if (seekDisabled || !Number.isFinite(nextTime)) {
       return;
     }
 
     const clampedTime = Math.min(Math.max(nextTime, 0), duration);
 
-    audioRef.current.currentTime = clampedTime;
+    seekTo(clampedTime);
     setCurrentTime(clampedTime);
   }
 
@@ -501,9 +409,13 @@ export default function PlayerPage() {
     let nextTime = currentTime;
 
     if (event.key === "ArrowRight") {
-      nextTime += 5;
+      seekBy(5);
+      event.preventDefault();
+      return;
     } else if (event.key === "ArrowLeft") {
-      nextTime -= 5;
+      seekBy(-5);
+      event.preventDefault();
+      return;
     } else if (event.key === "PageUp") {
       nextTime += 10;
     } else if (event.key === "PageDown") {
@@ -522,35 +434,13 @@ export default function PlayerPage() {
 
   // Connect the UI slider and mute button to the real audio element
   function handleVolumeChange(event) {
-    const audioElement = audioRef.current;
     const rawValue = Number(event.target.value);
-    const nextVolume = clampVolumePercent(rawValue);
-
-    setVolume(nextVolume);
-
-    if (!audioElement) {
-      return;
-    }
-
-    audioElement.volume = nextVolume / 100;
-
-    if (audioElement.muted && nextVolume > 0) {
-      audioElement.muted = false;
-    }
-
-    if (!audioElement.muted && nextVolume === 0) {
-      audioElement.muted = true;
-    }
+    const nextVolume = Math.min(100, Math.max(0, Math.round(rawValue)));
+    setVolumeLevel(nextVolume);
   }
 
   function handleToggleMute() {
-    const audioElement = audioRef.current;
-
-    if (!audioElement) {
-      return;
-    }
-
-    audioElement.muted = !audioElement.muted;
+    toggleMute();
   }
 
   // This is the displayed logic. The duplication is intentional enough to keep the display logic readable, though some of these could probably be consolidated later.

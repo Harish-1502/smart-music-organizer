@@ -27,7 +27,7 @@ vi.mock("../../../appMode/appMode", () => ({
   subscribeToAppModeChanges: () => () => {},
 }));
 
-vi.mock("../../../playlists/playlistSource", () => ({
+vi.mock("../sources/playlistSource", () => ({
   getPlaylistSourceForMode: (mode) => {
     lastPlaylistSourceMode = mode;
     return {
@@ -38,7 +38,7 @@ vi.mock("../../../playlists/playlistSource", () => ({
   },
 }));
 
-vi.mock("../../../context/PlayerContext", () => ({
+vi.mock("../../player/context/PlayerContext", () => ({
   usePlayer: () => playerMocks,
 }));
 
