@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
+            "http://localhost",
+            "https://localhost",
             "http://127.0.0.1:5173",
         ],
         validation_alias="CORS_ORIGINS",
@@ -91,6 +93,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    @field_validator("backend_host", mode="before")
+    @classmethod
+    def strip_backend_host(cls, value):
+        if isinstance(value, str):
+            return value.strip()
+
+        return value
+
     @field_validator("api_auth_token", mode="before")
     @classmethod
     def strip_api_auth_token(cls, value):
@@ -102,10 +112,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_lan_security_settings(self):
-        if self.backend_host.strip() in WILDCARD_BACKEND_HOSTS and not self.app_lan_mode:
+        if self.backend_host in WILDCARD_BACKEND_HOSTS and not self.app_lan_mode:
             raise ValueError(
-                "BACKEND_HOST=0.0.0.0 requires APP_LAN_MODE=true because it "
-                "exposes the API on the local network."
+                "BACKEND_HOST=0.0.0.0 (or another wildcard host) requires "
+                "APP_LAN_MODE=true because it exposes the API on the local network."
             )
 
         if self.app_lan_mode and not self.api_auth_token:

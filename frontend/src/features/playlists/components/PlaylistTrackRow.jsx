@@ -1,6 +1,11 @@
 import { maskTrack } from "../../../utils/demoMode";
 
-export default function PlaylistTrackRow({ track, onRemove, onPlay }) {
+export default function PlaylistTrackRow({
+  track,
+  onRemove,
+  onPlay,
+  canRemove = true,
+}) {
   const displayTrack = maskTrack(track, track.position ? track.position - 1 : 0);
 
   return (
@@ -38,13 +43,15 @@ export default function PlaylistTrackRow({ track, onRemove, onPlay }) {
         </span>
       </button>
 
-      <button
-        type="button"
-        className="playlist-detail-page__button playlist-detail-page__button--danger"
-        onClick={() => onRemove(track.playlist_track_id)}
-      >
-        Remove
-      </button>
+      {canRemove ? (
+        <button
+          type="button"
+          className="playlist-detail-page__button playlist-detail-page__button--danger"
+          onClick={() => onRemove(track.playlist_track_id)}
+        >
+          Remove
+        </button>
+      ) : null}
     </div>
   );
 }

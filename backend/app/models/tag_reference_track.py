@@ -44,6 +44,7 @@ class TagReferenceTrack(Base):
     tag = relationship("Tag")
     track = relationship("Track")
 
+    # The tag reference label is contrained to be either positive or negative. The combination of tag_id and track_id is unique to prevent duplicate references for the same tag and track.    
     __table_args__ = (
         CheckConstraint(
             "label IN ('positive', 'negative')",

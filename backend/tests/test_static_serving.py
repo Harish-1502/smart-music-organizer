@@ -25,16 +25,11 @@ def test_static_does_not_serve_database_file(client):
 
 
 def test_static_track_art_still_serves_managed_artwork(client):
-    TRACK_ART_DIR.mkdir(parents=True, exist_ok=True)
-    artwork_path = TRACK_ART_DIR / "static-test-cover.png"
-    artwork_bytes = b"test artwork bytes"
-    artwork_path.write_bytes(artwork_bytes)
+    artwork_path = TRACK_ART_DIR / "track_2.jpg"
 
-    try:
-        response = client.get("/static/track_art/static-test-cover.png")
+    assert artwork_path.is_file()
 
-        assert response.status_code == 200
-        assert response.content == artwork_bytes
-    finally:
-        if artwork_path.exists():
-            artwork_path.unlink()
+    response = client.get("/static/track_art/track_2.jpg")
+
+    assert response.status_code == 200
+    assert response.content == artwork_path.read_bytes()

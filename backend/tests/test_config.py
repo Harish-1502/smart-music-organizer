@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 import pytest
+from pydantic_settings import SettingsError
 
 from app.core import database
 from app.core.config import Settings
@@ -11,11 +12,24 @@ from app.main import app, settings as main_settings
 
 def clear_lan_env(monkeypatch):
     for name in (
+        "APP_ENV",
+        "API_ENV",
+        "API_MODE",
         "APP_LAN_MODE",
         "BACKEND_HOST",
         "BACKEND_PORT",
         "API_AUTH_TOKEN",
+        "DATABASE_URL",
+        "CORS_ORIGINS",
+        "MANAGED_STATIC_DIRS",
+        "MANAGED_ARTWORK_DIR",
         "ALLOWED_SCAN_ROOTS",
+        "UPLOAD_MAX_BYTES",
+        "ENABLE_AI_PLAYLISTS",
+        "ENABLE_DEEP_SCAN",
+        "ENABLE_LEGACY_ART_PATH_ROUTE",
+        "EXPOSE_LOCAL_PATHS",
+        "DEBUG_EXPOSE_LOCAL_PATHS",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -46,7 +60,7 @@ def test_default_settings_preserve_current_local_behavior(monkeypatch):
 
 
 def test_settings_support_environment_overrides(monkeypatch):
-    monkeypatch.setenv("API_ENV", "test")
+    monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("API_MODE", "ci")
     monkeypatch.setenv("APP_LAN_MODE", "true")
     monkeypatch.setenv("BACKEND_HOST", "0.0.0.0")
@@ -81,6 +95,17 @@ def test_settings_support_environment_overrides(monkeypatch):
     assert settings.enable_deep_scan is False
     assert settings.enable_legacy_art_path_route is True
     assert settings.expose_local_paths is False
+
+
+def test_invalid_allowed_scan_roots_json_raises_settings_error(monkeypatch):
+    clear_lan_env(monkeypatch)
+    monkeypatch.setenv("ALLOWED_SCAN_ROOTS", "S:\\Music")
+
+    with pytest.raises(
+        SettingsError,
+        match='error parsing value for field "allowed_scan_roots"',
+    ):
+        Settings(_env_file=None)
 
 
 def test_wildcard_backend_host_requires_lan_mode(monkeypatch):

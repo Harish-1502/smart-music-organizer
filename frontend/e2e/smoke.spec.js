@@ -7,6 +7,7 @@ test.describe("Smoke tests", () => {
         await expect(page.getByText("Smart Music")).toBeVisible();
         await expect(page.getByRole("link", { name: /library/i })).toBeVisible();
         await expect(page.getByRole("link", { name: /playlists/i })).toBeVisible();
+        await expect(page.getByRole("link", { name: /connection/i })).toBeVisible();
     });
 
     test("library route loads", async ({ page }) => {
@@ -44,5 +45,11 @@ test.describe("Smoke tests", () => {
 
         await page.getByRole("link", { name: /library/i }).click();
         await expect(page).toHaveURL(/\/library/);
+
+        await page.getByRole("link", { name: /connection/i }).click();
+        await expect(page).toHaveURL(/\/connection/);
+        await expect(
+            page.getByRole("heading", { name: "Connection", level: 1 })
+        ).toBeVisible();
     });
 });

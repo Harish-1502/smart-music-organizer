@@ -1,33 +1,64 @@
 import { useEffect, useState } from "react";
+// import { runAndroidOfflineFoundationSmokeTest } from "./features/offline/services/androidOfflineFoundationSmokeTest";
 import { Link, Routes, Route, Navigate } from "react-router-dom";
 import { API_AUTH_REQUIRED_EVENT } from "./api/apiBase";
-import { clearApiToken } from "./api/authToken";
-import ApiTokenPrompt from "./components/ApiTokenPrompt";
-import LibraryPage from "./pages/LibraryPage";
+import {
+  API_TOKEN_UPDATED_EVENT,
+  clearApiToken,
+} from "./api/authToken";
+import ApiTokenPrompt from "./shared/components/ApiTokenPrompt";
+import LibraryPage from "./features/library/pages/LibraryPage";
+import ConnectionPage from "./pages/ConnectionPage";
+import DownloadedPage from "./features/offline/pages/DownloadedPage";
 import PlaylistsPage from "./features/playlists/pages/PlaylistsPage";
 import PlaylistDetailPage from "./features/playlists/pages/PlaylistDetailPage";
-import PlayerPage from "./pages/PlayerPage.jsx";
+import PlayerPage from "./features/player/pages/PlayerPage.jsx";
 import TagCalibrationPage from "./pages/TagCalibrationPage.jsx";
-import MiniPlayer from "./components/MiniPlayer";
-import { usePlayer } from "./context/PlayerContext";
+import MiniPlayer from "./features/player/components/MiniPlayer";
+import { usePlayer } from "./features/player/context/PlayerContext";
 
 export default function App() {
-  const { currentTrack, audioRef, getStreamUrl, handleEnded } = usePlayer();
+  const { currentTrack, audioRef, isPlaying, streamUrl, handleEnded } = usePlayer();
   const hasMiniPlayer = Boolean(currentTrack);
   const [showApiTokenPrompt, setShowApiTokenPrompt] = useState(false);
+  const [authRefreshKey, setAuthRefreshKey] = useState(0);
 
   useEffect(() => {
+    // runAndroidOfflineFoundationSmokeTest({ allowInProduction: true });
+
     function handleApiAuthRequired() {
       clearApiToken();
       setShowApiTokenPrompt(true);
     }
 
+    function handleApiTokenUpdated(event) {
+      const tokenConfigured = Boolean(event?.detail?.configured);
+
+      if (tokenConfigured) {
+        setShowApiTokenPrompt(false);
+        setAuthRefreshKey((currentKey) => currentKey + 1);
+      }
+    }
+
     window.addEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
+    window.addEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
 
     return () => {
       window.removeEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
+      window.removeEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
     };
   }, []);
+
+  useEffect(() => {
+    if (!audioRef.current || !currentTrack || !streamUrl || !isPlaying) {
+      return;
+    }
+
+    try {
+      const playPromise = audioRef.current.play();
+      playPromise?.catch(() => {});
+    } catch {}
+  }, [audioRef, currentTrack, streamUrl, isPlaying]);
 
   return (
     <div
@@ -66,6 +97,12 @@ export default function App() {
             <Link to="/calibration" className="app-shell__nav-link">
               Calibration
             </Link>
+            <Link to="/connection" className="app-shell__nav-link">
+              Connection
+            </Link>
+            <Link to="/downloaded" className="app-shell__nav-link">
+              Downloaded
+            </Link>
           </div>
 
           <div className="app-shell__nav-actions" aria-hidden="true">
@@ -77,7 +114,7 @@ export default function App() {
       </nav>
 
       <main className="app-shell__main">
-        <Routes>
+        <Routes key={authRefreshKey}>
           <Route path="/" element={<Navigate to="/library" replace />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/playlists" element={<PlaylistsPage />} />
@@ -87,6 +124,8 @@ export default function App() {
           />
           <Route path="/player" element={<PlayerPage />} />
           <Route path="/calibration" element={<TagCalibrationPage />} />
+          <Route path="/connection" element={<ConnectionPage />} />
+          <Route path="/downloaded" element={<DownloadedPage />} />
         </Routes>
       </main>
 
@@ -100,7 +139,7 @@ export default function App() {
       {currentTrack ? (
         <audio
           ref={audioRef}
-          src={getStreamUrl(currentTrack)}
+          src={streamUrl}
           autoPlay
           preload="metadata"
           onEnded={handleEnded}
