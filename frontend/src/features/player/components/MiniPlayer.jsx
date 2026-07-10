@@ -9,6 +9,10 @@ import {
 import { useNavigate } from "react-router-dom";
 import { usePlayer } from "../context/PlayerContext";
 import { getTrackArtPath } from "../../../api/apiBase";
+import {
+  getTrackDisplayArtist,
+  getTrackDisplayTitle,
+} from "../utils/trackDisplay";
 import useAuthenticatedBlobUrl from "../../../shared/hooks/useAuthenticatedBlobUrl";
 import { maskTrack, shouldHideDemoArtwork } from "../../../utils/demoMode";
 
@@ -40,18 +44,8 @@ export default function MiniPlayer() {
     cycleRepeatMode,
   } = usePlayer();
   const displayTrack = maskTrack(currentTrack);
-  const title =
-    displayTrack?.title ||
-    displayTrack?.display_title ||
-    displayTrack?.scanned_title ||
-    displayTrack?.file_name ||
-    "Unknown track";
-
-  const artist =
-    displayTrack?.artist ||
-    displayTrack?.display_artist ||
-    displayTrack?.scanned_artist ||
-    "Unknown artist";
+  const title = getTrackDisplayTitle(displayTrack);
+  const artist = getTrackDisplayArtist(displayTrack);
 
   const currentTrackId = currentTrack?.track_id ?? currentTrack?.id ?? null;
   const artPath =

@@ -16,9 +16,10 @@ import PlayerPage from "./features/player/pages/PlayerPage.jsx";
 import TagCalibrationPage from "./pages/TagCalibrationPage.jsx";
 import MiniPlayer from "./features/player/components/MiniPlayer";
 import { usePlayer } from "./features/player/context/PlayerContext";
+import PlayerAudioHost from "./features/player/components/PlayerAudioHost";
 
 export default function App() {
-  const { currentTrack, audioRef, isPlaying, streamUrl, handleEnded } = usePlayer();
+  const { currentTrack } = usePlayer();
   const hasMiniPlayer = Boolean(currentTrack);
   const [showApiTokenPrompt, setShowApiTokenPrompt] = useState(false);
   const [authRefreshKey, setAuthRefreshKey] = useState(0);
@@ -48,17 +49,6 @@ export default function App() {
       window.removeEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
     };
   }, []);
-
-  useEffect(() => {
-    if (!audioRef.current || !currentTrack || !streamUrl || !isPlaying) {
-      return;
-    }
-
-    try {
-      const playPromise = audioRef.current.play();
-      playPromise?.catch(() => {});
-    } catch {}
-  }, [audioRef, currentTrack, streamUrl, isPlaying]);
 
   return (
     <div
@@ -128,23 +118,14 @@ export default function App() {
           <Route path="/downloaded" element={<DownloadedPage />} />
         </Routes>
       </main>
-
+      <PlayerAudioHost />
       <MiniPlayer />
 
       <ApiTokenPrompt
         open={showApiTokenPrompt}
         onClose={() => setShowApiTokenPrompt(false)}
       />
-
-      {currentTrack ? (
-        <audio
-          ref={audioRef}
-          src={streamUrl}
-          autoPlay
-          preload="metadata"
-          onEnded={handleEnded}
-        />
-      ) : null}
+      
     </div>
   );
 }
