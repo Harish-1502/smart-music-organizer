@@ -157,19 +157,118 @@ Triggered by: audio `timeupdate`, queue changes, repeat changes, shuffle changes
 ↓
 The saved session can be restored the next time the app opens
 
-
-
 ## Frontend Implementation
 
 Important files:
 
-- `frontend/src/features/player/pages/PlayerPage.jsx`
+### 1. Core State
 
 - `frontend/src/features/player/context/PlayerContext.jsx`
-  - 
-- `frontend/src/features/player/hooks/useAuthenticatedBlobUrl.js`
-  - 
+  - Main playback state owner.
+  - Builds the shared player API used by the rest of the frontend.
+  - Owns queue state, current track selection, `isPlaying`, playback error state, and exported player actions.
+
+- `frontend/src/features/player/controls/playerCommandActions.js`
+  - Defines the actual player action functions such as play/pause, next, previous, stop, seek, shuffle, repeat, volume, and mute.
+  - This is the main action layer used by `PlayerContext`.
+
+### 2. Audio Runtime
+
+- `frontend/src/features/player/components/PlayerAudioHost.jsx`
+  - Owns the shared `<audio>` element behavior.
+  - Attempts playback when `isPlaying` and `streamUrl` are ready.
+  - Reports play failures back into shared player error state.
+  - Connects the audio element `ended` event to `handleEnded()`.
+
 - `frontend/src/features/player/context/playbackSourceResolver.js`
+  - Converts a track object into a playable playback source and artwork source.
+  - Decides between backend streaming, offline blob playback, and native file playback.
+
+- `frontend/src/features/player/hooks/usePlayerTrackSources.js`
+  - Loads `streamUrl` and `artworkUrl` for the current track.
+  - Clears previous source state when the active track changes.
+  - Stores source-loading failures in `streamError`.
+
+- `frontend/src/features/player/hooks/usePlayerSessionPersistence.js`
+  - Restores the playback session from `localStorage` on startup.
+  - Saves queue, current track index, current time, shuffle state, and repeat mode.
+  - Reapplies restored playback time to the shared audio element.
+
+- `frontend/src/features/player/hooks/usePlayerPlaybackPreferences.js`
+  - Loads and persists shuffle and repeat preferences in `localStorage`.
+
+- `frontend/src/features/player/hooks/usePlayerVolumeState.js`
+  - Syncs volume and mute state from the shared audio element.
+  - Keeps React state aligned with `audio.volume` and `audio.muted`.
+
+### 3. Input / Commands
+
+- `frontend/src/features/player/controls/playerCommandNames.js`
+  - Central list of shared player command constants used across keyboard, MP3, and dispatcher logic.
+
+- `frontend/src/features/player/hooks/usePlayerCommandDispatcher.js`
+  - Maps shared player commands to the matching player actions.
+
+- `frontend/src/features/player/hooks/usePlayerInputControls.js`
+  - Higher-level input wiring hook.
+  - Connects keyboard and MP3/media input hooks to the shared command dispatcher.
+
+- `frontend/src/features/player/hooks/useKeyboardPlayerControls.js`
+  - Listens for keyboard events and forwards them as shared player commands.
+
+- `frontend/src/features/player/hooks/useMp3ControllerControls.js`
+  - Listens for MP3/media-controller style input events and forwards them as shared player commands.
+
+- `frontend/src/features/player/controls/keyboardCommandMap.js`
+  - Converts browser keyboard events into shared player commands.
+
+- `frontend/src/features/player/controls/mp3CommandParser.js`
+  - Converts MP3/media-controller input events into shared player commands.
+
+### 4. UI
+
+- `frontend/src/features/player/pages/PlayerPage.jsx`
+  - Main full-screen player UI.
+  - Reads shared player state from `usePlayer()`.
+  - Renders artwork, metadata, progress, transport controls, queue panel, and volume controls.
+
+- `frontend/src/features/player/components/MiniPlayer.jsx`
+  - Compact always-visible playback UI shown outside the full player page.
+  - Uses shared player state and actions for quick transport controls.
+
+- `frontend/src/features/player/components/PlayerNowPlayingCard.jsx`
+  - Presentational component for artwork and current track metadata.
+
+- `frontend/src/features/player/components/PlayerTransportControls.jsx`
+  - Presentational component for play/pause, next/previous, shuffle, and repeat buttons.
+
+- `frontend/src/features/player/components/PlayerQueuePanel.jsx`
+  - Presentational component for showing the active queue and selecting a track from it.
+
+- `frontend/src/features/player/components/PlayerVolumeControls.jsx`
+  - Presentational component for mute and volume slider controls.
+
+- `frontend/src/features/player/hooks/useAudioTransportState.js`
+  - Tracks page-level transport UI state such as loading, buffering, audio readiness, and visible playback status/error messages.
+
+- `frontend/src/features/player/hooks/usePlayerProgressState.js`
+  - Tracks current time, duration, progress percentage, scrubbing behavior, and seek interactions for the player page.
+
+- `frontend/src/features/player/styles/PlayerPage.css`
+  - Main playback page styling.
+
+### 5. Shared Helpers / Shared Integration
+
+- `frontend/src/features/player/utils/trackDisplay.js`
+  - Shared display helpers for track title, artist, album, and file-name fallbacks.
+
+- `frontend/src/shared/hooks/useAuthenticatedBlobUrl.js`
+  - Used by playback UI to load authenticated artwork blob URLs for backend-served art.
+  - This is shared infrastructure, but it is part of the playback UI rendering path.
+
+- `frontend/src/App.jsx`
+  - Hosts the global player provider and shared playback UI shell.
+  - Important because it is where the top-level playback feature is mounted into the app.
 
 ## Backend Implementation
 
