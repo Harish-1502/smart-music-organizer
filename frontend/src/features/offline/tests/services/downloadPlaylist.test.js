@@ -19,12 +19,12 @@ const offlineTrackDownloadMocks = {
   downloadTrackForOffline: vi.fn(),
 };
 
-vi.mock("../storage/offlineStorage", () => offlineStorageMocks);
-vi.mock("../storage/mobileOfflineRepository", () => mobileOfflineRepositoryMocks);
-vi.mock("./offlineTrackDownload", () => offlineTrackDownloadMocks);
+vi.mock("../../storage/offlineStorage", () => offlineStorageMocks);
+vi.mock("../../storage/mobileOfflineRepository", () => mobileOfflineRepositoryMocks);
+vi.mock("../../services/offlineTrackDownload", () => offlineTrackDownloadMocks);
 
 async function loadModule() {
-  return import("./downloadPlaylist.js");
+  return import("../../services/downloadPlaylist.js");
 }
 
 describe("downloadPlaylistForOffline", () => {

@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import LibraryPage from "./LibraryPage";
+import LibraryPage from "../../pages/LibraryPage";
 
 const sourceMocks = {
   backend: { kind: "backend" },
@@ -16,18 +16,18 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock("../../../appMode/appMode", () => ({
+vi.mock("../../../../appMode/appMode", () => ({
   getAppMode: () => currentAppMode,
   isOfflineMode: (mode) => mode === "offline",
   subscribeToAppModeChanges: () => () => {},
 }));
 
-vi.mock("../sources/librarySource", () => ({
+vi.mock("../../sources/librarySource", () => ({
   getLibrarySourceForMode: (mode) =>
     mode === "offline" ? sourceMocks.offline : sourceMocks.backend,
 }));
 
-vi.mock("../../../shared/hooks/useTrackBrowser", () => ({
+vi.mock("../../../../shared/hooks/useTrackBrowser", () => ({
   default: (source) => {
     lastTrackBrowserSource = source;
 
@@ -65,7 +65,7 @@ vi.mock("../../../shared/hooks/useTrackBrowser", () => ({
   },
 }));
 
-vi.mock("../hooks/useLibraryViews", () => ({
+vi.mock("../../hooks/useLibraryViews", () => ({
   default: ({ source }) => {
     lastLibraryViewsSource = source;
 
@@ -82,33 +82,33 @@ vi.mock("../hooks/useLibraryViews", () => ({
   },
 }));
 
-vi.mock("../../player/context/PlayerContext", () => ({
+vi.mock("../../../player/context/PlayerContext", () => ({
   usePlayer: () => ({
     playQueue: vi.fn(),
   }),
 }));
 
-vi.mock("../../../utils/demoMode", () => ({
+vi.mock("../../../../utils/demoMode", () => ({
   isDemoMode: () => false,
 }));
 
-vi.mock("../components/ScanProgress", () => ({
+vi.mock("../../components/ScanProgress", () => ({
   default: () => React.createElement("div", null, "ScanProgress"),
 }));
 
-vi.mock("../components/LibraryViewTabs", () => ({
+vi.mock("../../components/LibraryViewTabs", () => ({
   default: () => React.createElement("div", null, "LibraryViewTabs"),
 }));
 
-vi.mock("../components/ArtistList", () => ({
+vi.mock("../../components/ArtistList", () => ({
   default: () => React.createElement("div", null, "ArtistList"),
 }));
 
-vi.mock("../components/AlbumList", () => ({
+vi.mock("../../components/AlbumList", () => ({
   default: () => React.createElement("div", null, "AlbumList"),
 }));
 
-vi.mock("../../../shared/components/TrackBrowser", () => ({
+vi.mock("../../../../shared/components/TrackBrowser", () => ({
   default: ({ mode, emptyStateMessage }) =>
     React.createElement(
       "div",

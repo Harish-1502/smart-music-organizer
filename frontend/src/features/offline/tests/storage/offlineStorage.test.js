@@ -4,7 +4,7 @@ const databaseMocks = {
   getAll: vi.fn(),
 };
 
-vi.mock("./offlineDb", () => ({
+vi.mock("../../storage/offlineDb", () => ({
   OFFLINE_AUDIO_BLOBS_STORE: "offline_audio_blobs",
   OFFLINE_ARTWORK_BLOBS_STORE: "offline_artwork_blobs",
   OFFLINE_PLAYLISTS_STORE: "offline_playlists",
@@ -13,7 +13,7 @@ vi.mock("./offlineDb", () => ({
 }));
 
 async function loadModule() {
-  return import("./offlineStorage.js");
+  return import("../../storage/offlineStorage.js");
 }
 
 describe("offlineStorage", () => {

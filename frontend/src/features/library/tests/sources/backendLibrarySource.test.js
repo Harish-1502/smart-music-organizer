@@ -6,10 +6,10 @@ const libraryApiMocks = {
   getAlbums: vi.fn(),
 };
 
-vi.mock("../../../api/libraryApi", () => libraryApiMocks);
+vi.mock("../../../../api/libraryApi", () => libraryApiMocks);
 
 async function loadModule() {
-  return import("./backendLibrarySource.js");
+  return import("../../sources/backendLibrarySource.js");
 }
 
 describe("backendLibrarySource", () => {

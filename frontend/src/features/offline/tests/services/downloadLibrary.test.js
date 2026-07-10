@@ -29,14 +29,14 @@ const offlineTrackDownloadMocks = {
   isAbortError: vi.fn((error) => error?.name === "AbortError"),
 };
 
-vi.mock("../../../appMode/appMode", () => appModeMocks);
-vi.mock("../../library/sources/backendLibrarySource", () => backendLibrarySourceMocks);
-vi.mock("../storage/mobileOfflineRepository", () => mobileOfflineRepositoryMocks);
-vi.mock("../storage/offlineStorage", () => offlineStorageMocks);
-vi.mock("./offlineTrackDownload", () => offlineTrackDownloadMocks);
+vi.mock("../../../../appMode/appMode", () => appModeMocks);
+vi.mock("../../../library/sources/backendLibrarySource", () => backendLibrarySourceMocks);
+vi.mock("../../storage/mobileOfflineRepository", () => mobileOfflineRepositoryMocks);
+vi.mock("../../storage/offlineStorage", () => offlineStorageMocks);
+vi.mock("../../services/offlineTrackDownload", () => offlineTrackDownloadMocks);
 
 async function loadModule() {
-  return import("./downloadLibrary.js");
+  return import("../../services/downloadLibrary.js");
 }
 
 describe("downloadLibrary", () => {

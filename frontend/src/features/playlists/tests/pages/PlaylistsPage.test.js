@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import PlaylistsPage from "./PlaylistsPage";
+import PlaylistsPage from "../../pages/PlaylistsPage";
 
 const sourceMocks = {
   backend: {
@@ -31,20 +31,20 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-vi.mock("../../../appMode/appMode", () => ({
+vi.mock("../../../../appMode/appMode", () => ({
   getAppMode: () => currentAppMode,
   isOfflineMode: (mode) => mode === "offline",
   subscribeToAppModeChanges: () => () => {},
 }));
 
-vi.mock("../sources/playlistSource", () => ({
+vi.mock("../../sources/playlistSource", () => ({
   getPlaylistSourceForMode: (mode) => {
     lastPlaylistSourceMode = mode;
     return mode === "offline" ? sourceMocks.offline : sourceMocks.backend;
   },
 }));
 
-vi.mock("../../../config/featureFlags", () => ({
+vi.mock("../../../../config/featureFlags", () => ({
   featureFlags: {
     enableAiPlaylists: true,
   },

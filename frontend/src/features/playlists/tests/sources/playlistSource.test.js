@@ -4,10 +4,10 @@ const appModeMocks = {
   isOfflineMode: vi.fn((mode) => mode === "offline"),
 };
 
-vi.mock("../../../appMode/appMode", () => appModeMocks);
+vi.mock("../../../../appMode/appMode", () => appModeMocks);
 
 async function loadModule() {
-  return import("./playlistSource.js");
+  return import("../../sources/playlistSource.js");
 }
 
 describe("playlistSource", () => {

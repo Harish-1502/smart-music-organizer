@@ -16,11 +16,11 @@ const playlistApiMocks = {
   renamePlaylist: vi.fn(),
 };
 
-vi.mock("../../offline/storage/mobileOfflineRepository", () => mobileRepositoryMocks);
-vi.mock("../../../api/playlistApi", () => playlistApiMocks);
+vi.mock("../../../offline/storage/mobileOfflineRepository", () => mobileRepositoryMocks);
+vi.mock("../../../../api/playlistApi", () => playlistApiMocks);
 
 async function loadModule() {
-  return import("./offlinePlaylistSource.js");
+  return import("../../sources/offlinePlaylistSource.js");
 }
 
 describe("offlinePlaylistSource", () => {

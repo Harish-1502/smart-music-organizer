@@ -7,7 +7,7 @@ import DownloadedPage, {
   buildDeleteDownloadConfirmationText,
   getMissingAudioWarningMessage,
   sanitizeLibraryProgressTitle,
-} from "./DownloadedPage";
+} from "../../pages/DownloadedPage";
 
 const playerMocks = {
   playQueue: vi.fn(),
@@ -15,17 +15,17 @@ const playerMocks = {
 
 let currentAppMode = "lan";
 
-vi.mock("../../player/context/PlayerContext", () => ({
+vi.mock("../../../player/context/PlayerContext", () => ({
   usePlayer: () => playerMocks,
 }));
 
-vi.mock("../../../appMode/appMode", () => ({
+vi.mock("../../../../appMode/appMode", () => ({
   getAppMode: () => currentAppMode,
   isLanMode: (mode) => mode === "lan",
   subscribeToAppModeChanges: () => () => {},
 }));
 
-vi.mock("../storage/mobileOfflineRepository", () => ({
+vi.mock("../../storage/mobileOfflineRepository", () => ({
   buildOfflinePlaybackQueue: vi.fn(),
   clearOfflineData: vi.fn(),
   deleteOfflinePlaylist: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("../storage/mobileOfflineRepository", () => ({
   getOfflineStorageSummary: vi.fn(),
 }));
 
-vi.mock("../services/downloadLibrary", () => ({
+vi.mock("../../services/downloadLibrary", () => ({
   cancelFullLibraryDownload: vi.fn(),
   downloadFullLibraryForOffline: vi.fn(),
   getFullLibraryDownloadRuntimeState: vi.fn(() => ({

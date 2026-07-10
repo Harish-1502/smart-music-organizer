@@ -31,7 +31,7 @@ vi.mock("@capacitor-community/sqlite", () => ({
 }));
 
 async function loadModule() {
-  return import("./mobileSqliteDb.js");
+  return import("../../storage/mobileSqliteDb.js");
 }
 
 describe("mobileSqliteDb", () => {

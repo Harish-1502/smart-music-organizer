@@ -25,10 +25,10 @@ const nativeMediaStorageMocks = {
   nativeMediaFileExists: vi.fn(),
 };
 
-vi.mock("./offlineStorage", () => offlineStorageMocks);
-vi.mock("./nativeMediaFileStorage", () => nativeMediaStorageMocks);
+vi.mock("../../storage/offlineStorage", () => offlineStorageMocks);
+vi.mock("../../storage/nativeMediaFileStorage", () => nativeMediaStorageMocks);
 
-vi.mock("./mobileSqliteDb", () => ({
+vi.mock("../../storage/mobileSqliteDb", () => ({
   getMobileOfflineDb: vi.fn(async () => mobileDatabase),
   initializeMobileOfflineDb: vi.fn(async () => Boolean(mobileDatabase)),
   isNativeAndroidMobileOfflineSupported: vi.fn(() => nativeAndroidSupported),
@@ -36,7 +36,7 @@ vi.mock("./mobileSqliteDb", () => ({
 }));
 
 async function loadRepository() {
-  return import("./mobileOfflineRepository.js");
+  return import("../../storage/mobileOfflineRepository.js");
 }
 
 function createMockDatabase({ queryHandler } = {}) {

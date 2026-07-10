@@ -34,7 +34,7 @@ vi.mock("@capacitor/filesystem", () => ({
 }));
 
 async function loadModule() {
-  return import("./nativeMediaFileStorage.js");
+  return import("../../storage/nativeMediaFileStorage.js");
 }
 
 describe("nativeMediaFileStorage", () => {
