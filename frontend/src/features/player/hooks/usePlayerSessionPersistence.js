@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// Session persistence constants and helpers.
 const PLAYER_SESSION_STORAGE_KEY = "smart-music-player-session";
 const PLAYER_SESSION_VERSION = 2;
 const MAX_PERSISTED_QUEUE_SIZE = 500;
 const CURRENT_TIME_SAVE_INTERVAL_MS = 2000;
 
+// Strips the track object down to only playback-relevant fields for
+// persistence.
 function createTrackSnapshot(track) {
   if (!track || typeof track !== "object") {
     return null;
@@ -50,10 +53,12 @@ function createTrackSnapshot(track) {
 function sanitizeQueueForStorage(queue, currentIndex) {
   const normalizedQueue = Array.isArray(queue) ? queue : [];
 
+  // Empty queue, return an empty snapshot and invalid index.
   if (normalizedQueue.length === 0) {
     return { queueSnapshot: [], currentIndex: -1 };
   }
 
+  // Save the whole queue if it is small enough.
   if (normalizedQueue.length <= MAX_PERSISTED_QUEUE_SIZE) {
     const queueSnapshot = normalizedQueue
       .map(createTrackSnapshot)
@@ -68,6 +73,8 @@ function sanitizeQueueForStorage(queue, currentIndex) {
     };
   }
 
+  // Slice a window around the current index so very large queues do not bloat
+  // localStorage while still preserving the active track.
   const halfWindow = Math.floor(MAX_PERSISTED_QUEUE_SIZE / 2);
   let start = Math.max(
     0,
@@ -109,12 +116,15 @@ export function usePlayerSessionPersistence({
   isTrackPlayable,
   validRepeatModes,
 }) {
+  // Refs and state used to restore and periodically save the current playback
+  // session without clobbering it during startup.
   const restoredCurrentTimeRef = useRef(null);
   const lastCurrentTimeSaveRef = useRef(0);
   const hasAppliedRestoredTimeRef = useRef(false);
   const hasHydratedSessionRef = useRef(false);
   const [hasHydratedSession, setHasHydratedSession] = useState(false);
 
+  // Clears the stored session when it is invalid or becomes unsafe to reuse.
   const clearStoredSession = useCallback(() => {
     if (typeof window === "undefined") {
       return;
@@ -125,12 +135,14 @@ export function usePlayerSessionPersistence({
     } catch {}
   }, []);
 
+  // Saves queue, position, time, shuffle, and repeat settings to localStorage.
   const saveSession = useCallback(
     (forceTime) => {
       if (typeof window === "undefined") {
         return;
       }
 
+      // Do not write session state until the initial restore attempt finishes.
       if (!hasHydratedSessionRef.current) {
         return;
       }
@@ -169,6 +181,8 @@ export function usePlayerSessionPersistence({
     [audioRef, currentIndex, queue, repeatMode, shuffleEnabled],
   );
 
+  // Attempts to restore a saved session on mount. Invalid payloads are
+  // discarded so the player does not get stuck in a broken state.
   useEffect(() => {
     if (typeof window === "undefined") {
       hasHydratedSessionRef.current = true;
@@ -231,6 +245,7 @@ export function usePlayerSessionPersistence({
         return;
       }
 
+      // Ensure every stored track is still playable before restoring it.
       for (const track of storedQueue) {
         if (!track || !isTrackPlayable(track)) {
           clearStoredSession();
@@ -238,6 +253,7 @@ export function usePlayerSessionPersistence({
         }
       }
 
+      // Restore the minimum playback session state, but do not autoplay.
       setQueue(storedQueue);
       setCurrentIndex(
         Math.min(Math.max(Number(storedIndex), 0), storedQueue.length - 1),
@@ -263,6 +279,8 @@ export function usePlayerSessionPersistence({
     validRepeatModes,
   ]);
 
+  // Persists the session whenever the important playback inputs change after
+  // hydration completes.
   useEffect(() => {
     if (!hasHydratedSession) {
       return;
@@ -275,6 +293,8 @@ export function usePlayerSessionPersistence({
     saveSession();
   }, [currentIndex, hasHydratedSession, queue, saveSession]);
 
+  // Attaches audio listeners for restored time, throttled progress saves, and
+  // unload/error cleanup once the audio element becomes available.
   useEffect(() => {
     let attached = false;
     let onLoadedMetadata;
@@ -328,6 +348,8 @@ export function usePlayerSessionPersistence({
       };
 
       onError = () => {
+        // If playback fails for restored tracks, clear the stored session so
+        // the app does not keep reloading a bad entry.
         clearStoredSession();
       };
 

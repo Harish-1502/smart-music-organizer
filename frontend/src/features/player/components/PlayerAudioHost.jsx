@@ -12,6 +12,8 @@ export default function PlayerAudioHost() {
     clearPlaybackError,
   } = usePlayer();
 
+  // Acts as the bridge between PlayerContext state and the browser audio
+  // element, including reporting async play failures back into shared state.
   useEffect(() => {
     const audioElement = audioRef.current;
     let cancelled = false;

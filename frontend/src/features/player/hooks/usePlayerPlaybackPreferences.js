@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+// Storage keys for shuffle and repeat mode persistence.
 const SHUFFLE_STORAGE_KEY = "smart-music-organizer:shuffle-enabled";
 const REPEAT_STORAGE_KEY = "smart-music-organizer:repeat-mode";
 
@@ -28,6 +29,8 @@ export function usePlayerPlaybackPreferences(validRepeatModes) {
     }
   });
 
+  // Persists shuffle and repeat preferences independently of the playback
+  // session so the user's mode choices survive reloads.
   useEffect(() => {
     if (typeof window === "undefined") {
       return;

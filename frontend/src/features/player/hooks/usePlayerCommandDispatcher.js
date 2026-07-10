@@ -3,6 +3,8 @@ import { useCallback } from "react";
 import { PLAYER_COMMANDS } from "../controls/playerCommandNames";
 
 export function usePlayerCommandDispatcher(actions) {
+  // Centralizes external player commands so keyboard and MP3 controller inputs
+  // both dispatch through the same action interface.
   return useCallback(
     (command) => {
       switch (command) {

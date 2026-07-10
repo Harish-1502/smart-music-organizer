@@ -19,6 +19,8 @@ export function usePlayerTrackSources({
     let releasePlaybackSource = () => {};
     let releaseArtworkSource = () => {};
 
+    // Clear source state before loading the next track so stale URLs and
+    // errors do not leak across track changes.
     setStreamUrl("");
     setArtworkUrl("");
     setStreamError("");
@@ -28,6 +30,8 @@ export function usePlayerTrackSources({
       return () => {};
     }
 
+    // Loads playback and artwork sources for the current track and cancels the
+    // result if a newer track replaces it before the async work completes.
     async function loadTrackSources() {
       try {
         const [playbackSource, artworkSource] = await Promise.all([

@@ -15,7 +15,9 @@ import { usePlayerTrackSources } from "../hooks/usePlayerTrackSources";
 import { usePlayerVolumeState } from "../hooks/usePlayerVolumeState";
 import { getPlaybackErrorMessage } from "../utils/playbackErrorMessage";
 
-// Shared container for playback state and controls.
+// Shared container for playback state and controls. Provides a single audio
+// element for controlling playback, queue navigation, shuffle/repeat, and
+// session-backed player state across the app.
 const PlayerContext = createContext(null);
 
 const VALID_REPEAT_MODES = new Set(["off", "track", "playlist"]);
@@ -60,6 +62,8 @@ export function PlayerProvider({ children }) {
     clearPlaybackError,
   });
 
+  // This function plays the audio element and guards against rejected play()
+  // calls, which can happen when the browser blocks playback.
   const playAudioSafely = useCallback((audioElement) => {
     if (!audioElement) {
       setIsPlaying(false);
@@ -106,6 +110,7 @@ export function PlayerProvider({ children }) {
     playAudioSafely,
   ]);
 
+  // This function sets the queue and starts playing from a chosen index.
   function playQueue(tracks, startIndex = 0) {
     const normalizedQueue = Array.isArray(tracks) ? tracks : [];
 
@@ -125,6 +130,7 @@ export function PlayerProvider({ children }) {
     setIsPlaying(true);
   }
 
+  // Convenience shortcut to play one track.
   function playTrack(track) {
     setQueue([track]);
     setCurrentIndex(0);

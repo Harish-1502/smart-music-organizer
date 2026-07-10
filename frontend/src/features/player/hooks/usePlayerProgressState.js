@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+// Used to format playback time into a human-readable string such as "3:45".
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return "--:--";
@@ -34,7 +35,8 @@ export function usePlayerProgressState({
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubTime, setScrubTime] = useState(null);
 
-  // Keep time and duration in sync with the audio element.
+  // Provides live updates of the current playback time and duration by syncing
+  // with the real audio element.
   useEffect(() => {
     const audioElement = audioRef.current;
     const fallbackDuration = Number.isFinite(currentTrack?.duration)
@@ -103,6 +105,8 @@ export function usePlayerProgressState({
     return (clampedX / rect.width) * duration;
   }
 
+  // Commits a seek to the audio element and updates local progress state so
+  // the UI responds immediately.
   function commitSeek(nextTime) {
     if (seekDisabled || !Number.isFinite(nextTime)) {
       return;
@@ -129,6 +133,7 @@ export function usePlayerProgressState({
     } catch {}
   }
 
+  // Makes the progress bar usable with mouse, touch, and keyboard input.
   function handleProgressPointerMove(event) {
     if (!isScrubbing || seekDisabled) {
       return;

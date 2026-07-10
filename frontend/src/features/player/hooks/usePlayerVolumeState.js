@@ -12,6 +12,8 @@ export function usePlayerVolumeState({ audioRef, currentTrack }) {
   const [volume, setVolume] = useState(100);
   const [isMuted, setIsMuted] = useState(false);
 
+  // Keeps React volume state synced with the real audio element whenever the
+  // track or element volume changes.
   useEffect(() => {
     const audioElement = audioRef.current;
 
