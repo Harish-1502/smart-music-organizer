@@ -1,12 +1,23 @@
 import { useEffect } from "react";
 import { usePlayer } from "../context/PlayerContext";
 
+const DEBUG_TAG = "player-audio-host";
+
+function logDebug(phase, details = {}) {
+  console.info(`[${DEBUG_TAG}:${phase}] ${JSON.stringify(details)}`);
+}
+
+function logWarn(phase, details = {}) {
+  console.warn(`[${DEBUG_TAG}:${phase}] ${JSON.stringify(details)}`);
+}
+
 export default function PlayerAudioHost() {
   const {
     audioRef,
     currentTrack,
     streamUrl,
     isPlaying,
+    nativePlaybackMode,
     handleEnded,
     reportPlaybackError,
     clearPlaybackError,
@@ -24,8 +35,28 @@ export default function PlayerAudioHost() {
       };
     }
 
+    logDebug("effect-ran", {
+      trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+      isPlaying,
+      hasStreamUrl: Boolean(streamUrl),
+      nativePlaybackMode: Boolean(nativePlaybackMode),
+    });
+
+    if (nativePlaybackMode) {
+      logDebug("native-mode-active", {
+        trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+      });
+      audioElement.pause();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (isPlaying && streamUrl) {
       clearPlaybackError();
+      logDebug("play-attempt", {
+        trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+      });
 
       try {
         const playPromise = audioElement.play();
@@ -37,14 +68,25 @@ export default function PlayerAudioHost() {
 
           reportPlaybackError(error, audioElement);
           console.error("Audio playback failed:", error);
+          logWarn("play-rejected", {
+            trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+            message: error instanceof Error ? error.message : "",
+          });
         });
       } catch (error) {
         if (!cancelled) {
           reportPlaybackError(error, audioElement);
           console.error("Audio playback failed:", error);
+          logWarn("play-threw", {
+            trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+            message: error instanceof Error ? error.message : "",
+          });
         }
       }
     } else {
+      logDebug("pause-requested", {
+        trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+      });
       audioElement.pause();
     }
 
@@ -56,6 +98,7 @@ export default function PlayerAudioHost() {
     clearPlaybackError,
     currentTrack,
     isPlaying,
+    nativePlaybackMode,
     reportPlaybackError,
     streamUrl,
   ]);
@@ -67,9 +110,19 @@ export default function PlayerAudioHost() {
   return (
     <audio
       ref={audioRef}
-      src={streamUrl}
+      src={nativePlaybackMode ? "" : streamUrl}
       preload="metadata"
-      onEnded={handleEnded}
+      onEnded={() => {
+        logDebug("ended", {
+          trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+        });
+        handleEnded();
+      }}
+      onError={() => {
+        logWarn("audio-error", {
+          trackId: currentTrack?.track_id ?? currentTrack?.id ?? null,
+        });
+      }}
     />
   );
 }
