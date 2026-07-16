@@ -6,6 +6,8 @@ The Playback feature allows the user to stream songs that they have scanned in t
 
 This allows the user to play the songs in a queue, shuffle the songs, repeat the same song and move to the next track in the queue or the previous song in the queue.
 
+On Android, downloaded tracks can also play through a native foreground Media3 service so playback can continue in the background with standard media notification and lock-screen controls.
+
 ## User Flow
 
 What the user sees:
@@ -14,6 +16,7 @@ What the user sees:
 - The current track's name, artist and album
 - The show queue button to show the current queue
 - When the user moves to another page, they will see a mini-player
+- On Android for downloaded tracks, the standard media notification and lock-screen controls stay available while playback continues in the background
 
 ## Execution Flow
 
@@ -52,6 +55,22 @@ Triggered by: `streamUrl`, `currentTrack`, or `isPlaying` changes
 -> The browser attempts to start playback
 -> If playback starts, browser media events begin firing
 -> This reconnects to the main flow at: `PlayerPage.jsx` listens to audio events and updates UI
+
+---
+
+## Attached Flow: Native Android Downloaded Playback
+
+Triggered by: a downloaded track queue is started inside the Capacitor Android app
+-> `PlayerContext.jsx` checks whether the queue is fully downloaded and the runtime is Android
+-> If the queue qualifies, `PlayerContext.jsx` switches into native playback mode instead of using the shared HTML audio element
+-> `frontend/src/features/player/native/nativeDownloadedPlayback.js` loads the queue into the Capacitor plugin
+-> `frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackService.java` owns the ExoPlayer queue, foreground service, media session, and notification
+-> The service streams from local downloaded file URIs and advances the queue itself while playback is active
+-> `PlayerAudioHost.jsx` keeps the browser audio element out of the way in native mode so the HTML player does not fight the Android service
+-> `usePlayerProgressState.js` reads the native snapshot and interpolates progress from the service timestamp while playback is running
+-> When the app returns to the foreground, `PlayerContext.jsx` refreshes the native snapshot so React and the service stay aligned
+-> Seek commands are sent to the native service as millisecond positions; React keeps the chosen position visible until the service reports the new one
+-> If the queue is not a downloaded Android queue, reconnect to: Audio Start
 
 ---
 
@@ -133,6 +152,7 @@ Important files:
   - Attempts playback when `isPlaying` and `streamUrl` are ready.
   - Reports play failures back into shared player error state.
   - Connects the audio element `ended` event to `handleEnded()`.
+  - In Android native downloaded mode, keeps the HTML audio element paused so the native service owns playback.
 
 - `frontend/src/features/player/context/playbackSourceResolver.js`
   - Converts a track object into a playable playback source and artwork source.
@@ -142,6 +162,18 @@ Important files:
   - Loads `streamUrl` and `artworkUrl` for the current track.
   - Clears previous source state when the active track changes.
   - Stores source-loading failures in `streamError`.
+
+- `frontend/src/features/player/native/nativeDownloadedPlayback.js`
+  - Capacitor bridge for native Android downloaded playback.
+  - Loads downloaded queues, sends play/pause/seek/next/previous commands, and reads the native playback snapshot.
+
+- `frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackService.java`
+  - Foreground Media3 playback service for downloaded tracks on Android.
+  - Owns the ExoPlayer queue, media session, notification, queue advancement, seek handling, and native state snapshots.
+
+- `frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackPlugin.java`
+  - Capacitor plugin that bridges the React app to the Android playback service.
+  - Translates JS queue and control calls into service commands.
 
 - `frontend/src/features/player/hooks/usePlayerSessionPersistence.js`
   - Restores the playback session from `localStorage` on startup.
