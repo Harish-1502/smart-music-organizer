@@ -114,4 +114,33 @@ describe("PlayerAudioHost", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("keeps the browser audio element paused when native playback is active", async () => {
+    const audioElement = {
+      play: vi.fn(),
+      pause: vi.fn(),
+    };
+    const clearPlaybackError = vi.fn();
+    const reportPlaybackError = vi.fn();
+
+    currentPlayerState = {
+      audioRef: { current: audioElement },
+      currentTrack: { id: "track-native" },
+      streamUrl: "blob:track-native",
+      isPlaying: true,
+      nativePlaybackMode: true,
+      handleEnded: vi.fn(),
+      reportPlaybackError,
+      clearPlaybackError,
+    };
+
+    const { default: PlayerAudioHost } = await loadModule();
+
+    PlayerAudioHost();
+
+    expect(audioElement.pause).toHaveBeenCalledTimes(1);
+    expect(audioElement.play).not.toHaveBeenCalled();
+    expect(clearPlaybackError).not.toHaveBeenCalled();
+    expect(reportPlaybackError).not.toHaveBeenCalled();
+  });
 });
