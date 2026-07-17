@@ -6,7 +6,7 @@ The Playback feature allows the user to stream songs that they have scanned in t
 
 This allows the user to play the songs in a queue, shuffle the songs, repeat the same song and move to the next track in the queue or the previous song in the queue.
 
-On Android, downloaded tracks can also play through a native foreground Media3 service so playback can continue in the background with standard media notification and lock-screen controls.
+On Android, downloaded tracks can also play through a native foreground Media3 service so playback can continue in the background with a native notification card, lock-screen controls, and in-app return flow.
 
 ## User Flow
 
@@ -16,7 +16,7 @@ What the user sees:
 - The current track's name, artist and album
 - The show queue button to show the current queue
 - When the user moves to another page, they will see a mini-player
-- On Android for downloaded tracks, the standard media notification and lock-screen controls stay available while playback continues in the background
+- On Android for downloaded tracks, the native foreground notification shows the current track, transport buttons, and a tap target that returns to the player page while playback continues in the background
 
 ## Execution Flow
 
@@ -65,6 +65,8 @@ Triggered by: a downloaded track queue is started inside the Capacitor Android a
 -> If the queue qualifies, `PlayerContext.jsx` switches into native playback mode instead of using the shared HTML audio element
 -> `frontend/src/features/player/native/nativeDownloadedPlayback.js` loads the queue into the Capacitor plugin
 -> `frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackService.java` owns the ExoPlayer queue, foreground service, media session, and notification
+-> `frontend/android/app/src/main/res/layout/notification_playback_compact.xml` defines the foreground notification card layout for the current track and transport buttons
+-> The notification track area opens the app back to the player page, while the Prev / Play-Pause / Next buttons send service commands directly
 -> The service streams from local downloaded file URIs and advances the queue itself while playback is active
 -> `PlayerAudioHost.jsx` keeps the browser audio element out of the way in native mode so the HTML player does not fight the Android service
 -> `usePlayerProgressState.js` reads the native snapshot and interpolates progress from the service timestamp while playback is running
@@ -167,13 +169,25 @@ Important files:
   - Capacitor bridge for native Android downloaded playback.
   - Loads downloaded queues, sends play/pause/seek/next/previous commands, and reads the native playback snapshot.
 
+- `frontend/src/features/player/native/nativeAppLaunch.js`
+  - Small Capacitor bridge that consumes a pending native launch route.
+  - Lets React navigate to `/player` when the Android notification or deep link opens the app.
+
 - `frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackService.java`
   - Foreground Media3 playback service for downloaded tracks on Android.
-  - Owns the ExoPlayer queue, media session, notification, queue advancement, seek handling, and native state snapshots.
+  - Owns the ExoPlayer queue, media session, notification, queue advancement, seek handling, native state snapshots, and notification button actions.
 
 - `frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackPlugin.java`
   - Capacitor plugin that bridges the React app to the Android playback service.
   - Translates JS queue and control calls into service commands.
+
+- `frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeAppLaunchPlugin.java`
+  - Capacitor plugin that stores and exposes a pending launch route from Android.
+  - Used so the app can open the player page when the notification is tapped.
+
+- `frontend/android/app/src/main/res/layout/notification_playback_compact.xml`
+  - Custom compact notification layout for the native playback card.
+  - Places track text on the left and the transport buttons on the right.
 
 - `frontend/src/features/player/hooks/usePlayerSessionPersistence.js`
   - Restores the playback session from `localStorage` on startup.
@@ -694,9 +708,19 @@ Important files:
 
 What to check when this feature breaks.
 
+- If Android background playback stops, check `NativePlaybackService` logs first.
+- If the notification tap does not open the player page, check `MainActivity` and `NativeAppLaunch` logs.
+- If the notification looks wrong, inspect `notification_playback_compact.xml` and the `refreshForegroundNotification()` path in `NativeDownloadedPlaybackService.java`.
+- If play/pause/next/previous do not respond, check whether the service received `ACTION_PLAY`, `ACTION_PAUSE`, `ACTION_NEXT`, or `ACTION_PREVIOUS`.
+
 ## Change Guide
 
 How to safely modify this feature.
+
+- Keep browser and LAN playback on the shared HTML audio element.
+- Keep native Android playback limited to downloaded tracks until that path is stable.
+- Update the native notification layout and the service command wiring together so the UI and behavior stay in sync.
+- If you change the notification tap route, update `MainActivity`, `NativeAppLaunchPlugin`, and `nativeAppLaunch.js` together.
 
 ## Reimplementation Checklist
 
