@@ -2,6 +2,7 @@ package com.harish.smartmusicorganizer.nativeplayback;
 
 import android.content.Context;
 import android.content.Intent;
+import android.app.PendingIntent;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,6 +11,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.net.Uri;
 import android.util.Log;
+import android.view.View;
+import android.widget.RemoteViews;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -21,11 +24,11 @@ import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.session.DefaultMediaNotificationProvider;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
 import androidx.media3.common.util.UnstableApi;
 
+import com.harish.smartmusicorganizer.MainActivity;
 import com.harish.smartmusicorganizer.R;
 
 import java.io.File;
@@ -38,6 +41,10 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
     private static final String NOTIFICATION_CHANNEL_ID =
             "smart_music_organizer_playback";
     private static final int NOTIFICATION_ID = 1001;
+    private static final int REQUEST_CODE_CONTENT = 100;
+    private static final int REQUEST_CODE_PREVIOUS = 101;
+    private static final int REQUEST_CODE_PLAY_PAUSE = 102;
+    private static final int REQUEST_CODE_NEXT = 103;
     public static final String ACTION_LOAD_QUEUE = "com.harish.smartmusicorganizer.nativeplayback.LOAD_QUEUE";
     public static final String ACTION_PLAY = "com.harish.smartmusicorganizer.nativeplayback.PLAY";
     public static final String ACTION_PAUSE = "com.harish.smartmusicorganizer.nativeplayback.PAUSE";
@@ -86,6 +93,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
     private boolean muted = false;
     private String repeatMode = "off";
     private String lastErrorMessage = "";
+    private String lastForegroundNotificationKey = "";
 
     private void log(String message) {
         Log.d(TAG, message);
@@ -159,9 +167,8 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
     public void onCreate() {
         super.onCreate();
         log("onCreate");
-        ensureForegroundNotification();
-        setMediaNotificationProvider(new DefaultMediaNotificationProvider(this));
         createPlayer();
+        ensureForegroundNotification();
         updateSnapshot();
     }
 
@@ -311,26 +318,56 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
                         updateSnapshot();
                     }
                 });
-        mediaSession = new MediaSession.Builder(this, player).build();
+        mediaSession =
+                new MediaSession.Builder(this, player)
+                        .setSessionActivity(createSessionActivity())
+                        .build();
         log("mediaSession created");
+    }
+
+    private PendingIntent createSessionActivity() {
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("smartmusicorganizer://player"), this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+        return createPendingIntentForActivity(intent, REQUEST_CODE_CONTENT);
+    }
+
+    private PendingIntent createServiceActionPendingIntent(int requestCode, String action) {
+        Intent intent = new Intent(this, NativeDownloadedPlaybackService.class);
+        intent.setAction(action);
+        return createPendingIntentForService(intent, requestCode);
+    }
+
+    private PendingIntent createServiceActionPendingIntent(
+            int requestCode, String action, long positionMs) {
+        Intent intent = new Intent(this, NativeDownloadedPlaybackService.class);
+        intent.setAction(action);
+        intent.putExtra(EXTRA_POSITION_MS, positionMs);
+        return createPendingIntentForService(intent, requestCode);
+    }
+
+    private PendingIntent createPendingIntentForService(Intent intent, int requestCode) {
+        int pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pendingIntentFlags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+
+        return PendingIntent.getService(this, requestCode, intent, pendingIntentFlags);
+    }
+
+    private PendingIntent createPendingIntentForActivity(Intent intent, int requestCode) {
+        int pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pendingIntentFlags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+
+        return PendingIntent.getActivity(this, requestCode, intent, pendingIntentFlags);
     }
 
     private void ensureForegroundNotification() {
         log("ensureForegroundNotification");
         createNotificationChannel();
-
-        Notification notification =
-                new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-                        .setSmallIcon(R.mipmap.ic_launcher)
-                        .setContentTitle("Smart Music Organizer")
-                        .setContentText("Preparing offline playback")
-                        .setOngoing(true)
-                        .setSilent(true)
-                        .setOnlyAlertOnce(true)
-                        .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-                        .build();
-
-        startForeground(NOTIFICATION_ID, notification);
+        refreshForegroundNotification(true);
     }
 
     private void createNotificationChannel() {
@@ -502,11 +539,15 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
                 warn("encountered null track while building media items");
                 continue;
             }
+            String trackTitle = normalizeText(track.title, "Unknown Title");
+            String trackArtist = normalizeText(track.artist, "");
+            String trackAlbum = normalizeText(track.album, "");
             MediaMetadata metadata =
                     new MediaMetadata.Builder()
-                            .setTitle(track.title)
-                            .setArtist(track.artist)
-                            .setAlbumTitle(track.album)
+                            .setTitle(trackTitle)
+                            .setDisplayTitle(trackTitle)
+                            .setArtist(trackArtist)
+                            .setAlbumTitle(trackAlbum)
                             .build();
             mediaItems.add(
                     new MediaItem.Builder()
@@ -600,6 +641,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
         if (player == null) {
             log("updateSnapshot player=null");
             currentState = NativeDownloadedPlaybackState.unavailable();
+            refreshForegroundNotification(false);
             return;
         }
 
@@ -633,6 +675,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
                         + currentState.queueSize
                         + " error="
                         + currentState.errorMessage);
+        refreshForegroundNotification(false);
     }
 
     private void scheduleSnapshotTicker() {
@@ -685,6 +728,108 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
         }
 
         return value;
+    }
+
+    private static String normalizeText(@Nullable String value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? fallback : trimmed;
+    }
+
+    private void refreshForegroundNotification(boolean force) {
+        String title = "Smart Music Organizer";
+        String text = "Preparing offline playback";
+        NativeDownloadedPlaybackTrack track = getCurrentTrackForNotification();
+
+        if (track != null) {
+            title = normalizeText(track.title, title);
+            text = normalizeText(track.artist, normalizeText(track.album, ""));
+        }
+
+        String notificationKey =
+                title
+                        + "|"
+                        + text
+                        + "|"
+                        + (currentState != null && currentState.isPlaying)
+                        + "|"
+                        + (currentState != null ? currentState.currentIndex : -1);
+
+        if (!force && notificationKey.equals(lastForegroundNotificationKey)) {
+            return;
+        }
+
+        lastForegroundNotificationKey = notificationKey;
+        log("refreshForegroundNotification title=" + title + " text=" + text);
+
+        RemoteViews contentView =
+                new RemoteViews(getPackageName(), R.layout.notification_playback_compact);
+        contentView.setTextViewText(R.id.notification_track_title, title);
+        contentView.setTextViewText(R.id.notification_track_subtitle, text);
+        contentView.setOnClickPendingIntent(
+                R.id.notification_track_container, createSessionActivity());
+        contentView.setOnClickPendingIntent(
+                R.id.notification_prev_button,
+                createServiceActionPendingIntent(REQUEST_CODE_PREVIOUS, ACTION_PREVIOUS));
+        contentView.setOnClickPendingIntent(
+                R.id.notification_play_button,
+                createServiceActionPendingIntent(
+                        REQUEST_CODE_PLAY_PAUSE,
+                        currentState != null && currentState.isPlaying
+                                ? ACTION_PAUSE
+                                : ACTION_PLAY));
+        contentView.setOnClickPendingIntent(
+                R.id.notification_next_button,
+                createServiceActionPendingIntent(REQUEST_CODE_NEXT, ACTION_NEXT));
+
+        contentView.setImageViewResource(
+                R.id.notification_prev_button, android.R.drawable.ic_media_previous);
+        contentView.setImageViewResource(
+                R.id.notification_play_button,
+                currentState != null && currentState.isPlaying
+                        ? android.R.drawable.ic_media_pause
+                        : android.R.drawable.ic_media_play);
+        contentView.setImageViewResource(
+                R.id.notification_next_button, android.R.drawable.ic_media_next);
+
+        if (text == null || text.isEmpty()) {
+            contentView.setViewVisibility(R.id.notification_track_subtitle, View.GONE);
+        } else {
+            contentView.setViewVisibility(R.id.notification_track_subtitle, View.VISIBLE);
+        }
+
+        Notification notification =
+                new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setContentIntent(createSessionActivity())
+                        .setCustomContentView(contentView)
+                        .setCustomBigContentView(contentView)
+                        .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
+                        .setVisibility(Notification.VISIBILITY_PUBLIC)
+                        .setOngoing(true)
+                        .setSilent(true)
+                        .setOnlyAlertOnce(true)
+                        .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+                        .build();
+
+        startForeground(NOTIFICATION_ID, notification);
+    }
+
+    @Nullable
+    private NativeDownloadedPlaybackTrack getCurrentTrackForNotification() {
+        if (queueTracks.isEmpty()) {
+            return null;
+        }
+
+        int currentIndex = currentState == null ? -1 : currentState.currentIndex;
+        if (currentIndex < 0 || currentIndex >= queueTracks.size()) {
+            return null;
+        }
+
+        return queueTracks.get(currentIndex);
     }
 
     private Uri resolvePlayableUri(String audioLocalUri) {
