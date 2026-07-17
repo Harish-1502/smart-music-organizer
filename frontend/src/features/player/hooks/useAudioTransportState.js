@@ -20,15 +20,9 @@ export function useAudioTransportState({
   // Reset status when the active track changes.
   useEffect(() => {
     if (nativePlaybackMode) {
-      setIsLoading(
-        !nativePlaybackState || Boolean(nativePlaybackState?.isLoading),
-      );
-      setIsBuffering(Boolean(nativePlaybackState?.isBuffering));
-      setIsAudioReady(
-        Boolean(
-          nativePlaybackState?.isReady ?? nativePlaybackState?.available,
-        ),
-      );
+      setIsLoading(false);
+      setIsBuffering(false);
+      setIsAudioReady(Boolean(nativePlaybackState?.available));
       clearPlaybackError();
 
       return;
@@ -151,11 +145,7 @@ export function useAudioTransportState({
       ? nativePlaybackState.errorMessage
       : playbackError || streamError
       ? playbackError || streamError
-      : isBuffering
-        ? "Buffering..."
-        : isLoading
-          ? "Loading..."
-          : "";
+      : "";
 
   function handleTogglePlayback() {
     if (playbackError) {
