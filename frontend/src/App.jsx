@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 // import { runAndroidOfflineFoundationSmokeTest } from "./features/offline/services/androidOfflineFoundationSmokeTest";
-import { Link, Routes, Route, Navigate } from "react-router-dom";
+import { Link, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { API_AUTH_REQUIRED_EVENT } from "./api/apiBase";
 import {
   API_TOKEN_UPDATED_EVENT,
@@ -17,12 +17,15 @@ import TagCalibrationPage from "./pages/TagCalibrationPage.jsx";
 import MiniPlayer from "./features/player/components/MiniPlayer";
 import { usePlayer } from "./features/player/context/PlayerContext";
 import PlayerAudioHost from "./features/player/components/PlayerAudioHost";
+import { consumeNativeAppLaunchRoute } from "./features/player/native/nativeAppLaunch";
 
 export default function App() {
   const { currentTrack } = usePlayer();
   const hasMiniPlayer = Boolean(currentTrack);
   const [showApiTokenPrompt, setShowApiTokenPrompt] = useState(false);
   const [authRefreshKey, setAuthRefreshKey] = useState(0);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     // runAndroidOfflineFoundationSmokeTest({ allowInProduction: true });
@@ -49,6 +52,40 @@ export default function App() {
       window.removeEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncPendingLaunchRoute() {
+      const route = await consumeNativeAppLaunchRoute();
+
+      if (cancelled || !route || route === location.pathname) {
+        return;
+      }
+
+      navigate(route, { replace: true });
+    }
+
+    function handleFocus() {
+      syncPendingLaunchRoute();
+    }
+
+    function handleVisibilityChange() {
+      if (!document.hidden) {
+        syncPendingLaunchRoute();
+      }
+    }
+
+    syncPendingLaunchRoute();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [location.pathname, navigate]);
 
   return (
     <div
@@ -125,7 +162,6 @@ export default function App() {
         open={showApiTokenPrompt}
         onClose={() => setShowApiTokenPrompt(false)}
       />
-      
     </div>
   );
 }
