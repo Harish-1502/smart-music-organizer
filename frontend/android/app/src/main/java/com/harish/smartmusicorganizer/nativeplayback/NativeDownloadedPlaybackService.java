@@ -490,6 +490,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
         }
 
         updateSnapshot();
+        refreshForegroundNotification(true);
     }
 
     private void handleLoadQueue(Intent intent) {
@@ -743,6 +744,9 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
         String title = "Smart Music Organizer";
         String text = "Preparing offline playback";
         NativeDownloadedPlaybackTrack track = getCurrentTrackForNotification();
+        boolean playing = player != null && player.isPlaying();
+        int notificationIndex =
+                player != null ? player.getCurrentMediaItemIndex() : currentState.currentIndex;
 
         if (track != null) {
             title = normalizeText(track.title, title);
@@ -754,9 +758,9 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
                         + "|"
                         + text
                         + "|"
-                        + (currentState != null && currentState.isPlaying)
+                        + playing
                         + "|"
-                        + (currentState != null ? currentState.currentIndex : -1);
+                        + notificationIndex;
 
         if (!force && notificationKey.equals(lastForegroundNotificationKey)) {
             return;
@@ -778,9 +782,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
                 R.id.notification_play_button,
                 createServiceActionPendingIntent(
                         REQUEST_CODE_PLAY_PAUSE,
-                        currentState != null && currentState.isPlaying
-                                ? ACTION_PAUSE
-                                : ACTION_PLAY));
+                        playing ? ACTION_PAUSE : ACTION_PLAY));
         contentView.setOnClickPendingIntent(
                 R.id.notification_next_button,
                 createServiceActionPendingIntent(REQUEST_CODE_NEXT, ACTION_NEXT));
@@ -789,7 +791,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
                 R.id.notification_prev_button, android.R.drawable.ic_media_previous);
         contentView.setImageViewResource(
                 R.id.notification_play_button,
-                currentState != null && currentState.isPlaying
+                playing
                         ? android.R.drawable.ic_media_pause
                         : android.R.drawable.ic_media_play);
         contentView.setImageViewResource(
@@ -805,6 +807,8 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
                 new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentIntent(createSessionActivity())
+                        .setColor(ContextCompat.getColor(this, R.color.notification_playback_accent))
+                        .setColorized(true)
                         .setCustomContentView(contentView)
                         .setCustomBigContentView(contentView)
                         .setStyle(new NotificationCompat.DecoratedCustomViewStyle())

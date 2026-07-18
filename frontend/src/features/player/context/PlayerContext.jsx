@@ -66,6 +66,35 @@ function normalizeRepeatMode(value) {
   return VALID_REPEAT_MODES.has(value) ? value : "off";
 }
 
+function summarizeNativeQueueEligibility(tracks) {
+  if (!Array.isArray(tracks) || tracks.length === 0) {
+    return {
+      eligible: false,
+      reason: "empty-queue",
+    };
+  }
+
+  const firstIneligibleTrack = tracks.find((track) => !track?.offline || !(track?.audioLocalUri || track?.audioSrc));
+
+  if (!firstIneligibleTrack) {
+    return {
+      eligible: true,
+      reason: "eligible",
+    };
+  }
+
+  return {
+    eligible: false,
+    reason: "track-not-native",
+    trackId: getPlayableTrackId(firstIneligibleTrack),
+    offline: Boolean(firstIneligibleTrack?.offline),
+    hasAudioSrc: Boolean(firstIneligibleTrack?.audioSrc),
+    hasAudioLocalUri: Boolean(firstIneligibleTrack?.audioLocalUri),
+    hasAudioBlobId: Boolean(firstIneligibleTrack?.audioBlobId),
+    storageType: firstIneligibleTrack?.storageType ?? null,
+  };
+}
+
 export function PlayerProvider({ children }) {
   const audioRef = useRef(null);
 
@@ -501,6 +530,9 @@ export function PlayerProvider({ children }) {
     const useNativePlayback = shouldUseNativeDownloadedPlaybackQueue(
       normalizedQueue,
     );
+    const nativeQueueEligibility = summarizeNativeQueueEligibility(
+      normalizedQueue,
+    );
 
     logDebug("play-queue-selected", {
       safeStartIndex,
@@ -509,6 +541,17 @@ export function PlayerProvider({ children }) {
         normalizedQueue[safeStartIndex]?.id ??
         null,
       useNativePlayback,
+      isAndroidNativeRuntime: isAndroidNativeRuntime(),
+      nativeQueueEligibility,
+      firstTrackSnapshot: {
+        trackId:
+          normalizedQueue[0]?.track_id ?? normalizedQueue[0]?.id ?? null,
+        offline: Boolean(normalizedQueue[0]?.offline),
+        storageType: normalizedQueue[0]?.storageType ?? null,
+        audioLocalUri: normalizedQueue[0]?.audioLocalUri ?? null,
+        audioSrc: normalizedQueue[0]?.audioSrc ?? null,
+        audioBlobId: normalizedQueue[0]?.audioBlobId ?? null,
+      },
     });
 
     setQueue(normalizedQueue);
@@ -523,7 +566,17 @@ export function PlayerProvider({ children }) {
     setNativePlaybackMode(true);
 
     try {
+      logDebug("native-play-queue-starting", {
+        trackCount: normalizedQueue.length,
+        startIndex: safeStartIndex,
+        shuffleEnabled,
+        repeatMode,
+        volume,
+      });
       await ensureNativeDownloadedPlaybackNotificationPermission();
+      logDebug("native-play-queue-permission-complete", {
+        trackCount: normalizedQueue.length,
+      });
       const nativeState = await loadNativeDownloadedPlaybackQueue({
         tracks: normalizedQueue,
         startIndex: safeStartIndex,
@@ -548,6 +601,14 @@ export function PlayerProvider({ children }) {
         setIsMuted(Boolean(nativeState.muted));
         setQueue(Array.isArray(nativeState.tracks) && nativeState.tracks.length > 0 ? nativeState.tracks : normalizedQueue);
       }
+
+      logDebug("native-play-queue-complete", {
+        isPlaying: Boolean(nativeState?.isPlaying),
+        currentIndex: nativeState?.currentIndex ?? null,
+        trackCount: Array.isArray(nativeState?.tracks)
+          ? nativeState.tracks.length
+          : normalizedQueue.length,
+      });
     } catch (error) {
       setNativePlaybackMode(false);
       setNativePlaybackState(null);
