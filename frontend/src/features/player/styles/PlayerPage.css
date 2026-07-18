@@ -466,12 +466,14 @@
   font-size: 0;
   font-weight: 700;
   cursor: pointer;
+  touch-action: manipulation;
   transition:
-    transform 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease,
-    filter 0.2s ease;
+    transform 0.12s ease,
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    filter 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .player-page__repeat-icon-wrap {
@@ -481,6 +483,12 @@
 .player-page__control:hover,
 .player-page__utility-button:hover {
   transform: translateY(-1px);
+}
+
+.player-page__control:active,
+.player-page__utility-button:active {
+  transform: translateY(0) scale(0.975);
+  filter: brightness(1.08);
 }
 
 .player-page__control:disabled,
@@ -503,6 +511,10 @@
 
 .player-page__control--primary:hover {
   filter: brightness(1.05);
+}
+
+.player-page__control--primary:active {
+  transform: scale(0.97);
 }
 
 .player-page__control--secondary {
@@ -618,6 +630,13 @@
 .player-page__control--secondary:hover {
   border-color: var(--player-accent-border-soft);
   background: var(--player-control-hover);
+  color: var(--text-strong);
+}
+
+.player-page__control--secondary:active,
+.player-page__control--mode:active {
+  border-color: var(--player-accent-border-soft);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-strong);
 }
 
