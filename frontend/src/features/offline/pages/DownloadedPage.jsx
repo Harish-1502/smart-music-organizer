@@ -24,6 +24,7 @@ import {
 import { getSafeErrorMessage } from "../../../utils/formatSafeError";
 import "../styles/DownloadedPage.css";
 
+// Helpers for formatting storage size and type, and building confirmation messages.
 export function formatStorageSize(totalBytes) {
   const size = Number(totalBytes);
 
@@ -189,8 +190,10 @@ export default function DownloadedPage({
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("success");
 
+  // Used to stay in sync with the app mode changes, so that the library download status can be reloaded when the app mode changes.
   useEffect(() => subscribeToAppModeChanges(setAppMode), []);
 
+  // Used to stay in sync with the full library download state, so the UI can reflect the current download progress and status.
   useEffect(() => {
     return subscribeToFullLibraryDownloadState((runtimeState) => {
       if (!isMountedRef.current) {
@@ -202,9 +205,11 @@ export default function DownloadedPage({
     });
   }, []);
 
+  // Load the offline storage summary and downloaded playlists when the component mounts.
   useEffect(() => {
     let isMounted = true;
 
+    // Load the offline storage summary and downloaded playlists and handles any errors that occur
     async function loadOfflineData() {
       setLoading(true);
       setMessage("");
@@ -253,6 +258,7 @@ export default function DownloadedPage({
     };
   }, []);
 
+  // Checks whether the full-library download is available 
   useEffect(() => {
     let isMounted = true;
 
@@ -318,6 +324,7 @@ export default function DownloadedPage({
     };
   }, []);
 
+  // Reloads the offline storage summary after an action in the DownloadedPage
   async function reloadOfflineData(
     nextMessage = "",
     nextMessageTone = "success",
@@ -366,6 +373,7 @@ export default function DownloadedPage({
     }
   }
 
+  // Refreshed the full-library download status based on the current app mode
   async function reloadLibraryStatus() {
     if (!isMountedRef.current) {
       return;
@@ -418,6 +426,7 @@ export default function DownloadedPage({
     }
   }
 
+  // Handles the deletion of a downloaded playlist, prompting the user for confirmation and updating the UI accordingly.
   async function handleDeletePlaylist(playlistId) {
     const playlist = playlists.find((entry) => entry.id === playlistId);
     const confirmed = window.confirm(
@@ -440,6 +449,7 @@ export default function DownloadedPage({
     await reloadLibraryStatus();
   }
 
+  // Used to clear all stored offline dowloads
   async function handleClearAll() {
     const confirmed = window.confirm(
       buildClearAllDownloadsConfirmationText(summary),
@@ -473,6 +483,7 @@ export default function DownloadedPage({
     libraryStatus?.error === "offline_database_unavailable";
   const libraryUnavailable = libraryStatus?.error === "library_unavailable";
 
+  // The entry point for offline playback of a downloaded playlist. It builds the offline playback queue and navigates to the player page, handling any errors or missing tracks.
   async function handlePlayOffline(playlistId) {
     const playbackQueue = await buildOfflinePlaybackQueue(playlistId);
 
@@ -509,6 +520,7 @@ export default function DownloadedPage({
     setMessageTone("success");
   }
 
+  // Handles the download the full library for offline use, checking for LAN mode and download status, and updating the UI with progress, success, or error messages.
   async function handleDownloadFullLibrary() {
     if (!lanModeEnabled || isLibraryDownloading) {
       return;
