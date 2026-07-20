@@ -32,6 +32,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("APP_ENV", "API_ENV"),
     ) 
     api_mode: str = Field(default="local", validation_alias="API_MODE")
+    demo_mode: bool = Field(default=False, validation_alias="DEMO_MODE")
     app_lan_mode: bool = Field(default=False, validation_alias="APP_LAN_MODE")
     backend_host: str = Field(default="127.0.0.1", validation_alias="BACKEND_HOST")
     backend_port: int = Field(default=8000, validation_alias="BACKEND_PORT")

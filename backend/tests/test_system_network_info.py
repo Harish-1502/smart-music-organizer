@@ -3,6 +3,7 @@ from app.services import network_info
 
 
 def set_network_mode(monkeypatch, *, lan_mode: bool, token: str | None = None, port: int = 8000):
+    monkeypatch.setattr(settings, "demo_mode", False)
     monkeypatch.setattr(settings, "app_lan_mode", lan_mode)
     monkeypatch.setattr(settings, "backend_host", "0.0.0.0" if lan_mode else "127.0.0.1")
     monkeypatch.setattr(settings, "backend_port", port)
@@ -36,6 +37,7 @@ def test_network_info_local_mode_response_shape(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body == {
+        "demo_mode": False,
         "lan_mode": False,
         "backend_host": "127.0.0.1",
         "backend_port": 8123,
@@ -92,6 +94,7 @@ def test_network_info_lan_mode_returns_filtered_urls_and_port(
 
     assert response.status_code == 200
     body = response.json()
+    assert body["demo_mode"] is False
     assert body["lan_mode"] is True
     assert body["backend_host"] == "0.0.0.0"
     assert body["backend_port"] == 9001
