@@ -29,6 +29,12 @@ import {
   formatSafeError,
   getSafeErrorMessage,
 } from "../../../utils/formatSafeError";
+import {
+  hiddenPathValue,
+  isDemoMode,
+  maskOfflineTrack,
+  maskPlaylist,
+} from "../../../utils/demoMode";
 
 // Native mobile metadata must never store API tokens, auth headers, or PC file paths.
 // Audio files and artwork files will live in native storage later; SQLite only stores metadata and local refs.
@@ -685,7 +691,7 @@ export async function getOfflineTrack(trackId) {
     [normalizedTrackId],
   );
 
-  return sanitizeOfflineTrackRow(rows?.[0] ?? null);
+  return maskOfflineTrack(sanitizeOfflineTrackRow(rows?.[0] ?? null));
 }
 
 export async function hasVerifiedOfflineTrack(trackId) {
@@ -1486,7 +1492,7 @@ export async function saveNativeDownloadedPlaylist(downloadPayload) {
 
 export async function getOfflinePlaylists() {
   if (!shouldUseMobileOfflineSqlite()) {
-    return getDownloadedPlaylists();
+    return (await getDownloadedPlaylists()).map(maskPlaylist).filter(Boolean);
   }
 
   await ensureMobileOfflineDbReady();
@@ -1510,7 +1516,7 @@ export async function getOfflinePlaylists() {
     { rethrow: true },
   );
 
-  return rows.map(sanitizeOfflinePlaylistRow).filter(Boolean);
+  return rows.map(sanitizeOfflinePlaylistRow).map(maskPlaylist).filter(Boolean);
 }
 
 export async function getOfflineTracksForPlaylist(playlistId) {
@@ -1554,6 +1560,7 @@ export async function getOfflineTracksForPlaylist(playlistId) {
           downloadStatus: "downloaded",
         };
       })
+      .map(maskOfflineTrack)
       .filter(Boolean);
   }
 
@@ -1584,7 +1591,7 @@ export async function getOfflineTracksForPlaylist(playlistId) {
     { rethrow: true },
   );
 
-  return rows.map(sanitizeOfflineTrackRow).filter(Boolean);
+  return rows.map(sanitizeOfflineTrackRow).map(maskOfflineTrack).filter(Boolean);
 }
 
 function buildSafeOfflineLibraryTrack(track) {
@@ -1646,6 +1653,7 @@ export async function getOfflineLibraryTracks() {
           downloadStatus: "downloaded",
         }),
       )
+      .map(maskOfflineTrack)
       .filter(Boolean);
   }
 
@@ -1670,7 +1678,7 @@ export async function getOfflineLibraryTracks() {
     { rethrow: true },
   );
 
-  return rows.map(buildSafeOfflineLibraryTrack).filter(Boolean);
+  return rows.map(buildSafeOfflineLibraryTrack).map(maskOfflineTrack).filter(Boolean);
 }
 
 function buildSafePlaybackTrack(track, sourceFields = {}) {
@@ -1855,7 +1863,7 @@ async function inspectTrackMediaFiles(tracks, key) {
 
     details.push({
       trackId: normalizeOfflineId(track?.id),
-      relativePath,
+      relativePath: isDemoMode() ? hiddenPathValue() : relativePath,
       exists,
       sizeBytes: normalizePositiveInteger(sizeBytes, 0),
     });

@@ -6,6 +6,8 @@ import {
   API_TOKEN_UPDATED_EVENT,
   clearApiToken,
 } from "./api/authToken";
+import { getBackendBaseUrl } from "./api/backendBaseUrl";
+import { syncAppConfig } from "./api/appConfig";
 import ApiTokenPrompt from "./shared/components/ApiTokenPrompt";
 import LibraryPage from "./features/library/pages/LibraryPage";
 import ConnectionPage from "./pages/ConnectionPage";
@@ -17,15 +19,19 @@ import TagCalibrationPage from "./pages/TagCalibrationPage.jsx";
 import MiniPlayer from "./features/player/components/MiniPlayer";
 import { usePlayer } from "./features/player/context/PlayerContext";
 import PlayerAudioHost from "./features/player/components/PlayerAudioHost";
+import { DEMO_MODE_UPDATED_EVENT } from "./utils/demoMode";
 
 export default function App() {
   const { currentTrack } = usePlayer();
   const hasMiniPlayer = Boolean(currentTrack);
   const [showApiTokenPrompt, setShowApiTokenPrompt] = useState(false);
   const [authRefreshKey, setAuthRefreshKey] = useState(0);
+  const [demoModeRefreshKey, setDemoModeRefreshKey] = useState(0);
 
   useEffect(() => {
     // runAndroidOfflineFoundationSmokeTest({ allowInProduction: true });
+
+    void syncAppConfig(getBackendBaseUrl()).catch(() => {});
 
     function handleApiAuthRequired() {
       clearApiToken();
@@ -43,16 +49,23 @@ export default function App() {
 
     window.addEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
     window.addEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
+    window.addEventListener(DEMO_MODE_UPDATED_EVENT, handleDemoModeUpdated);
 
     return () => {
       window.removeEventListener(API_AUTH_REQUIRED_EVENT, handleApiAuthRequired);
       window.removeEventListener(API_TOKEN_UPDATED_EVENT, handleApiTokenUpdated);
+      window.removeEventListener(DEMO_MODE_UPDATED_EVENT, handleDemoModeUpdated);
     };
   }, []);
+
+  function handleDemoModeUpdated() {
+    setDemoModeRefreshKey((currentKey) => currentKey + 1);
+  }
 
   return (
     <div
       className={`app-shell${hasMiniPlayer ? " app-shell--has-mini-player" : ""}`}
+      data-demo-mode-refresh-key={demoModeRefreshKey}
     >
       <nav className="app-shell__nav" aria-label="Primary">
         <div className="app-shell__nav-inner">
@@ -125,7 +138,6 @@ export default function App() {
         open={showApiTokenPrompt}
         onClose={() => setShowApiTokenPrompt(false)}
       />
-      
     </div>
   );
 }

@@ -1,4 +1,7 @@
 const HIDDEN_PATH_VALUE = "Hidden in demo mode";
+const DEMO_MODE_STORAGE_KEY = "demoMode";
+export const DEMO_MODE_UPDATED_EVENT =
+  "smart-music-organizer:demo-mode-updated";
 
 function canUseLocalStorage() {
   if (typeof window === "undefined") {
@@ -10,6 +13,26 @@ function canUseLocalStorage() {
   } catch {
     return false;
   }
+}
+
+function readStoredDemoModeValue() {
+  if (!canUseLocalStorage()) {
+    return null;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(DEMO_MODE_STORAGE_KEY);
+
+    if (storedValue === "true") {
+      return true;
+    }
+
+    if (storedValue === "false") {
+      return false;
+    }
+  } catch {}
+
+  return null;
 }
 
 function getDemoIndex(value, fallbackIndex = 0) {
@@ -27,21 +50,47 @@ function padTrackNumber(value) {
 }
 
 export function isDemoMode() {
+  const storedValue = readStoredDemoModeValue();
+
+  if (storedValue !== null) {
+    return storedValue;
+  }
+
   const envEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 
   if (envEnabled) {
     return true;
   }
 
-  if (!canUseLocalStorage()) {
-    return false;
+  return false;
+}
+
+export function setDemoMode(value) {
+  const normalizedValue = Boolean(value);
+
+  if (typeof window !== "undefined") {
+    if (canUseLocalStorage()) {
+      try {
+        if (normalizedValue) {
+          window.localStorage.setItem(DEMO_MODE_STORAGE_KEY, "true");
+        } else {
+          window.localStorage.removeItem(DEMO_MODE_STORAGE_KEY);
+        }
+      } catch {}
+    }
+
+    window.dispatchEvent(
+      new CustomEvent(DEMO_MODE_UPDATED_EVENT, {
+        detail: { enabled: normalizedValue },
+      }),
+    );
   }
 
-  try {
-    return window.localStorage.getItem("demoMode") === "true";
-  } catch {
-    return false;
-  }
+  return normalizedValue;
+}
+
+export function hasDemoModePreference() {
+  return readStoredDemoModeValue() !== null;
 }
 
 export function hiddenPathValue() {
@@ -78,6 +127,23 @@ export function maskTrack(track, index = 0) {
     folder_path: HIDDEN_PATH_VALUE,
     art_path: null,
   };
+}
+
+export function maskPlaylist(playlist, index = 0) {
+  if (!isDemoMode() || !playlist || typeof playlist !== "object") {
+    return playlist;
+  }
+
+  const demoIndex = getDemoIndex(playlist.playlist_id ?? playlist.id, index);
+
+  return {
+    ...playlist,
+    name: `Demo Playlist ${padTrackNumber(demoIndex)}`,
+  };
+}
+
+export function maskOfflineTrack(track, index = 0) {
+  return maskTrack(track, index);
 }
 
 export function maskTracks(tracks) {

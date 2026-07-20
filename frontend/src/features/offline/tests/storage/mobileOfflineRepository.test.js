@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let nativeAndroidSupported = false;
 let mobileDatabase = null;
+let demoModeEnabled = false;
 
 const offlineStorageMocks = {
   clearOfflineDownloads: vi.fn(),
@@ -27,6 +28,31 @@ const nativeMediaStorageMocks = {
 
 vi.mock("../../storage/offlineStorage", () => offlineStorageMocks);
 vi.mock("../../storage/nativeMediaFileStorage", () => nativeMediaStorageMocks);
+vi.mock("../../../../utils/demoMode", () => ({
+  hiddenPathValue: () => "Hidden in demo mode",
+  isDemoMode: () => demoModeEnabled,
+  maskOfflineTrack: (track, index = 0) =>
+    demoModeEnabled && track
+      ? {
+          ...track,
+          title: `Demo Track ${String(index + 1).padStart(3, "0")}`,
+          display_title: `Demo Track ${String(index + 1).padStart(3, "0")}`,
+          scanned_title: `Demo Track ${String(index + 1).padStart(3, "0")}`,
+          artist: `Demo Artist ${((index % 12) + 1)}`,
+          album: `Demo Album ${((index % 8) + 1)}`,
+          file_path: "Hidden in demo mode",
+          folder_path: "Hidden in demo mode",
+          art_path: null,
+        }
+      : track,
+  maskPlaylist: (playlist, index = 0) =>
+    demoModeEnabled && playlist
+      ? {
+          ...playlist,
+          name: `Demo Playlist ${String(index + 1).padStart(3, "0")}`,
+        }
+      : playlist,
+}));
 
 vi.mock("../../storage/mobileSqliteDb", () => ({
   getMobileOfflineDb: vi.fn(async () => mobileDatabase),
@@ -62,6 +88,7 @@ describe("mobileOfflineRepository", () => {
 
     nativeAndroidSupported = false;
     mobileDatabase = null;
+    demoModeEnabled = false;
 
     offlineStorageMocks.clearOfflineDownloads.mockResolvedValue(true);
     offlineStorageMocks.deleteDownloadedPlaylist.mockResolvedValue(true);
@@ -215,6 +242,95 @@ describe("mobileOfflineRepository", () => {
       { id: "browser-playlist", name: "Browser Fallback" },
     ]);
     expect(offlineStorageMocks.getDownloadedPlaylists).toHaveBeenCalledTimes(1);
+  });
+
+  it("masks native mobile offline metadata in demo mode", async () => {
+    demoModeEnabled = true;
+    nativeAndroidSupported = true;
+    mobileDatabase = createMockDatabase({
+      queryHandler: async (statement) => {
+        if (statement.includes("FROM offline_playlists")) {
+          return {
+            values: [
+              {
+                id: "playlist-1",
+                name: "Road Trip",
+                totalTracks: 1,
+                totalBytes: 4096,
+                downloadedAt: "2026-07-20T12:00:00.000Z",
+                updatedAt: "2026-07-20T12:00:00.000Z",
+              },
+            ],
+          };
+        }
+
+        if (statement.includes("FROM offline_playlist_tracks pt")) {
+          return {
+            values: [
+              {
+                id: "track-1",
+                title: "Actual Song",
+                artist: "Real Artist",
+                album: "Real Album",
+                duration: 245,
+                downloadStatus: "downloaded",
+                storageType: "native_file",
+                downloadedAt: "2026-07-20T12:00:00.000Z",
+                trackOrder: 0,
+                audioLocalUri: "media/audio/track-1.mp3",
+                artworkLocalUri: "media/artwork/track-1.jpg",
+              },
+            ],
+          };
+        }
+
+        return { values: [] };
+      },
+    });
+    nativeMediaStorageMocks.getNativeMediaFileSize.mockImplementation(async (relativePath) =>
+      relativePath === "media/audio/track-1.mp3" ? 4096 : 512,
+    );
+
+    const {
+      getOfflinePlaylists,
+      getOfflineTracksForPlaylist,
+      inspectDownloadedPlaylist,
+    } = await loadRepository();
+
+    const playlists = await getOfflinePlaylists();
+    const tracks = await getOfflineTracksForPlaylist("playlist-1");
+    const inspection = await inspectDownloadedPlaylist("playlist-1");
+
+    expect(playlists[0]).toEqual(
+      expect.objectContaining({
+        id: "playlist-1",
+        name: "Demo Playlist 001",
+      }),
+    );
+    expect(tracks[0]).toEqual(
+      expect.objectContaining({
+        id: "track-1",
+        title: "Demo Track 001",
+        artist: "Demo Artist 1",
+        album: "Demo Album 1",
+        audioLocalUri: "media/audio/track-1.mp3",
+      }),
+    );
+    expect(inspection).toEqual(
+      expect.objectContaining({
+        playlistName: "Demo Playlist 001",
+        audioFiles: [
+          expect.objectContaining({
+            relativePath: "Hidden in demo mode",
+          }),
+        ],
+        artworkFiles: [
+          expect.objectContaining({
+            relativePath: "Hidden in demo mode",
+          }),
+        ],
+      }),
+    );
   });
 
   it("uses the IndexedDB fallback summary in the browser", async () => {
