@@ -6,6 +6,7 @@ import {
   subscribeToAppModeChanges,
 } from "../../../appMode/appMode";
 import { usePlayer } from "../../player/context/PlayerContext";
+import DownloadedPlaylistsSection from "../components/DownloadedPlaylistsSection";
 import {
   cancelFullLibraryDownload,
   downloadFullLibraryForOffline,
@@ -21,136 +22,30 @@ import {
   getOfflineStorageSummary,
   OfflineDatabaseUnavailableError,
 } from "../storage/mobileOfflineRepository";
+import {
+  buildClearAllDownloadsConfirmationText,
+  buildDeleteDownloadConfirmationText,
+  buildLibraryTransferSummary,
+  formatDownloadedDate,
+  formatStorageSize,
+  formatStorageType,
+  getMissingAudioWarningMessage,
+  sanitizeLibraryProgressTitle,
+} from "../utils/downloadedPageText";
+import {
+  createEmptyLibraryProgress,
+  createOfflineDatabaseUnavailableUiMessage,
+  sortPlaylistsByDownloadedDate,
+} from "../utils/downloadedPageData";
 import { getSafeErrorMessage } from "../../../utils/formatSafeError";
 import "../styles/DownloadedPage.css";
 
-// Helpers for formatting storage size and type, and building confirmation messages.
-export function formatStorageSize(totalBytes) {
-  const size = Number(totalBytes);
-
-  if (!Number.isFinite(size) || size <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const unitIndex = Math.min(
-    Math.floor(Math.log(size) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = size / 1024 ** unitIndex;
-
-  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
-}
-
-export function formatStorageType(storageType) {
-  if (storageType === "native_file") {
-    return "Native files";
-  }
-
-  if (storageType === "indexeddb" || storageType === "indexeddb_blob") {
-    return "IndexedDB";
-  }
-
-  return "Unknown";
-}
-
-function formatDownloadedDate(value) {
-  if (!value) {
-    return "Date unavailable";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Date unavailable";
-  }
-
-  return date.toLocaleString();
-}
-
-export function buildDeleteDownloadConfirmationText(playlistName) {
-  const safePlaylistName =
-    typeof playlistName === "string" && playlistName.trim()
-      ? playlistName.trim()
-      : "this playlist";
-
-  return `Delete the offline download for ${safePlaylistName}? Shared tracks used by other downloaded playlists will be kept.`;
-}
-
-export function buildClearAllDownloadsConfirmationText(summary) {
-  return `Clear all offline downloads? This removes ${summary?.playlistCount ?? 0} playlists, ${summary?.trackCount ?? 0} tracks, and ${formatStorageSize(summary?.totalBytes ?? 0)} from ${formatStorageType(summary?.storageType)} storage.`;
-}
-
-export function getMissingAudioWarningMessage(summary) {
-  const missingAudioFileCount = Number(summary?.missingAudioFileCount ?? 0);
-
-  if (!Number.isFinite(missingAudioFileCount) || missingAudioFileCount <= 0) {
-    return "";
-  }
-
-  return `${missingAudioFileCount} offline audio file${missingAudioFileCount === 1 ? "" : "s"} ${missingAudioFileCount === 1 ? "is" : "are"} missing. Play Offline will skip unavailable tracks until those downloads are refreshed.`;
-}
-
-function sortPlaylistsByDownloadedDate(playlists) {
-  return [...playlists].sort((left, right) => {
-    const leftDate = new Date(left?.downloadedAt ?? 0).getTime();
-    const rightDate = new Date(right?.downloadedAt ?? 0).getTime();
-
-    return rightDate - leftDate;
-  });
-}
-
-function createEmptyLibraryProgress() {
-  return {
-    totalLibraryTracks: 0,
-    totalMissingTracks: 0,
-    processedMissingTracks: 0,
-    verifiedExistingCount: 0,
-    downloadedCount: 0,
-    skippedCount: 0,
-    failedCount: 0,
-    downloadedBytes: 0,
-    currentTrackTitle: "",
-    lastSafeErrorMessage: "",
-  };
-}
-
-function createOfflineDatabaseUnavailableUiMessage() {
-  return "Offline database is unavailable. The library was found, but the phone database could not be opened. Try clearing app storage or reinstalling if this continues.";
-}
-
-export function sanitizeLibraryProgressTitle(value) {
-  const normalizedValue =
-    typeof value === "string" ? value.trim().replaceAll("\\", "/") : "";
-
-  if (!normalizedValue) {
-    return "";
-  }
-
-  if (
-    /^[a-zA-Z]:\//.test(normalizedValue) ||
-    normalizedValue.startsWith("//") ||
-    normalizedValue.startsWith("file://") ||
-    normalizedValue.startsWith("content://") ||
-    normalizedValue.startsWith("http://") ||
-    normalizedValue.startsWith("https://") ||
-    normalizedValue.startsWith("../") ||
-    normalizedValue.includes("/../")
-  ) {
-    return "Current track hidden for privacy.";
-  }
-
-  return normalizedValue;
-}
-
-function buildLibraryTransferSummary(progress) {
-  const verifiedExistingCount = Number(progress?.verifiedExistingCount ?? 0);
-  const downloadedCount = Number(progress?.downloadedCount ?? 0);
-  const skippedCount = Number(progress?.skippedCount ?? 0);
-  const failedCount = Number(progress?.failedCount ?? 0);
-
-  return `Verified existing ${verifiedExistingCount}, newly downloaded ${downloadedCount}, skipped during this run ${skippedCount}, failed ${failedCount}.`;
-}
+export {
+  buildClearAllDownloadsConfirmationText,
+  buildDeleteDownloadConfirmationText,
+  getMissingAudioWarningMessage,
+  sanitizeLibraryProgressTitle,
+} from "../utils/downloadedPageText";
 
 export default function DownloadedPage({
   initialAppMode = null,
@@ -818,133 +713,21 @@ export default function DownloadedPage({
           </div>
         </section>
 
-        {message ? (
-          <p
-            className={`downloaded-page__message downloaded-page__message--${messageTone}`}
-            role={messageTone === "error" ? "alert" : "status"}
-          >
-            {message}
-          </p>
-        ) : null}
-
-        {missingAudioWarning ? (
-          <section className="downloaded-page__warning" role="alert">
-            <p className="downloaded-page__warning-title">
-              Missing offline audio files
-            </p>
-            <p className="downloaded-page__warning-text">
-              {missingAudioWarning}
-            </p>
-          </section>
-        ) : null}
-
-        {loading && !summary ? (
-          <section className="downloaded-page__state" aria-live="polite">
-            <p className="downloaded-page__state-title">
-              Loading offline storage...
-            </p>
-            <p className="downloaded-page__state-text">
-              Reading downloaded playlist data from local offline storage.
-            </p>
-          </section>
-        ) : null}
-
-        {!loading && !storageAvailable ? (
-          <section className="downloaded-page__state downloaded-page__state--unavailable">
-            <p className="downloaded-page__state-title">
-              Offline storage is unavailable in this browser.
-            </p>
-            <p className="downloaded-page__state-text">
-              Local offline storage is unavailable or blocked on this device.
-            </p>
-          </section>
-        ) : null}
-
-        {!loading && storageAvailable && !hasPlaylists ? (
-          <section className="downloaded-page__state downloaded-page__state--empty">
-            <p className="downloaded-page__state-title">
-              No downloaded playlists yet.
-            </p>
-            <p className="downloaded-page__state-text">
-              Download a playlist from the playlist page or use Download Full
-              Library in LAN Mode.
-            </p>
-          </section>
-        ) : null}
-
-        {!loading && storageAvailable && hasPlaylists ? (
-          <section
-            className="downloaded-page__content"
-            aria-label="Downloaded playlists"
-          >
-            <div className="downloaded-page__section-header">
-              <div>
-                <p className="downloaded-page__section-eyebrow">
-                  Stored playlists
-                </p>
-                <h2 className="downloaded-page__section-title">
-                  Downloaded playlists
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="downloaded-page__button downloaded-page__button--danger"
-                onClick={handleClearAll}
-              >
-                Clear All Downloads
-              </button>
-            </div>
-
-            <div className="downloaded-page__playlist-grid">
-              {playlists.map((playlist) => (
-                <article
-                  key={playlist.id}
-                  className="downloaded-page__playlist-card"
-                >
-                  <div className="downloaded-page__playlist-copy">
-                    <p className="downloaded-page__playlist-label">Playlist</p>
-                    <h3 className="downloaded-page__playlist-name">
-                      {playlist.name || "Untitled playlist"}
-                    </h3>
-                    <p className="downloaded-page__playlist-meta">
-                      {playlist.totalTracks ?? 0} tracks
-                    </p>
-                    <p className="downloaded-page__playlist-meta">
-                      Offline size {formatStorageSize(playlist.totalBytes ?? 0)}
-                    </p>
-                    <p className="downloaded-page__playlist-meta">
-                      Downloaded {formatDownloadedDate(playlist.downloadedAt)}
-                    </p>
-                    <p className="downloaded-page__playlist-status">
-                      Already downloaded for offline playback.
-                    </p>
-                  </div>
-
-                  <div
-                    className="downloaded-page__playlist-actions"
-                    role="group"
-                    aria-label={`Actions for ${playlist.name || "downloaded playlist"}`}
-                  >
-                    <button
-                      type="button"
-                      className="downloaded-page__button downloaded-page__button--secondary"
-                      onClick={() => handlePlayOffline(playlist.id)}
-                    >
-                      Play Offline
-                    </button>
-                    <button
-                      type="button"
-                      className="downloaded-page__button downloaded-page__button--ghost-danger"
-                      onClick={() => handleDeletePlaylist(playlist.id)}
-                    >
-                      Delete Download
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
+        <DownloadedPlaylistsSection
+          loading={loading}
+          summary={summary}
+          storageAvailable={storageAvailable}
+          hasPlaylists={hasPlaylists}
+          playlists={playlists}
+          missingAudioWarning={missingAudioWarning}
+          message={message}
+          messageTone={messageTone}
+          onClearAll={handleClearAll}
+          onPlayOffline={handlePlayOffline}
+          onDeletePlaylist={handleDeletePlaylist}
+          formatStorageSize={formatStorageSize}
+          formatDownloadedDate={formatDownloadedDate}
+        />
       </div>
     </section>
   );
