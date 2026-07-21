@@ -721,7 +721,3 @@ How to safely modify this feature.
 - Keep native Android playback limited to downloaded tracks until that path is stable.
 - Update the native notification layout and the service command wiring together so the UI and behavior stay in sync.
 - If you change the notification tap route, update `MainActivity`, `NativeAppLaunchPlugin`, and `nativeAppLaunch.js` together.
-
-## Reimplementation Checklist
-
-What you would need to rebuild this feature from scratch.
