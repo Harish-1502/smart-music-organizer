@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+let demoModeEnabled = false;
+
 const offlineStorageMocks = {
   saveDownloadedPlaylist: vi.fn(),
 };
@@ -22,6 +24,23 @@ const offlineTrackDownloadMocks = {
 vi.mock("../../storage/offlineStorage", () => offlineStorageMocks);
 vi.mock("../../storage/mobileOfflineRepository", () => mobileOfflineRepositoryMocks);
 vi.mock("../../services/offlineTrackDownload", () => offlineTrackDownloadMocks);
+vi.mock("../../../../utils/demoMode", () => ({
+  isDemoMode: () => demoModeEnabled,
+  maskPlaylist: (playlist, index = 0) =>
+    demoModeEnabled && playlist
+      ? {
+          ...playlist,
+          name: `Demo Playlist ${String(index + 1).padStart(3, "0")}`,
+        }
+      : playlist,
+  maskTrack: (track, index = 0) =>
+    demoModeEnabled && track
+      ? {
+          ...track,
+          title: `Demo Track ${String(index + 1).padStart(3, "0")}`,
+        }
+      : track,
+}));
 
 async function loadModule() {
   return import("../../services/downloadPlaylist.js");
@@ -31,6 +50,7 @@ describe("downloadPlaylistForOffline", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    demoModeEnabled = false;
 
     offlineStorageMocks.saveDownloadedPlaylist.mockResolvedValue({
       id: "playlist-1",
@@ -77,6 +97,63 @@ describe("downloadPlaylistForOffline", () => {
     });
     expect(offlineStorageMocks.saveDownloadedPlaylist).toHaveBeenCalledTimes(1);
     expect(mobileOfflineRepositoryMocks.saveNativeDownloadedPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("masks playlist track titles in demo mode before saving offline downloads", async () => {
+    demoModeEnabled = true;
+    offlineStorageMocks.saveDownloadedPlaylist.mockResolvedValueOnce({
+      id: "playlist-1",
+      name: "Demo Playlist 001",
+    });
+    offlineTrackDownloadMocks.downloadTrackForOffline.mockResolvedValue({
+      status: "downloaded",
+      trackId: "track-1",
+      title: "Demo Track 001",
+      downloadedBytes: 128,
+      downloadedTrack: {
+        id: "track-1",
+        title: "Demo Track 001",
+        artist: "Artist A",
+        audioBlob: new Blob(["audio"], { type: "audio/mpeg" }),
+        artworkBlob: new Blob(["art"], { type: "image/jpeg" }),
+      },
+      createdNativeFiles: {
+        audio: false,
+        artwork: false,
+      },
+    });
+
+    const { downloadPlaylistForOffline } = await loadModule();
+    const result = await downloadPlaylistForOffline({
+      playlist: {
+        id: "playlist-1",
+        name: "Road Trip",
+        tracks: [{ id: "track-1", title: "Actual Song", artist: "Artist A" }],
+      },
+    });
+
+    expect(result.savedPlaylist).toEqual({
+      id: "playlist-1",
+      name: "Demo Playlist 001",
+    });
+    expect(offlineTrackDownloadMocks.downloadTrackForOffline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "track-1",
+        title: "Demo Track 001",
+      }),
+      expect.any(Object),
+    );
+    expect(offlineStorageMocks.saveDownloadedPlaylist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Demo Playlist 001",
+        tracks: [
+          expect.objectContaining({
+            id: "track-1",
+            title: "Demo Track 001",
+          }),
+        ],
+      }),
+    );
   });
 
   it("uses native file storage and SQLite metadata on Android", async () => {
