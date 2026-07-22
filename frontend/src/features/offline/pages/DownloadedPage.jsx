@@ -380,9 +380,16 @@ export default function DownloadedPage({
 
   // The entry point for offline playback of a downloaded playlist. It builds the offline playback queue and navigates to the player page, handling any errors or missing tracks.
   async function handlePlayOffline(playlistId) {
+    logDebug("play-offline-requested", {
+      playlistId,
+    });
+
     const playbackQueue = await buildOfflinePlaybackQueue(playlistId);
 
     if (!playbackQueue) {
+      logWarn("play-offline-queue-missing", {
+        playlistId,
+      });
       setMessage(
         "Could not load this downloaded playlist for offline playback.",
       );
@@ -391,12 +398,23 @@ export default function DownloadedPage({
     }
 
     if (!playbackQueue.tracks.length) {
+      logWarn("play-offline-no-tracks", {
+        playlistId,
+        missingTrackIds: playbackQueue.missingTrackIds.length,
+      });
       setMessage(
         "No playable offline audio files were found for this playlist.",
       );
       setMessageTone("error");
       return;
     }
+
+    logDebug("play-offline-queue-ready", {
+      playlistId,
+      trackCount: playbackQueue.tracks.length,
+      missingTrackCount: playbackQueue.missingTrackIds.length,
+      firstTrackId: playbackQueue.tracks[0]?.track_id ?? playbackQueue.tracks[0]?.id ?? null,
+    });
 
     playQueue(playbackQueue.tracks, 0);
     navigate("/player");

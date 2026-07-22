@@ -23,6 +23,8 @@ function formatTime(seconds) {
 export function usePlayerProgressState({
   audioRef,
   currentTrack,
+  nativePlaybackMode = false,
+  nativePlaybackState = null,
   seekTo,
   seekBy,
   transportDisabled,
@@ -38,6 +40,49 @@ export function usePlayerProgressState({
   // Provides live updates of the current playback time and duration by syncing
   // with the real audio element.
   useEffect(() => {
+    if (nativePlaybackMode) {
+      const basePositionSeconds = Number.isFinite(nativePlaybackState?.positionMs)
+        ? nativePlaybackState.positionMs / 1000
+        : 0;
+      const nextDuration = Number.isFinite(nativePlaybackState?.durationMs)
+        ? nativePlaybackState.durationMs / 1000
+        : Number.isFinite(currentTrack?.duration)
+          ? currentTrack.duration
+          : NaN;
+      const snapshotUpdatedAtMs = Number.isFinite(
+        nativePlaybackState?.updatedAtMs,
+      )
+        ? nativePlaybackState.updatedAtMs
+        : 0;
+      const shouldAdvanceLive =
+        Boolean(nativePlaybackState?.isPlaying) && snapshotUpdatedAtMs > 0;
+      const syncNativeProgress = () => {
+        const livePositionSeconds = shouldAdvanceLive
+          ? basePositionSeconds +
+            Math.max(0, Date.now() - snapshotUpdatedAtMs) / 1000
+          : basePositionSeconds;
+        const boundedPositionSeconds =
+          Number.isFinite(nextDuration) && nextDuration > 0
+            ? Math.min(livePositionSeconds, nextDuration)
+            : Math.max(0, livePositionSeconds);
+
+        setCurrentTime(boundedPositionSeconds);
+        setDuration(nextDuration);
+      };
+
+      syncNativeProgress();
+
+      if (!shouldAdvanceLive) {
+        return;
+      }
+
+      const intervalId = window.setInterval(syncNativeProgress, 250);
+
+      return () => {
+        window.clearInterval(intervalId);
+      };
+    }
+
     const audioElement = audioRef.current;
     const fallbackDuration = Number.isFinite(currentTrack?.duration)
       ? currentTrack.duration
@@ -80,7 +125,7 @@ export function usePlayerProgressState({
       audioElement.removeEventListener("durationchange", syncProgress);
       audioElement.removeEventListener("emptied", syncProgress);
     };
-  }, [audioRef, currentTrack]);
+  }, [audioRef, currentTrack, nativePlaybackMode, nativePlaybackState]);
 
   const seekDisabled = transportDisabled || !(duration > 0);
   const effectiveCurrentTime =
@@ -147,10 +192,9 @@ export function usePlayerProgressState({
       return;
     }
 
-    const nextTime =
-      shouldCommit && Number.isFinite(event?.clientX)
-        ? getTimeFromClientX(event.clientX)
-        : scrubTime;
+    const nextTime = shouldCommit
+      ? scrubTime ?? currentTime
+      : scrubTime;
 
     if (shouldCommit && Number.isFinite(nextTime)) {
       commitSeek(nextTime);

@@ -36,6 +36,8 @@ export default function PlayerPage() {
     isPlaying,
     shuffleEnabled,
     repeatMode,
+    nativePlaybackMode,
+    nativePlaybackState,
     togglePlayPause,
     nextTrack,
     previousTrack,
@@ -61,6 +63,8 @@ export default function PlayerPage() {
   } = useAudioTransportState({
     audioRef,
     currentTrack,
+    nativePlaybackMode,
+    nativePlaybackState,
     streamError,
     playbackError,
     reportPlaybackError,
@@ -82,6 +86,8 @@ export default function PlayerPage() {
   } = usePlayerProgressState({
     audioRef,
     currentTrack,
+    nativePlaybackMode,
+    nativePlaybackState,
     seekTo,
     seekBy,
     transportDisabled,

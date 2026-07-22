@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 // import { runAndroidOfflineFoundationSmokeTest } from "./features/offline/services/androidOfflineFoundationSmokeTest";
-import { Link, Routes, Route, Navigate } from "react-router-dom";
+import { Link, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { API_AUTH_REQUIRED_EVENT } from "./api/apiBase";
 import {
   API_TOKEN_UPDATED_EVENT,
@@ -20,6 +20,7 @@ import MiniPlayer from "./features/player/components/MiniPlayer";
 import { usePlayer } from "./features/player/context/PlayerContext";
 import PlayerAudioHost from "./features/player/components/PlayerAudioHost";
 import { DEMO_MODE_UPDATED_EVENT } from "./utils/demoMode";
+import { consumeNativeAppLaunchRoute } from "./features/player/native/nativeAppLaunch";
 
 export default function App() {
   const { currentTrack } = usePlayer();
@@ -27,6 +28,8 @@ export default function App() {
   const [showApiTokenPrompt, setShowApiTokenPrompt] = useState(false);
   const [authRefreshKey, setAuthRefreshKey] = useState(0);
   const [demoModeRefreshKey, setDemoModeRefreshKey] = useState(0);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     // runAndroidOfflineFoundationSmokeTest({ allowInProduction: true });
@@ -61,6 +64,39 @@ export default function App() {
   function handleDemoModeUpdated() {
     setDemoModeRefreshKey((currentKey) => currentKey + 1);
   }
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncPendingLaunchRoute() {
+      const route = await consumeNativeAppLaunchRoute();
+
+      if (cancelled || !route || route === location.pathname) {
+        return;
+      }
+
+      navigate(route, { replace: true });
+    }
+
+    function handleFocus() {
+      syncPendingLaunchRoute();
+    }
+
+    function handleVisibilityChange() {
+      if (!document.hidden) {
+        syncPendingLaunchRoute();
+      }
+    }
+
+    syncPendingLaunchRoute();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [location.pathname, navigate]);
 
   return (
     <div

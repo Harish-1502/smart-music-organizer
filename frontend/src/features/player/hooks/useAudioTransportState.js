@@ -5,6 +5,8 @@ import { getPlaybackErrorMessage } from "../utils/playbackErrorMessage";
 export function useAudioTransportState({
   audioRef,
   currentTrack,
+  nativePlaybackMode = false,
+  nativePlaybackState = null,
   streamError,
   playbackError,
   reportPlaybackError,
@@ -17,6 +19,15 @@ export function useAudioTransportState({
 
   // Reset status when the active track changes.
   useEffect(() => {
+    if (nativePlaybackMode) {
+      setIsLoading(false);
+      setIsBuffering(false);
+      setIsAudioReady(Boolean(nativePlaybackState?.available));
+      clearPlaybackError();
+
+      return;
+    }
+
     if (!currentTrack) {
       setIsLoading(false);
       setIsBuffering(false);
@@ -41,12 +52,18 @@ export function useAudioTransportState({
     audioRef,
     clearPlaybackError,
     currentTrack,
+    nativePlaybackMode,
+    nativePlaybackState,
     reportPlaybackError,
   ]);
 
   // Keep transport status in sync with the real audio element.
   useEffect(() => {
     const audioElement = audioRef.current;
+
+    if (nativePlaybackMode) {
+      return undefined;
+    }
 
     if (!audioElement || !currentTrack) {
       return undefined;
@@ -113,20 +130,22 @@ export function useAudioTransportState({
     audioRef,
     clearPlaybackError,
     currentTrack,
+    nativePlaybackMode,
     playbackError,
     reportPlaybackError,
   ]);
 
   const transportDisabled =
-    isLoading || !isAudioReady || Boolean(playbackError || streamError);
+    (nativePlaybackMode
+      ? !nativePlaybackState || Boolean(!nativePlaybackState.available)
+      : isLoading || !isAudioReady) ||
+    Boolean(playbackError || streamError || nativePlaybackState?.errorMessage);
   const playerStatus =
-    playbackError || streamError
+    nativePlaybackMode && nativePlaybackState?.errorMessage
+      ? nativePlaybackState.errorMessage
+      : playbackError || streamError
       ? playbackError || streamError
-      : isBuffering
-        ? "Buffering..."
-        : isLoading
-          ? "Loading..."
-          : "";
+      : "";
 
   function handleTogglePlayback() {
     if (playbackError) {
