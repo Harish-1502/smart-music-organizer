@@ -335,11 +335,21 @@ code {
 
   .app-shell__nav-links {
     width: 100%;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    overflow: hidden;
+    padding: 3px;
   }
 
   .app-shell__nav-link {
-    flex: 1 1 0;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 36px;
     padding: 0 12px;
+    border-radius: 16px;
+    font-size: 13px;
   }
 
   .app-shell__brand-mark {

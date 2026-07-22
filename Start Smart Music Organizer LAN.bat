@@ -17,6 +17,7 @@ if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 set "BACKEND_PORT="
 set "API_AUTH_TOKEN="
 set "ALLOWED_SCAN_ROOTS="
+set "DEMO_MODE="
 
 if not exist "%~dp0.env.lan" (
     echo Smart Music Organizer LAN
@@ -62,6 +63,17 @@ if defined ALLOWED_SCAN_ROOTS (
     set "ALLOWED_SCAN_ROOTS_CONFIGURED=no"
 )
 
+if defined DEMO_MODE (
+    if /I not "%DEMO_MODE%"=="true" if /I not "%DEMO_MODE%"=="false" (
+        echo Smart Music Organizer LAN
+        echo.
+        echo ERROR: DEMO_MODE must be true or false.
+        echo ERROR: DEMO_MODE is invalid. >> "%LOG_FILE%"
+        pause
+        exit /b 1
+    )
+)
+
 echo Smart Music Organizer LAN
 echo.
 echo APP_LAN_MODE=true
@@ -69,6 +81,7 @@ echo BACKEND_HOST=0.0.0.0
 echo BACKEND_PORT=%BACKEND_PORT%
 echo API token configured: yes
 echo ALLOWED_SCAN_ROOTS configured: %ALLOWED_SCAN_ROOTS_CONFIGURED%
+echo DEMO_MODE=%DEMO_MODE%
 echo.
 echo WARNING: LAN mode exposes the API on your local network.
 echo Use only on a trusted network and do not expose the app to the internet.
@@ -79,6 +92,7 @@ echo BACKEND_HOST=%BACKEND_HOST% >> "%LOG_FILE%"
 echo BACKEND_PORT=%BACKEND_PORT% >> "%LOG_FILE%"
 echo API token configured: yes >> "%LOG_FILE%"
 echo ALLOWED_SCAN_ROOTS configured: %ALLOWED_SCAN_ROOTS_CONFIGURED% >> "%LOG_FILE%"
+echo DEMO_MODE=%DEMO_MODE% >> "%LOG_FILE%"
 
 echo Building frontend...
 echo.
@@ -148,6 +162,10 @@ for /f "usebackq tokens=1* delims==" %%A in (`findstr /r /b /c:"API_AUTH_TOKEN="
 
 for /f "usebackq tokens=1* delims==" %%A in (`findstr /r /b /c:"ALLOWED_SCAN_ROOTS=" "%~1"`) do (
     if /I "%%A"=="ALLOWED_SCAN_ROOTS" set "ALLOWED_SCAN_ROOTS=%%B"
+)
+
+for /f "usebackq tokens=1* delims==" %%A in (`findstr /r /b /c:"DEMO_MODE=" "%~1"`) do (
+    if /I "%%A"=="DEMO_MODE" set "DEMO_MODE=%%B"
 )
 
 exit /b 0

@@ -8,6 +8,7 @@ import {
   createAbortError,
   downloadTrackForOffline,
 } from "./offlineTrackDownload";
+import { isDemoMode, maskPlaylist, maskTrack } from "../../../utils/demoMode";
 
 function buildProgress({
   totalTracks,
@@ -27,7 +28,11 @@ function buildProgress({
 }
 
 async function downloadPlaylistTracks({ playlist, onProgress, signal }) {
-  const orderedTracks = Array.isArray(playlist?.tracks) ? playlist.tracks : [];
+  const demoModeEnabled = isDemoMode();
+  const sourceTracks = Array.isArray(playlist?.tracks) ? playlist.tracks : [];
+  const orderedTracks = demoModeEnabled
+    ? sourceTracks.map((track, index) => maskTrack(track, index))
+    : sourceTracks;
   const totalTracks = orderedTracks.length;
   const downloadedAt = new Date().toISOString();
   const successfulTracks = [];
@@ -139,7 +144,7 @@ async function downloadPlaylistForBrowser({ playlist, onProgress, signal }) {
 
   const savedPlaylist = await saveDownloadedPlaylist({
     id: playlist?.id,
-    name: playlist?.name,
+    name: isDemoMode() ? maskPlaylist(playlist)?.name : playlist?.name,
     tracks: result.successfulTracks,
     downloadedAt: result.downloadedAt,
     requestedTrackCount: result.totalTracks,
@@ -180,7 +185,7 @@ async function downloadPlaylistForNativeAndroid({
 
   const savedPlaylist = await saveNativeDownloadedPlaylist({
     id: playlist?.id,
-    name: playlist?.name,
+    name: isDemoMode() ? maskPlaylist(playlist)?.name : playlist?.name,
     tracks: result.successfulTracks,
     downloadedAt: result.downloadedAt,
     requestedTrackCount: result.totalTracks,

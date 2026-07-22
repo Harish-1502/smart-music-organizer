@@ -24,6 +24,16 @@ import {
 import { getSafeErrorMessage } from "../../../utils/formatSafeError";
 import "../styles/DownloadedPage.css";
 
+const DEBUG_TAG = "downloaded-page";
+
+function logDebug(phase, details = {}) {
+  console.info(`[${DEBUG_TAG}:${phase}] ${JSON.stringify(details)}`);
+}
+
+function logWarn(phase, details = {}) {
+  console.warn(`[${DEBUG_TAG}:${phase}] ${JSON.stringify(details)}`);
+}
+
 export function formatStorageSize(totalBytes) {
   const size = Number(totalBytes);
 
@@ -474,9 +484,16 @@ export default function DownloadedPage({
   const libraryUnavailable = libraryStatus?.error === "library_unavailable";
 
   async function handlePlayOffline(playlistId) {
+    logDebug("play-offline-requested", {
+      playlistId,
+    });
+
     const playbackQueue = await buildOfflinePlaybackQueue(playlistId);
 
     if (!playbackQueue) {
+      logWarn("play-offline-queue-missing", {
+        playlistId,
+      });
       setMessage(
         "Could not load this downloaded playlist for offline playback.",
       );
@@ -485,12 +502,23 @@ export default function DownloadedPage({
     }
 
     if (!playbackQueue.tracks.length) {
+      logWarn("play-offline-no-tracks", {
+        playlistId,
+        missingTrackIds: playbackQueue.missingTrackIds.length,
+      });
       setMessage(
         "No playable offline audio files were found for this playlist.",
       );
       setMessageTone("error");
       return;
     }
+
+    logDebug("play-offline-queue-ready", {
+      playlistId,
+      trackCount: playbackQueue.tracks.length,
+      missingTrackCount: playbackQueue.missingTrackIds.length,
+      firstTrackId: playbackQueue.tracks[0]?.track_id ?? playbackQueue.tracks[0]?.id ?? null,
+    });
 
     playQueue(playbackQueue.tracks, 0);
     navigate("/player");

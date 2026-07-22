@@ -1,118 +1,57 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
-  resolveTrackArtworkSource,
-  resolveTrackPlaybackSource,
-} from "./playbackSourceResolver";
-import { useCallback } from "react";
-import { PLAYER_COMMANDS } from "../controls/playerCommandNames";
-import { useKeyboardPlayerControls } from "../hooks/useKeyboardPlayerControls";
-import { useMp3ControllerControls } from "../hooks/useMp3ControllerControls";
-import { createPlayerActions } from "../controls/playerCommandActions";
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-// Shared Container for Player state and controls. Provides a single audio element for controlling the various actions (play, pause, shuffle, repeat and queue management). This is meant to be used as a top level provider in the app so all the components can access the same player state and controls. This is also persistence is handled using localStorage to save the current queue, index, and playback position. The session is restored on mount and saved on relevant state changes.
+import { createPlayerActions } from "../controls/playerCommandActions";
+import {
+  ensureNativeDownloadedPlaybackNotificationPermission,
+  getNativeDownloadedPlaybackState,
+  isAndroidNativeRuntime,
+  loadNativeDownloadedPlaybackQueue,
+  nextNativeDownloadedPlayback,
+  pauseNativeDownloadedPlayback,
+  playNativeDownloadedPlayback,
+  previousNativeDownloadedPlayback,
+  seekNativeDownloadedPlayback,
+  setNativeDownloadedPlaybackMuted,
+  setNativeDownloadedPlaybackRepeatMode,
+  setNativeDownloadedPlaybackShuffleEnabled,
+  setNativeDownloadedPlaybackVolume,
+  shouldUseNativeDownloadedPlaybackQueue,
+  stopNativeDownloadedPlayback,
+} from "../native/nativeDownloadedPlayback";
+import { usePlayerInputControls } from "../hooks/usePlayerInputControls";
+import { usePlayerPlaybackPreferences } from "../hooks/usePlayerPlaybackPreferences";
+import { usePlayerSessionPersistence } from "../hooks/usePlayerSessionPersistence";
+import { usePlayerTrackSources } from "../hooks/usePlayerTrackSources";
+import { usePlayerVolumeState } from "../hooks/usePlayerVolumeState";
+import { getPlaybackErrorMessage } from "../utils/playbackErrorMessage";
+
+// Shared container for playback state and controls. Provides a single audio
+// element for controlling playback, queue navigation, shuffle/repeat, and
+// session-backed player state across the app.
 const PlayerContext = createContext(null);
 
-// Storage keys for shuffle and repeat mode persistence
-const SHUFFLE_STORAGE_KEY = "smart-music-organizer:shuffle-enabled";
-const REPEAT_STORAGE_KEY = "smart-music-organizer:repeat-mode";
 const VALID_REPEAT_MODES = new Set(["off", "track", "playlist"]);
+const DEBUG_TAG = "player-context";
 
-// Session persistence constants and helpers
-// Stores the full playback session
-const PLAYER_SESSION_STORAGE_KEY = "smart-music-player-session";
-// Current version of the persisted session format.
-const PLAYER_SESSION_VERSION = 2;
-// Max number of tracks to persist in the queue.
-const MAX_PERSISTED_QUEUE_SIZE = 500;
-// Used to control how often the current playback session is saved.
-const CURRENT_TIME_SAVE_INTERVAL_MS = 2000; // throttle timeupdate saves
-
-// Strips the track object down to only playback-relevant fields fir persistence.
-function createTrackSnapshot(track) {
-  if (!track || typeof track !== "object") return null;
-
-  return {
-    id: track.id ?? null,
-    track_id: track.track_id ?? null,
-    playlist_track_id: track.playlist_track_id ?? null,
-    title: track.title ?? track.display_title ?? null,
-    artist: track.artist ?? track.display_artist ?? null,
-    album: track.album ?? null,
-    duration: typeof track.duration === "number" ? track.duration : null,
-    offline: Boolean(track.offline),
-    storageType: track.storageType ?? null,
-    audioSrc:
-      track.offline && typeof track.audioSrc === "string"
-        ? track.audioSrc
-        : null,
-    artworkSrc:
-      track.offline && typeof track.artworkSrc === "string"
-        ? track.artworkSrc
-        : null,
-    audioLocalUri:
-      track.offline && typeof track.audioLocalUri === "string"
-        ? track.audioLocalUri
-        : null,
-    artworkLocalUri:
-      track.offline && typeof track.artworkLocalUri === "string"
-        ? track.artworkLocalUri
-        : null,
-    audioBlobId:
-      track.offline && typeof track.audioBlobId === "string"
-        ? track.audioBlobId
-        : null,
-    artworkBlobId:
-      track.offline && typeof track.artworkBlobId === "string"
-        ? track.artworkBlobId
-        : null,
-  };
-}
-
-// Returns the track id of the track object or null if it's not available. This is used to determine if a track is playable or not.
+// Returns the track id when the item is playable.
 function getPlayableTrackId(track) {
   return (track && (track.track_id ?? track.id)) || null;
 }
 
-// Make the queue safe to save to LocalStorage
-function sanitizeQueueForStorage(queue, currentIndex) {
-  const q = Array.isArray(queue) ? queue : [];
-  // Empty queue, return empty snapshot and invalid index
-  if (q.length === 0) return { queueSnapshot: [], currentIndex: -1 };
+function logDebug(phase, details = {}) {
+  console.info(`[${DEBUG_TAG}:${phase}] ${JSON.stringify(details)}`);
+}
 
-  // Save the whole queue if it's small enough (smaller than MAX_PERSISTED_QUEUE_SIZE)
-  if (q.length <= MAX_PERSISTED_QUEUE_SIZE) {
-    const snap = q.map(createTrackSnapshot).filter(Boolean);
-    return {
-      queueSnapshot: snap,
-      currentIndex: Math.min(
-        Math.max(Math.trunc(currentIndex || 0), 0),
-        snap.length - 1,
-      ),
-    };
-  }
-
-  // Slice window around currentIndex to preserve the current track
-  // Why? To prevent the browser from runnning out of storage which can cause it to slow down or crash. This is mean for large playlists with thousands of tracks.
-  const half = Math.floor(MAX_PERSISTED_QUEUE_SIZE / 2);
-  // Start of the slice window
-  let start = Math.max(
-    0,
-    (Number.isFinite(currentIndex) ? currentIndex : 0) - half,
-  );
-  // End of the slice window
-  let end = start + MAX_PERSISTED_QUEUE_SIZE;
-  if (end > q.length) {
-    end = q.length;
-    start = Math.max(0, end - MAX_PERSISTED_QUEUE_SIZE);
-  }
-  // Create a snapshot of the sliced queue and filter out any invalid tracks
-  const slice = q.slice(start, end).map(createTrackSnapshot).filter(Boolean);
-  // Adjust the currentIndex to the new slice window
-  const adjustedIndex = Math.min(
-    Math.max(Number.isFinite(currentIndex) ? currentIndex - start : 0, 0),
-    slice.length - 1,
-  );
-  return { queueSnapshot: slice, currentIndex: adjustedIndex };
+function logWarn(phase, details = {}) {
+  console.warn(`[${DEBUG_TAG}:${phase}] ${JSON.stringify(details)}`);
 }
 
 function clampVolumePercent(value) {
@@ -123,146 +62,151 @@ function clampVolumePercent(value) {
   return Math.min(100, Math.max(0, Math.round(value)));
 }
 
-// This function defines the actual playback state that the rest of the app uses.
+function normalizeRepeatMode(value) {
+  return VALID_REPEAT_MODES.has(value) ? value : "off";
+}
+
+function summarizeNativeQueueEligibility(tracks) {
+  if (!Array.isArray(tracks) || tracks.length === 0) {
+    return {
+      eligible: false,
+      reason: "empty-queue",
+    };
+  }
+
+  const firstIneligibleTrack = tracks.find((track) => !track?.offline || !(track?.audioLocalUri || track?.audioSrc));
+
+  if (!firstIneligibleTrack) {
+    return {
+      eligible: true,
+      reason: "eligible",
+    };
+  }
+
+  return {
+    eligible: false,
+    reason: "track-not-native",
+    trackId: getPlayableTrackId(firstIneligibleTrack),
+    offline: Boolean(firstIneligibleTrack?.offline),
+    hasAudioSrc: Boolean(firstIneligibleTrack?.audioSrc),
+    hasAudioLocalUri: Boolean(firstIneligibleTrack?.audioLocalUri),
+    hasAudioBlobId: Boolean(firstIneligibleTrack?.audioBlobId),
+    storageType: firstIneligibleTrack?.storageType ?? null,
+  };
+}
+
 export function PlayerProvider({ children }) {
   const audioRef = useRef(null);
 
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [shuffleEnabled, setShuffleEnabled] = useState(() => {
-    if (typeof window === "undefined") return false;
-
-    try {
-      return window.localStorage.getItem(SHUFFLE_STORAGE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-  const [repeatMode, setRepeatMode] = useState(() => {
-    if (typeof window === "undefined") return "off";
-
-    try {
-      const storedRepeatMode = window.localStorage.getItem(REPEAT_STORAGE_KEY);
-      return VALID_REPEAT_MODES.has(storedRepeatMode)
-        ? storedRepeatMode
-        : "off";
-    } catch {
-      return "off";
-    }
-  });
-  // "off" | "track" | "playlist"
+  const [nativePlaybackMode, setNativePlaybackMode] = useState(false);
+  const [nativePlaybackState, setNativePlaybackState] = useState(null);
+  const pendingNativeSeekRef = useRef(null);
+  const { shuffleEnabled, setShuffleEnabled, repeatMode, setRepeatMode } =
+    usePlayerPlaybackPreferences(VALID_REPEAT_MODES);
 
   const currentTrack =
     currentIndex >= 0 && currentIndex < queue.length
       ? queue[currentIndex]
       : null;
   const currentTrackId = getPlayableTrackId(currentTrack);
-  const [streamUrl, setStreamUrl] = useState("");
-  const [artworkUrl, setArtworkUrl] = useState("");
-  const [streamError, setStreamError] = useState("");
-  const [volume, setVolume] = useState(100);
-  const [isMuted, setIsMuted] = useState(false);
+  const [playbackError, setPlaybackError] = useState("");
+  const { volume, setVolume, isMuted, setIsMuted } = usePlayerVolumeState({
+    audioRef,
+    currentTrack,
+  });
 
-  // This is triggered whenever the current track changes. This enables to user to switch between tracks in the middle of the track by updating the currentIndex with the next or prev track.
-  useEffect(() => {
-    let cancelled = false;
-    let releasePlaybackSource = () => {};
-    let releaseArtworkSource = () => {};
+  const clearPlaybackError = useCallback(() => {
+    setPlaybackError("");
+  }, []);
 
-    // Clear state
-    setStreamUrl("");
-    setArtworkUrl("");
-    setStreamError("");
+  const reportPlaybackError = useCallback((error, audioElement) => {
+    setPlaybackError(getPlaybackErrorMessage(error, audioElement));
+    setIsPlaying(false);
+  }, []);
 
-    if (!currentTrack) {
-      return () => {};
-    }
-
-    // This function loads the playback and artwork sources for the current track. Also has a check to see a new track has been selected before the previous track has finished loading. If the new track is selected, the track that was loading will be cancelled the new track will be loaded instead.
-    async function loadTrackSources() {
-      try {
-        const [playbackSource, artworkSource] = await Promise.all([
-          resolveTrackPlaybackSource(currentTrack),
-          resolveTrackArtworkSource(currentTrack),
-        ]);
-
-        releasePlaybackSource = playbackSource?.revoke ?? (() => {});
-        releaseArtworkSource = artworkSource?.revoke ?? (() => {});
-
-        if (cancelled) {
-          releasePlaybackSource();
-          releaseArtworkSource();
-          return;
-        }
-
-        setStreamUrl(playbackSource?.url ?? "");
-        setArtworkUrl(artworkSource?.url ?? "");
-      } catch (error) {
-        if (!cancelled) {
-          setStreamError(
-            error instanceof Error && error.message.trim()
-              ? error.message
-              : "Unable to load playback source.",
-          );
-        }
-      }
-    }
-
-    loadTrackSources();
-
-    return () => {
-      cancelled = true;
-      releasePlaybackSource();
-      releaseArtworkSource();
-    };
-  }, [
+  const { streamUrl, artworkUrl, streamError } = usePlayerTrackSources({
     currentTrack,
     currentTrackId,
-    currentTrack?.offline,
-    currentTrack?.audioSrc,
-    currentTrack?.audioLocalUri,
-    currentTrack?.audioBlobId,
-    currentTrack?.artworkSrc,
-    currentTrack?.artworkLocalUri,
-    currentTrack?.artworkBlobId,
+    clearPlaybackError,
+  });
+
+  const syncNativePlaybackState = useCallback(async () => {
+    if (!isAndroidNativeRuntime() || !nativePlaybackMode) {
+      return null;
+    }
+
+    const nativeState = await getNativeDownloadedPlaybackState();
+
+    if (!nativeState) {
+      return null;
+    }
+
+    const pendingSeek = pendingNativeSeekRef.current;
+    const now = Date.now();
+    let effectiveNativeState = nativeState;
+
+    if (
+      pendingSeek &&
+      Number.isFinite(pendingSeek.positionMs) &&
+      now - pendingSeek.startedAtMs < 3000
+    ) {
+      const nativePositionMs = Number(nativeState.positionMs);
+      const positionDiffMs = Number.isFinite(nativePositionMs)
+        ? Math.abs(nativePositionMs - pendingSeek.positionMs)
+        : Number.POSITIVE_INFINITY;
+
+      if (positionDiffMs > 750) {
+        logDebug("native-seek-stale-snapshot", {
+          requestedPositionMs: pendingSeek.positionMs,
+          nativePositionMs: Number.isFinite(nativePositionMs)
+            ? nativePositionMs
+            : null,
+          ageMs: now - pendingSeek.startedAtMs,
+        });
+        effectiveNativeState = {
+          ...nativeState,
+          positionMs: pendingSeek.positionMs,
+          isPlaying:
+            nativePlaybackState?.isPlaying != null
+              ? nativePlaybackState.isPlaying
+              : nativeState.isPlaying,
+          updatedAtMs: now,
+        };
+      } else {
+        pendingNativeSeekRef.current = null;
+      }
+    }
+
+    if (Number.isInteger(effectiveNativeState.currentIndex)) {
+      setCurrentIndex(effectiveNativeState.currentIndex);
+    }
+
+    setNativePlaybackState(effectiveNativeState);
+    setIsPlaying(Boolean(effectiveNativeState.isPlaying));
+    setShuffleEnabled(Boolean(nativeState.shuffleEnabled));
+    setRepeatMode(normalizeRepeatMode(nativeState.repeatMode));
+    setVolume(clampVolumePercent((Number(nativeState.volume) || 0) * 100));
+    setIsMuted(Boolean(nativeState.muted));
+
+    return effectiveNativeState;
+  }, [
+    nativePlaybackMode,
+    nativePlaybackState?.isPlaying,
+    setCurrentIndex,
+    setIsMuted,
+    setIsPlaying,
+    setNativePlaybackState,
+    setRepeatMode,
+    setShuffleEnabled,
+    setVolume,
   ]);
 
-  useEffect(() => {
-    const audioElement = audioRef.current;
-
-    function syncVolumeState() {
-      if (!audioElement) {
-        setVolume(100);
-        setIsMuted(false);
-        return;
-      }
-
-      setVolume(
-        clampVolumePercent(
-          Number.isFinite(audioElement.volume)
-            ? audioElement.volume * 100
-            : 100,
-        ),
-      );
-      setIsMuted(Boolean(audioElement.muted));
-    }
-
-    syncVolumeState();
-
-    if (!audioElement) {
-      return;
-    }
-
-    audioElement.addEventListener("volumechange", syncVolumeState);
-
-    return () => {
-      audioElement.removeEventListener("volumechange", syncVolumeState);
-    };
-  }, [audioRef, currentTrack]);
-
-  // This function plays the audio element
-  function playAudioSafely(audioElement) {
+  // This function plays the audio element and guards against rejected play()
+  // calls, which can happen when the browser blocks playback.
+  const playAudioSafely = useCallback((audioElement) => {
     if (!audioElement) {
       setIsPlaying(false);
       return;
@@ -276,9 +220,27 @@ export function PlayerProvider({ children }) {
     } catch {
       setIsPlaying(false);
     }
-  }
+  }, []);
 
-  const playerDeps = {
+  const browserActions = useMemo(() => {
+    return createPlayerActions({
+      audioRef,
+      currentTrack,
+      isPlaying,
+      queue,
+      currentIndex,
+      volume,
+      shuffleEnabled,
+      repeatMode,
+      setIsPlaying,
+      setCurrentIndex,
+      setVolume,
+      setIsMuted,
+      setShuffleEnabled,
+      setRepeatMode,
+      playAudioSafely,
+    });
+  }, [
     audioRef,
     currentTrack,
     isPlaying,
@@ -287,352 +249,462 @@ export function PlayerProvider({ children }) {
     volume,
     shuffleEnabled,
     repeatMode,
-    setIsPlaying,
-    setCurrentIndex,
-    setVolume,
-    setIsMuted,
-    setShuffleEnabled,
-    setRepeatMode,
     playAudioSafely,
-  };
+  ]);
 
-  const actions = createPlayerActions(playerDeps);
-
-  // This function sets the queue and starts playing from a chosen index
-  function playQueue(tracks, startIndex = 0) {
-    const normalizedQueue = Array.isArray(tracks) ? tracks : [];
-
-    if (normalizedQueue.length === 0) {
-      setQueue([]);
-      setCurrentIndex(-1);
-      setIsPlaying(false);
-      return;
+  const actions = useMemo(() => {
+    async function syncNativeStateAfterCommand() {
+      try {
+        await syncNativePlaybackState();
+      } catch (error) {
+        logWarn("native-sync-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
     }
 
+    async function handleNativeTogglePlayPause() {
+      try {
+        const nativeState = await getNativeDownloadedPlaybackState();
+
+        if (!nativeState || !nativeState.available) {
+          if (isPlaying) {
+            await pauseNativeDownloadedPlayback();
+            setIsPlaying(false);
+          } else {
+            await playNativeDownloadedPlayback();
+            setIsPlaying(true);
+          }
+
+          await syncNativeStateAfterCommand();
+          return;
+        }
+
+        if (nativeState.isPlaying) {
+          await pauseNativeDownloadedPlayback();
+          setIsPlaying(false);
+        } else {
+          await playNativeDownloadedPlayback();
+          setIsPlaying(true);
+        }
+
+        await syncNativeStateAfterCommand();
+      } catch (error) {
+        logWarn("native-toggle-play-pause-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+    }
+
+    async function handleNativeStop() {
+      try {
+        await stopNativeDownloadedPlayback();
+        setIsPlaying(false);
+        await syncNativeStateAfterCommand();
+      } catch (error) {
+        logWarn("native-stop-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+    }
+
+    async function handleNativeNextTrack() {
+      try {
+        await nextNativeDownloadedPlayback();
+        setIsPlaying(true);
+        await syncNativeStateAfterCommand();
+      } catch (error) {
+        logWarn("native-next-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+    }
+
+    async function handleNativePreviousTrack() {
+      try {
+        await previousNativeDownloadedPlayback();
+        setIsPlaying(true);
+        await syncNativeStateAfterCommand();
+      } catch (error) {
+        logWarn("native-previous-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+    }
+
+    async function handleNativeSetVolumeLevel(nextVolume) {
+      const safeVolume = clampVolumePercent(nextVolume);
+
+      try {
+        await setNativeDownloadedPlaybackVolume(safeVolume / 100);
+      } catch (error) {
+        logWarn("native-volume-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+
+      setVolume(safeVolume);
+    }
+
+    async function handleNativeToggleMute() {
+      const nextMuted = !isMuted;
+
+      try {
+        await setNativeDownloadedPlaybackMuted(nextMuted);
+      } catch (error) {
+        logWarn("native-mute-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+
+      setIsMuted(nextMuted);
+    }
+
+    async function handleNativeAdjustVolume(delta) {
+      const currentVolume = Number.isFinite(volume) ? volume : 100;
+      await handleNativeSetVolumeLevel(currentVolume + delta);
+    }
+
+    async function handleNativeSeekTo(nextTime) {
+      try {
+        const requestedPositionMs = Math.max(0, Math.round(nextTime * 1000));
+        pendingNativeSeekRef.current = {
+          positionMs: requestedPositionMs,
+          startedAtMs: Date.now(),
+        };
+        logDebug("native-seek-requested", {
+          nextTimeSeconds: nextTime,
+          requestedPositionMs,
+          currentTrackId: currentTrackId ?? null,
+        });
+        setNativePlaybackState((current) =>
+          current
+            ? {
+                ...current,
+                positionMs: requestedPositionMs,
+                isPlaying: current.isPlaying ?? true,
+                updatedAtMs: Date.now(),
+              }
+            : current,
+        );
+        await seekNativeDownloadedPlayback(requestedPositionMs);
+      } catch (error) {
+        pendingNativeSeekRef.current = null;
+        logWarn("native-seek-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+    }
+
+    async function handleNativeSeekBy(deltaSeconds) {
+      const nativePositionSeconds = Number.isFinite(
+        nativePlaybackState?.positionMs,
+      )
+        ? nativePlaybackState.positionMs / 1000
+        : 0;
+      const baseTime = nativePlaybackMode
+        ? nativePositionSeconds
+        : Number.isFinite(audioRef.current?.currentTime)
+          ? audioRef.current.currentTime
+          : 0;
+
+      await handleNativeSeekTo(baseTime + deltaSeconds);
+    }
+
+    async function handleNativeToggleShuffle() {
+      const nextValue = !shuffleEnabled;
+
+      try {
+        await setNativeDownloadedPlaybackShuffleEnabled(nextValue);
+      } catch (error) {
+        logWarn("native-shuffle-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+
+      setShuffleEnabled(nextValue);
+    }
+
+    async function handleNativeCycleRepeatMode() {
+      const nextValue =
+        repeatMode === "off" ? "track" : repeatMode === "track" ? "playlist" : "off";
+
+      try {
+        await setNativeDownloadedPlaybackRepeatMode(nextValue);
+      } catch (error) {
+        logWarn("native-repeat-mode-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
+      }
+
+      setRepeatMode(nextValue);
+    }
+
+    return {
+      ...browserActions,
+      togglePlayPause:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeTogglePlayPause
+          : browserActions.togglePlayPause,
+      stop:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeStop
+          : browserActions.stop,
+      nextTrack:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeNextTrack
+          : browserActions.nextTrack,
+      previousTrack:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativePreviousTrack
+          : browserActions.previousTrack,
+      toggleShuffle:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeToggleShuffle
+          : browserActions.toggleShuffle,
+      cycleRepeatMode:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeCycleRepeatMode
+          : browserActions.cycleRepeatMode,
+      setVolumeLevel:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeSetVolumeLevel
+          : browserActions.setVolumeLevel,
+      adjustVolume:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeAdjustVolume
+          : browserActions.adjustVolume,
+      toggleMute:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeToggleMute
+          : browserActions.toggleMute,
+      seekTo:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeSeekTo
+          : browserActions.seekTo,
+      seekBy:
+        nativePlaybackMode && isAndroidNativeRuntime()
+          ? handleNativeSeekBy
+          : browserActions.seekBy,
+    };
+  }, [
+    audioRef,
+    browserActions,
+    isAndroidNativeRuntime,
+    isPlaying,
+    isMuted,
+    nativePlaybackMode,
+    nativePlaybackState,
+    repeatMode,
+    shuffleEnabled,
+    syncNativePlaybackState,
+    volume,
+  ]);
+
+  // This function sets the queue and starts playing from a chosen index.
+  async function playQueue(tracks, startIndex = 0) {
+    const normalizedQueue = Array.isArray(tracks) ? tracks : [];
     const safeStartIndex = Number.isInteger(startIndex)
       ? Math.min(Math.max(startIndex, 0), normalizedQueue.length - 1)
       : 0;
 
+    logDebug("play-queue-requested", {
+      trackCount: normalizedQueue.length,
+      startIndex: safeStartIndex,
+      firstTrackId: normalizedQueue[0]?.track_id ?? normalizedQueue[0]?.id ?? null,
+      firstTrackOffline: Boolean(normalizedQueue[0]?.offline),
+      firstTrackHasAudioSrc: Boolean(normalizedQueue[0]?.audioSrc),
+      firstTrackHasAudioLocalUri: Boolean(normalizedQueue[0]?.audioLocalUri),
+      firstTrackHasAudioBlobId: Boolean(normalizedQueue[0]?.audioBlobId),
+    });
+
+    if (normalizedQueue.length === 0) {
+      logWarn("play-queue-empty", {});
+      setQueue([]);
+      setCurrentIndex(-1);
+      setIsPlaying(false);
+      setNativePlaybackMode(false);
+      return;
+    }
+
+    const useNativePlayback = shouldUseNativeDownloadedPlaybackQueue(
+      normalizedQueue,
+    );
+    const nativeQueueEligibility = summarizeNativeQueueEligibility(
+      normalizedQueue,
+    );
+
+    logDebug("play-queue-selected", {
+      safeStartIndex,
+      currentTrackId:
+        normalizedQueue[safeStartIndex]?.track_id ??
+        normalizedQueue[safeStartIndex]?.id ??
+        null,
+      useNativePlayback,
+      isAndroidNativeRuntime: isAndroidNativeRuntime(),
+      nativeQueueEligibility,
+      firstTrackSnapshot: {
+        trackId:
+          normalizedQueue[0]?.track_id ?? normalizedQueue[0]?.id ?? null,
+        offline: Boolean(normalizedQueue[0]?.offline),
+        storageType: normalizedQueue[0]?.storageType ?? null,
+        audioLocalUri: normalizedQueue[0]?.audioLocalUri ?? null,
+        audioSrc: normalizedQueue[0]?.audioSrc ?? null,
+        audioBlobId: normalizedQueue[0]?.audioBlobId ?? null,
+      },
+    });
+
     setQueue(normalizedQueue);
     setCurrentIndex(safeStartIndex);
     setIsPlaying(true);
-  }
 
-  // Convenience shortcut to play one track
-  function playTrack(track) {
-    setQueue([track]);
-    setCurrentIndex(0);
-    setIsPlaying(true);
-  }
-
-  const handlePlayerCommand = useCallback(
-    (command) => {
-      switch (command) {
-        case PLAYER_COMMANDS.PLAY_PAUSE:
-          actions.togglePlayPause();
-          break;
-
-        case PLAYER_COMMANDS.NEXT_TRACK:
-          actions.nextTrack();
-          break;
-
-        case PLAYER_COMMANDS.PREVIOUS_TRACK:
-          actions.previousTrack();
-          break;
-
-        case PLAYER_COMMANDS.VOLUME_UP:
-          actions.adjustVolume(5);
-          break;
-
-        case PLAYER_COMMANDS.VOLUME_DOWN:
-          actions.adjustVolume(-5);
-          break;
-
-        case PLAYER_COMMANDS.SEEK_FORWARD:
-          actions.seekBy(10);
-          break;
-
-        case PLAYER_COMMANDS.SEEK_BACKWARD:
-          actions.seekBy(-10);
-          break;
-
-        default:
-          break;
-      }
-    },
-    [
-      actions,
-    ]
-  );
-
-  useKeyboardPlayerControls({
-    enabled: true,
-    onCommand: handlePlayerCommand, 
-  });
-
-  useMp3ControllerControls({
-    enabled: true,
-    onCommand: handlePlayerCommand,
-  });
-
-
-  // These next two useEffects are used to save the shuffle and repeat mode to LocalStorage when they change. This is used to persist user preference when there is no saved session.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      window.localStorage.setItem(
-        SHUFFLE_STORAGE_KEY,
-        shuffleEnabled ? "true" : "false",
-      );
-    } catch {}
-  }, [shuffleEnabled]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      window.localStorage.setItem(REPEAT_STORAGE_KEY, repeatMode);
-    } catch {}
-  }, [repeatMode]);
-
-  // Refs & helpers for session restore/save
-  const restoredCurrentTimeRef = useRef(null);
-  const lastCurrentTimeSaveRef = useRef(0);
-  const hasAppliedRestoredTimeRef = useRef(false);
-  // Hydration guard: prevents initial default state from overwriting a valid saved session
-  // during startup. Set to true after we attempt to restore the stored session.
-  const hasHydratedSessionRef = useRef(false);
-  const [hasHydratedSession, setHasHydratedSession] = useState(false);
-
-  // Clear the stored session from LocalStorage. This is used when the stored session is invalid or when playback fails for restored tracks. Used to unstuck the player in a broken state.
-  function clearStoredSession() {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(PLAYER_SESSION_STORAGE_KEY);
-    } catch {}
-  }
-
-  // Saves the current queue, index, playback time, shuffle state, and repeat state in a session.
-  function saveSession(forceTime) {
-    if (typeof window === "undefined") return;
-    // Do not write session until initial hydration/restore has completed.
-    if (!hasHydratedSessionRef.current) return;
-
-    if (!Array.isArray(queue) || queue.length === 0 || currentIndex < 0) {
+    if (!useNativePlayback) {
+      setNativePlaybackMode(false);
       return;
     }
 
+    setNativePlaybackMode(true);
+
     try {
-      const { queueSnapshot, currentIndex: persistedIndex } =
-        sanitizeQueueForStorage(queue, currentIndex);
-
-      const timeToSave =
-        typeof forceTime === "number"
-          ? forceTime
-          : audioRef.current
-            ? audioRef.current.currentTime
-            : (restoredCurrentTimeRef.current ?? 0);
-
-      const payload = {
-        version: PLAYER_SESSION_VERSION,
-        savedAt: Date.now(),
-        queue: queueSnapshot,
-        currentIndex: persistedIndex,
-        currentTime: Number(timeToSave || 0),
-        shuffleEnabled: !!shuffleEnabled,
+      logDebug("native-play-queue-starting", {
+        trackCount: normalizedQueue.length,
+        startIndex: safeStartIndex,
+        shuffleEnabled,
         repeatMode,
-      };
+        volume,
+      });
+      await ensureNativeDownloadedPlaybackNotificationPermission();
+      logDebug("native-play-queue-permission-complete", {
+        trackCount: normalizedQueue.length,
+      });
+      const nativeState = await loadNativeDownloadedPlaybackQueue({
+        tracks: normalizedQueue,
+        startIndex: safeStartIndex,
+        autoplay: true,
+        shuffleEnabled,
+        repeatMode,
+        volume: clampVolumePercent(volume) / 100,
+      });
 
-      window.localStorage.setItem(
-        PLAYER_SESSION_STORAGE_KEY,
-        JSON.stringify(payload),
-      );
-    } catch {}
+      if (nativeState && typeof nativeState === "object") {
+        if (Number.isInteger(nativeState.currentIndex)) {
+          setCurrentIndex(nativeState.currentIndex);
+        }
+
+        setNativePlaybackState(nativeState);
+        setIsPlaying(Boolean(nativeState.isPlaying));
+        setShuffleEnabled(Boolean(nativeState.shuffleEnabled));
+        setRepeatMode(normalizeRepeatMode(nativeState.repeatMode));
+        setVolume(
+          clampVolumePercent((Number(nativeState.volume) || 0) * 100),
+        );
+        setIsMuted(Boolean(nativeState.muted));
+        setQueue(Array.isArray(nativeState.tracks) && nativeState.tracks.length > 0 ? nativeState.tracks : normalizedQueue);
+      }
+
+      logDebug("native-play-queue-complete", {
+        isPlaying: Boolean(nativeState?.isPlaying),
+        currentIndex: nativeState?.currentIndex ?? null,
+        trackCount: Array.isArray(nativeState?.tracks)
+          ? nativeState.tracks.length
+          : normalizedQueue.length,
+      });
+    } catch (error) {
+      setNativePlaybackMode(false);
+      setNativePlaybackState(null);
+      logWarn("native-play-queue-failed", {
+        message: error instanceof Error ? error.message : "",
+      });
+    }
   }
 
-  // Attempt to restore a saved session on mount. If invalid, clear it.
+  // Convenience shortcut to play one track.
+  function playTrack(track) {
+    logDebug("play-track-requested", {
+      trackId: track?.track_id ?? track?.id ?? null,
+      offline: Boolean(track?.offline),
+    });
+    playQueue([track], 0);
+  }
+
   useEffect(() => {
-    if (typeof window === "undefined") {
-      hasHydratedSessionRef.current = true;
-      setHasHydratedSession(true);
-      return;
+    if (!nativePlaybackMode || !isAndroidNativeRuntime()) {
+      setNativePlaybackState(null);
+      return undefined;
     }
 
-    try {
-      const raw = window.localStorage.getItem(PLAYER_SESSION_STORAGE_KEY);
-      if (!raw) return;
+    let cancelled = false;
+    let intervalId = null;
 
-      const parsed = JSON.parse(raw);
-      if (!parsed || parsed.version !== PLAYER_SESSION_VERSION) {
-        clearStoredSession();
+    async function handleVisibilitySync() {
+      if (cancelled) {
         return;
       }
 
-      const {
-        queue: storedQueue,
-        currentIndex: storedIndex,
-        currentTime: storedTime,
-        shuffleEnabled: storedShuffle,
-        repeatMode: storedRepeat,
-      } = parsed;
-
-      if (!Array.isArray(storedQueue)) {
-        clearStoredSession();
-        return;
+      try {
+        await syncNativePlaybackState();
+      } catch (error) {
+        logWarn("native-foreground-sync-failed", {
+          message: error instanceof Error ? error.message : "",
+        });
       }
-
-      if (
-        !Number.isInteger(storedIndex) ||
-        storedIndex < 0 ||
-        storedIndex >= storedQueue.length
-      ) {
-        clearStoredSession();
-        return;
-      }
-
-      if (typeof storedShuffle !== "boolean") {
-        clearStoredSession();
-        return;
-      }
-
-      if (!VALID_REPEAT_MODES.has(storedRepeat)) {
-        clearStoredSession();
-        return;
-      }
-
-      if (
-        !(
-          typeof storedTime === "number" &&
-          Number.isFinite(storedTime) &&
-          storedTime >= 0
-        )
-      ) {
-        clearStoredSession();
-        return;
-      }
-
-      // Ensure every stored track has a playable id
-      for (const t of storedQueue) {
-        if (!t || !getPlayableTrackId(t)) {
-          clearStoredSession();
-          return;
-        }
-      }
-
-      // Restore minimal session (do not autoplay)
-      setQueue(storedQueue);
-      setCurrentIndex(
-        Math.min(Math.max(Number(storedIndex), 0), storedQueue.length - 1),
-      );
-      setShuffleEnabled(Boolean(storedShuffle));
-      setRepeatMode(storedRepeat);
-      restoredCurrentTimeRef.current = Number(storedTime);
-      setIsPlaying(false);
-    } catch (err) {
-      clearStoredSession();
-    } finally {
-      // Mark hydration complete so save effects do not overwrite the restored session
-      hasHydratedSessionRef.current = true;
-      setHasHydratedSession(true);
-    }
-    // run once on mount
-  }, []);
-
-  // Persist session on important changes - do not run until hydration completed.
-  useEffect(() => {
-    if (!hasHydratedSession) return;
-
-    if (queue.length === 0 || currentIndex < 0) {
-      return;
     }
 
-    saveSession();
-  }, [hasHydratedSession, queue, currentIndex, shuffleEnabled, repeatMode]);
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        handleVisibilitySync();
+      }
+    }
 
-  // Attach audio listeners (loadedmetadata, timeupdate, error) when audio becomes available.
-  useEffect(() => {
-    let attached = false;
-    let onLoadedMetadata, onTimeUpdate, onError, onBeforeUnload;
-    let attempts = 0;
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
 
-    const tryAttach = () => {
-      const audio = audioRef.current;
-      if (!audio || attached) return;
+    if (document.visibilityState === "visible") {
+      handleVisibilitySync();
+    }
 
-      onLoadedMetadata = () => {
-        if (
-          restoredCurrentTimeRef.current != null &&
-          !hasAppliedRestoredTimeRef.current
-        ) {
-          const t = restoredCurrentTimeRef.current;
-          try {
-            if (
-              typeof audio.duration === "number" &&
-              Number.isFinite(audio.duration)
-            ) {
-              audio.currentTime = Math.min(Math.max(0, t), audio.duration);
-            } else {
-              audio.currentTime = Math.max(0, t);
-            }
-          } catch {}
-          hasAppliedRestoredTimeRef.current = true;
-          restoredCurrentTimeRef.current = null;
-        }
-      };
-
-      onTimeUpdate = () => {
-        const now = Date.now();
-        if (
-          !lastCurrentTimeSaveRef.current ||
-          now - lastCurrentTimeSaveRef.current > CURRENT_TIME_SAVE_INTERVAL_MS
-        ) {
-          saveSession(audio.currentTime);
-          lastCurrentTimeSaveRef.current = now;
-        }
-      };
-
-      onError = () => {
-        // If playback fails for restored track(s), clear stored session to avoid repeated errors.
-        clearStoredSession();
-      };
-
-      onBeforeUnload = () => {
-        try {
-          saveSession(audio.currentTime);
-        } catch {}
-      };
-
-      audio.addEventListener("loadedmetadata", onLoadedMetadata);
-      audio.addEventListener("timeupdate", onTimeUpdate);
-      audio.addEventListener("error", onError);
-      window.addEventListener("beforeunload", onBeforeUnload);
-
-      attached = true;
-    };
-
-    const interval = setInterval(() => {
-      tryAttach();
-      attempts += 1;
-      if (attached || attempts > 20) clearInterval(interval);
-    }, 200);
+    intervalId = window.setInterval(() => {
+      handleVisibilitySync();
+    }, 1000);
 
     return () => {
-      clearInterval(interval);
-      const audio = audioRef.current;
-      if (audio && attached) {
-        try {
-          audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-          audio.removeEventListener("timeupdate", onTimeUpdate);
-          audio.removeEventListener("error", onError);
-          window.removeEventListener("beforeunload", onBeforeUnload);
-        } catch {}
+      cancelled = true;
+      if (intervalId != null) {
+        window.clearInterval(intervalId);
       }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
     };
-    // run once
-  }, []);
+  }, [nativePlaybackMode, syncNativePlaybackState]);
+
+  usePlayerInputControls({
+    actions,
+    enabled: true,
+  });
+
+  usePlayerSessionPersistence({
+    audioRef,
+    queue,
+    currentIndex,
+    shuffleEnabled,
+    repeatMode,
+    setQueue,
+    setCurrentIndex,
+    setShuffleEnabled,
+    setRepeatMode,
+    setIsPlaying,
+    isTrackPlayable: getPlayableTrackId,
+    validRepeatModes: VALID_REPEAT_MODES,
+  });
 
   function handleEnded() {
+    logDebug("track-ended", {
+      currentTrackId: currentTrackId ?? null,
+      repeatMode,
+      queueLength: queue.length,
+      currentIndex,
+    });
+
     if (repeatMode === "track") {
       if (!audioRef.current) return;
 
@@ -657,10 +729,13 @@ export function PlayerProvider({ children }) {
         streamUrl,
         artworkUrl,
         streamError,
+        playbackError,
         volume,
         isMuted,
         shuffleEnabled,
         repeatMode,
+        nativePlaybackMode,
+        nativePlaybackState,
 
         getStreamUrl: () => streamUrl,
         playQueue,
@@ -676,6 +751,8 @@ export function PlayerProvider({ children }) {
         toggleShuffle: actions.toggleShuffle,
         cycleRepeatMode: actions.cycleRepeatMode,
         handleEnded,
+        reportPlaybackError,
+        clearPlaybackError,
       }}
     >
       {children}
