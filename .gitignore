@@ -66,5 +66,34 @@ ios/
 frontend/android/
 frontend/ios/
 
+# Keep the generated Android project ignored, but allow the custom native source
+# we own in Git for playback and launch routing.
+!frontend/android/
+frontend/android/*
+!frontend/android/app/
+frontend/android/app/*
+!frontend/android/app/src/
+frontend/android/app/src/*
+!frontend/android/app/src/main/
+frontend/android/app/src/main/*
+!frontend/android/app/src/main/java/
+frontend/android/app/src/main/java/*
+!frontend/android/app/src/main/java/com/
+frontend/android/app/src/main/java/com/*
+!frontend/android/app/src/main/java/com/harish/
+frontend/android/app/src/main/java/com/harish/*
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/
+frontend/android/app/src/main/java/com/harish/smartmusicorganizer/*
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/MainActivity.java
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeapplaunch/
+frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeapplaunch/*
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeapplaunch/NativeAppLaunchPlugin.java
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/
+frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/*
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackPlugin.java
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackService.java
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackState.java
+!frontend/android/app/src/main/java/com/harish/smartmusicorganizer/nativeplayback/NativeDownloadedPlaybackTrack.java
+
 # Project-specific local binaries
 chromaprint-fpcalc-1.6.0-windows-x86_64/
