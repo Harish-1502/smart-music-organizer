@@ -1,47 +1,43 @@
 export default function DownloadedPlaylistCard({
-  playlist,
+  playlistCard,
   onPlayOffline,
   onDeletePlaylist,
-  formatStorageSize,
-  formatDownloadedDate,
 }) {
   return (
     <article className="downloaded-page__playlist-card">
       <div className="downloaded-page__playlist-copy">
         <p className="downloaded-page__playlist-label">Playlist</p>
-        <h3 className="downloaded-page__playlist-name">
-          {playlist.name || "Untitled playlist"}
-        </h3>
+        <h3 className="downloaded-page__playlist-name">{playlistCard.name}</h3>
         <p className="downloaded-page__playlist-meta">
-          {playlist.totalTracks ?? 0} tracks
+          {playlistCard.trackCountLabel}
         </p>
         <p className="downloaded-page__playlist-meta">
-          Offline size {formatStorageSize(playlist.totalBytes ?? 0)}
+          {playlistCard.offlineSizeLabel}
         </p>
         <p className="downloaded-page__playlist-meta">
-          Downloaded {formatDownloadedDate(playlist.downloadedAt)}
+          {playlistCard.downloadedAtLabel}
         </p>
         <p className="downloaded-page__playlist-status">
-          Already downloaded for offline playback.
+          {playlistCard.statusLabel}
         </p>
       </div>
 
       <div
         className="downloaded-page__playlist-actions"
         role="group"
-        aria-label={`Actions for ${playlist.name || "downloaded playlist"}`}
+        aria-label={playlistCard.actionLabel}
       >
         <button
           type="button"
           className="downloaded-page__button downloaded-page__button--secondary"
-          onClick={() => onPlayOffline(playlist.id)}
+          onClick={() => onPlayOffline(playlistCard.id)}
         >
           Play Offline
         </button>
         <button
           type="button"
           className="downloaded-page__button downloaded-page__button--ghost-danger"
-          onClick={() => onDeletePlaylist(playlist.id)}
+          onClick={() => onDeletePlaylist(playlistCard.id)}
         >
           Delete Download
         </button>
