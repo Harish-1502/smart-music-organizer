@@ -224,7 +224,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
             return;
         }
 
-        pauseAllPlayersAndStopSelf();
+        stopForegroundPlaybackAndSelf();
     }
 
     private void createPlayer() {
@@ -408,6 +408,24 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
             player.release();
             player = null;
         }
+    }
+
+    private void stopForegroundPlaybackAndSelf() {
+        log("stopForegroundPlaybackAndSelf");
+
+        snapshotHandler.removeCallbacks(snapshotTicker);
+
+        if (player != null) {
+            player.pause();
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
+
+        stopSelf();
     }
 
     private void handleIntent(Intent intent) {
@@ -595,7 +613,7 @@ public class NativeDownloadedPlaybackService extends MediaSessionService {
             player.seekTo(0L);
         }
 
-        pauseAllPlayersAndStopSelf();
+        stopForegroundPlaybackAndSelf();
     }
 
     private void handleNext() {
