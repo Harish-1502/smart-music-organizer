@@ -1,5 +1,8 @@
 // Full-library download section for LAN-backed offline sync and progress.
 export default function OfflineLibraryCard({
+  summaryCards,
+  noteMessage,
+  progressCard,
   lanModeEnabled,
   isLibraryLoading,
   libraryTracksKnown,
@@ -9,10 +12,6 @@ export default function OfflineLibraryCard({
   libraryDatabaseUnavailable,
   onDownloadFullLibrary,
   onCancelFullLibraryDownload,
-  formatStorageSize,
-  buildLibraryTransferSummary,
-  sanitizeLibraryProgressTitle,
-  createOfflineDatabaseUnavailableUiMessage,
 }) {
   return (
     <section
@@ -37,105 +36,33 @@ export default function OfflineLibraryCard({
         className="downloaded-page__summary-grid"
         aria-label="Offline library download summary"
       >
-        <div className="downloaded-page__summary-card">
-          <span className="downloaded-page__summary-label">
-            PC library tracks
-          </span>
-          <span className="downloaded-page__summary-value">
-            {isLibraryLoading ? "..." : libraryTracksKnown}
-          </span>
-        </div>
-        <div className="downloaded-page__summary-card">
-          <span className="downloaded-page__summary-label">
-            Already downloaded
-          </span>
-          <span className="downloaded-page__summary-value">
-            {isLibraryDownloading
-              ? Number(libraryProgress.verifiedExistingCount ?? 0) +
-                Number(libraryProgress.downloadedCount ?? 0) +
-                Number(libraryProgress.skippedCount ?? 0)
-              : isLibraryLoading
-                ? "..."
-                : libraryStatus?.available
-                  ? libraryStatus.alreadyDownloadedCount
-                  : libraryDatabaseUnavailable
-                    ? "--"
-                    : 0}
-          </span>
-        </div>
-        <div className="downloaded-page__summary-card">
-          <span className="downloaded-page__summary-label">New downloads</span>
-          <span className="downloaded-page__summary-value">
-            {isLibraryDownloading
-              ? Math.max(
-                  libraryProgress.totalMissingTracks -
-                    libraryProgress.processedMissingTracks,
-                  0,
-                )
-              : isLibraryLoading
-                ? "..."
-                : libraryStatus?.available
-                  ? libraryStatus.missingDownloadCount
-                  : libraryDatabaseUnavailable
-                    ? "--"
-                    : 0}
-          </span>
-        </div>
-        <div className="downloaded-page__summary-card">
-          <span className="downloaded-page__summary-label">
-            Estimated size
-          </span>
-          <span className="downloaded-page__summary-value downloaded-page__summary-value--compact">
-            Estimated size unavailable
-          </span>
-        </div>
+        {summaryCards.map((card) => (
+          <div key={card.label} className="downloaded-page__summary-card">
+            <span className="downloaded-page__summary-label">{card.label}</span>
+            <span
+              className={`downloaded-page__summary-value${
+                card.compact
+                  ? " downloaded-page__summary-value--compact"
+                  : ""
+              }`}
+            >
+              {card.value}
+            </span>
+          </div>
+        ))}
       </div>
 
-      {!lanModeEnabled ? (
-        <p className="downloaded-page__library-note">
-          Switch to LAN Mode to download from your PC library.
-        </p>
+      {noteMessage ? (
+        <p className="downloaded-page__library-note">{noteMessage}</p>
       ) : null}
 
-      {lanModeEnabled && !isLibraryLoading && libraryDatabaseUnavailable ? (
-        <p className="downloaded-page__library-note">
-          {createOfflineDatabaseUnavailableUiMessage()}
-        </p>
-      ) : null}
-
-      {lanModeEnabled &&
-      !isLibraryLoading &&
-      !libraryStatus?.available &&
-      !libraryDatabaseUnavailable ? (
-        <p className="downloaded-page__library-note">
-          Connect to your PC backend in LAN Mode to inspect the full library.
-        </p>
-      ) : null}
-
-      {lanModeEnabled &&
-      !isLibraryLoading &&
-      libraryStatus?.available &&
-      libraryStatus.totalLibraryTracks === 0 ? (
-        <p className="downloaded-page__library-note">
-          No tracks found in your PC library right now.
-        </p>
-      ) : null}
-
-      {isLibraryDownloading ? (
+      {progressCard ? (
         <div className="downloaded-page__download-card" aria-live="polite">
-          <p className="downloaded-page__warning-title">
-            Downloading full library
-          </p>
-          <p className="downloaded-page__warning-text">
-            {libraryProgress.processedMissingTracks} /{" "}
-            {libraryProgress.totalMissingTracks} missing tracks processed.{" "}
-            {buildLibraryTransferSummary(libraryProgress)} Fetched{" "}
-            {formatStorageSize(libraryProgress.downloadedBytes)} so far.
-          </p>
-          {libraryProgress.currentTrackTitle ? (
+          <p className="downloaded-page__warning-title">{progressCard.title}</p>
+          <p className="downloaded-page__warning-text">{progressCard.summary}</p>
+          {progressCard.currentTrack ? (
             <p className="downloaded-page__warning-text">
-              Current track:{" "}
-              {sanitizeLibraryProgressTitle(libraryProgress.currentTrackTitle)}
+              {progressCard.currentTrack}
             </p>
           ) : null}
         </div>

@@ -2,20 +2,22 @@ import DownloadedPlaylistCard from "./DownloadedPlaylistCard";
 import DownloadedStatusBanner from "./DownloadedStatusBanner";
 
 export default function DownloadedPlaylistsSection({
-  isStorageLoading,
-  summary,
-  storageAvailable,
-  hasPlaylists,
-  playlists,
-  missingAudioWarning,
+  sectionState,
+  playlistCards,
   message,
   messageTone,
   onClearAll,
   onPlayOffline,
   onDeletePlaylist,
-  formatStorageSize,
-  formatDownloadedDate,
 }) {
+  const {
+    isStorageLoading,
+    hasSummary,
+    storageAvailable,
+    hasPlaylists,
+    missingAudioWarning,
+  } = sectionState;
+
   return (
     <>
       <DownloadedStatusBanner message={message} messageTone={messageTone} />
@@ -31,7 +33,7 @@ export default function DownloadedPlaylistsSection({
         </section>
       ) : null}
 
-      {isStorageLoading && !summary ? (
+      {isStorageLoading && !hasSummary ? (
         <section className="downloaded-page__state" aria-live="polite">
           <p className="downloaded-page__state-title">
             Loading offline storage...
@@ -89,14 +91,12 @@ export default function DownloadedPlaylistsSection({
           </div>
 
           <div className="downloaded-page__playlist-grid">
-            {playlists.map((playlist) => (
+            {playlistCards.map((playlistCard) => (
               <DownloadedPlaylistCard
-                key={playlist.id}
-                playlist={playlist}
+                key={playlistCard.id}
+                playlistCard={playlistCard}
                 onPlayOffline={onPlayOffline}
                 onDeletePlaylist={onDeletePlaylist}
-                formatStorageSize={formatStorageSize}
-                formatDownloadedDate={formatDownloadedDate}
               />
             ))}
           </div>
