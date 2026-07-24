@@ -99,7 +99,38 @@ If the offline database cannot be opened, the app shows an unavailable state and
 Important files:
 
 - `frontend/src/features/offline/pages/DownloadedPage.jsx`
-  - Main UI for downloaded tracks and offline library browsing.
+  - Main orchestrator for the downloaded page.
+  - Composes the storage controller, library controller, page feedback hook, and presentational offline components.
+
+- `frontend/src/features/offline/hooks/useDownloadedStorageController.js`
+  - Owns downloaded storage summary state, downloaded playlists state, reload behavior, delete/clear actions, and offline-play entry points.
+
+- `frontend/src/features/offline/hooks/useDownloadedLibraryController.js`
+  - Owns LAN-mode full-library status, runtime progress subscription, and full-library download/cancel actions.
+
+- `frontend/src/features/offline/hooks/useDownloadedPageFeedback.js`
+  - Owns shared downloaded-page feedback state such as success, warning, and error messages.
+
+- `frontend/src/features/offline/components/DownloadedHero.jsx`
+  - Renders the top-level offline storage summary section.
+
+- `frontend/src/features/offline/components/OfflineLibraryCard.jsx`
+  - Renders the full-library download UI using page-prepared summary, note, and progress display data.
+
+- `frontend/src/features/offline/components/DownloadedPlaylistsSection.jsx`
+  - Renders downloaded-playlist states, status messaging, and the stored-playlists grid.
+
+- `frontend/src/features/offline/components/DownloadedPlaylistCard.jsx`
+  - Presentational card for a single downloaded playlist entry.
+
+- `frontend/src/features/offline/components/DownloadedStatusBanner.jsx`
+  - Shared status banner for downloaded-page success, warning, and error messaging.
+
+- `frontend/src/features/offline/utils/downloadedPageText.js`
+  - Shared formatting and copy helpers for downloaded-page confirmations, labels, and warnings.
+
+- `frontend/src/features/offline/utils/downloadedPageData.js`
+  - Shared downloaded-page data helpers for sorting playlists and shaping fallback UI state.
 
 - `frontend/src/features/offline/services/downloadLibrary.js`
   - Handles the full-library offline download flow.
@@ -171,17 +202,19 @@ Important rules:
 
 Where the truth lives:
 
-- downloaded track metadata
-- downloaded playlist metadata
-- local audio file URIs
-- local artwork file URIs
-- download progress and failure state
-- offline database readiness state
+- downloaded track metadata in the offline repository
+- downloaded playlist metadata in the offline repository
+- local audio file URIs and artwork file URIs in native storage metadata
+- downloaded-page feedback state in `useDownloadedPageFeedback()`
+- downloaded storage summary and downloaded-playlist state in `useDownloadedStorageController()`
+- full-library availability, progress, and download state in `useDownloadedLibraryController()`
+- offline database readiness state in the storage layer
 
 ## Tests
 
 Relevant tests:
 
+- `frontend/src/features/offline/tests/hooks/useDownloadedLibraryController.test.js`
 - `frontend/src/features/offline/tests/services/downloadLibrary.test.js`
 - `frontend/src/features/offline/tests/services/downloadPlaylist.test.js`
 - `frontend/src/features/offline/tests/storage/mobileOfflineRepository.test.js`
@@ -190,7 +223,7 @@ Relevant tests:
 - `frontend/src/features/offline/tests/storage/offlineStorage.test.js`
 - `frontend/src/features/offline/tests/pages/DownloadedPage.test.js`
 
-These tests cover download flow behavior, repository storage rules, file storage helpers, and downloaded-page rendering.
+These tests cover download flow behavior, library-controller orchestration, repository storage rules, file storage helpers, and downloaded-page rendering.
 
 ## Debugging Checklist
 
