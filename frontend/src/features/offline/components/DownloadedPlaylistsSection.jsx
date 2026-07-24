@@ -1,7 +1,8 @@
 import DownloadedPlaylistCard from "./DownloadedPlaylistCard";
+import DownloadedStatusBanner from "./DownloadedStatusBanner";
 
 export default function DownloadedPlaylistsSection({
-  loading,
+  isStorageLoading,
   summary,
   storageAvailable,
   hasPlaylists,
@@ -17,14 +18,7 @@ export default function DownloadedPlaylistsSection({
 }) {
   return (
     <>
-      {message ? (
-        <p
-          className={`downloaded-page__message downloaded-page__message--${messageTone}`}
-          role={messageTone === "error" ? "alert" : "status"}
-        >
-          {message}
-        </p>
-      ) : null}
+      <DownloadedStatusBanner message={message} messageTone={messageTone} />
 
       {missingAudioWarning ? (
         <section className="downloaded-page__warning" role="alert">
@@ -37,7 +31,7 @@ export default function DownloadedPlaylistsSection({
         </section>
       ) : null}
 
-      {loading && !summary ? (
+      {isStorageLoading && !summary ? (
         <section className="downloaded-page__state" aria-live="polite">
           <p className="downloaded-page__state-title">
             Loading offline storage...
@@ -48,7 +42,7 @@ export default function DownloadedPlaylistsSection({
         </section>
       ) : null}
 
-      {!loading && !storageAvailable ? (
+      {!isStorageLoading && !storageAvailable ? (
         <section className="downloaded-page__state downloaded-page__state--unavailable">
           <p className="downloaded-page__state-title">
             Offline storage is unavailable in this browser.
@@ -59,7 +53,7 @@ export default function DownloadedPlaylistsSection({
         </section>
       ) : null}
 
-      {!loading && storageAvailable && !hasPlaylists ? (
+      {!isStorageLoading && storageAvailable && !hasPlaylists ? (
         <section className="downloaded-page__state downloaded-page__state--empty">
           <p className="downloaded-page__state-title">
             No downloaded playlists yet.
@@ -71,7 +65,7 @@ export default function DownloadedPlaylistsSection({
         </section>
       ) : null}
 
-      {!loading && storageAvailable && hasPlaylists ? (
+      {!isStorageLoading && storageAvailable && hasPlaylists ? (
         <section
           className="downloaded-page__content"
           aria-label="Downloaded playlists"
