@@ -86,6 +86,99 @@ export default function DownloadedPage({
     clearMessage,
     showErrorMessage,
   });
+  const playlistsSectionState = {
+    isStorageLoading,
+    hasSummary: Boolean(summary),
+    storageAvailable,
+    hasPlaylists,
+    missingAudioWarning,
+  };
+  const playlistCards = playlists.map((playlist) => {
+    const playlistName = playlist.name || "Untitled playlist";
+
+    return {
+      id: playlist.id,
+      name: playlistName,
+      trackCountLabel: `${playlist.totalTracks ?? 0} tracks`,
+      offlineSizeLabel: `Offline size ${formatStorageSize(playlist.totalBytes ?? 0)}`,
+      downloadedAtLabel: `Downloaded ${formatDownloadedDate(playlist.downloadedAt)}`,
+      statusLabel: "Already downloaded for offline playback.",
+      actionLabel: `Actions for ${playlistName}`,
+    };
+  });
+  const offlineLibrarySummaryCards = [
+    {
+      label: "PC library tracks",
+      value: isLibraryLoading ? "..." : libraryTracksKnown,
+      compact: false,
+    },
+    {
+      label: "Already downloaded",
+      value: isLibraryDownloading
+        ? Number(libraryProgress.verifiedExistingCount ?? 0) +
+          Number(libraryProgress.downloadedCount ?? 0) +
+          Number(libraryProgress.skippedCount ?? 0)
+        : isLibraryLoading
+          ? "..."
+          : libraryStatus?.available
+            ? libraryStatus.alreadyDownloadedCount
+            : libraryDatabaseUnavailable
+              ? "--"
+              : 0,
+      compact: false,
+    },
+    {
+      label: "New downloads",
+      value: isLibraryDownloading
+        ? Math.max(
+            libraryProgress.totalMissingTracks -
+              libraryProgress.processedMissingTracks,
+            0,
+          )
+        : isLibraryLoading
+          ? "..."
+          : libraryStatus?.available
+            ? libraryStatus.missingDownloadCount
+            : libraryDatabaseUnavailable
+              ? "--"
+              : 0,
+      compact: false,
+    },
+    {
+      label: "Estimated size",
+      value: "Estimated size unavailable",
+      compact: true,
+    },
+  ];
+  let offlineLibraryNote = null;
+
+  if (!lanModeEnabled) {
+    offlineLibraryNote = "Switch to LAN Mode to download from your PC library.";
+  } else if (!isLibraryLoading && libraryDatabaseUnavailable) {
+    offlineLibraryNote = createOfflineDatabaseUnavailableUiMessage();
+  } else if (
+    !isLibraryLoading &&
+    !libraryStatus?.available &&
+    !libraryDatabaseUnavailable
+  ) {
+    offlineLibraryNote =
+      "Connect to your PC backend in LAN Mode to inspect the full library.";
+  } else if (
+    !isLibraryLoading &&
+    libraryStatus?.available &&
+    libraryStatus.totalLibraryTracks === 0
+  ) {
+    offlineLibraryNote = "No tracks found in your PC library right now.";
+  }
+  const offlineLibraryProgress = isLibraryDownloading
+    ? {
+        title: "Downloading full library",
+        summary: `${libraryProgress.processedMissingTracks} / ${libraryProgress.totalMissingTracks} missing tracks processed. ${buildLibraryTransferSummary(libraryProgress)} Fetched ${formatStorageSize(libraryProgress.downloadedBytes)} so far.`,
+        currentTrack: libraryProgress.currentTrackTitle
+          ? `Current track: ${sanitizeLibraryProgressTitle(libraryProgress.currentTrackTitle)}`
+          : "",
+      }
+    : null;
 
   return (
     <section className="downloaded-page" aria-labelledby="downloaded-title">
@@ -98,6 +191,9 @@ export default function DownloadedPage({
         />
 
         <OfflineLibraryCard
+          summaryCards={offlineLibrarySummaryCards}
+          noteMessage={offlineLibraryNote}
+          progressCard={offlineLibraryProgress}
           lanModeEnabled={lanModeEnabled}
           isLibraryLoading={isLibraryLoading}
           libraryTracksKnown={libraryTracksKnown}
@@ -107,28 +203,16 @@ export default function DownloadedPage({
           libraryDatabaseUnavailable={libraryDatabaseUnavailable}
           onDownloadFullLibrary={handleDownloadFullLibrary}
           onCancelFullLibraryDownload={handleCancelFullLibraryDownload}
-          formatStorageSize={formatStorageSize}
-          buildLibraryTransferSummary={buildLibraryTransferSummary}
-          sanitizeLibraryProgressTitle={sanitizeLibraryProgressTitle}
-          createOfflineDatabaseUnavailableUiMessage={
-            createOfflineDatabaseUnavailableUiMessage
-          }
         />
 
         <DownloadedPlaylistsSection
-          isStorageLoading={isStorageLoading}
-          summary={summary}
-          storageAvailable={storageAvailable}
-          hasPlaylists={hasPlaylists}
-          playlists={playlists}
-          missingAudioWarning={missingAudioWarning}
+          sectionState={playlistsSectionState}
+          playlistCards={playlistCards}
           message={message}
           messageTone={messageTone}
           onClearAll={handleClearAll}
           onPlayOffline={handlePlayOffline}
           onDeletePlaylist={handleDeletePlaylist}
-          formatStorageSize={formatStorageSize}
-          formatDownloadedDate={formatDownloadedDate}
         />
       </div>
     </section>

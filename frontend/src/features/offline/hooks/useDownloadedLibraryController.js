@@ -12,9 +12,7 @@ import {
   getFullLibraryDownloadStatus,
   subscribeToFullLibraryDownloadState,
 } from "../services/downloadLibrary";
-import {
-  buildLibraryTransferSummary,
-} from "../utils/downloadedPageText";
+import { buildLibraryTransferSummary } from "../utils/downloadedPageText";
 import {
   createEmptyLibraryProgress,
   createOfflineDatabaseUnavailableUiMessage,

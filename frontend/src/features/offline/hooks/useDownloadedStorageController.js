@@ -48,6 +48,7 @@ export function useDownloadedStorageController({
   const [isStorageLoading, setIsStorageLoading] = useState(
     () => initialLoading ?? initialSummary === null,
   );
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -59,8 +60,8 @@ export function useDownloadedStorageController({
   useEffect(() => {
     let isMounted = true;
 
-    // Load the offline storage summary and downloaded playlists and handles
-    // any errors that occur.
+    // Load the offline storage summary and downloaded playlists, handling any
+    // errors that occur.
     async function loadOfflineData() {
       setIsStorageLoading(true);
       clearMessage?.();
