@@ -18,27 +18,15 @@ What the user sees:
 - delete actions for removing downloaded tracks or playlists
 - offline playback controls for downloaded media
 
-## Execution Flow: Download Track
-
-User taps download on a track
-  ↓
-`downloadTrackForOffline()` starts the offline download flow
-  ↓
-The app checks whether mobile offline storage should use native SQLite
-  ↓
-The app downloads the audio file and artwork file if needed
-  ↓
-`saveOfflineTrackWithMediaRefs()` stores metadata and local file references
-  ↓
-`DownloadedPage.jsx` can now show the track in the downloaded library
-
 ## Execution Flow: Download Playlist
 
-User taps download on a playlist
+User taps "download for offline" on a playlist inside the playlist detail page
   ↓
-`downloadPlaylist()` starts a multi-track offline job
+`handleDownloadForOffline()` starts a multi-track offline job
   ↓
-Each track is verified before download
+Each track is verified to check if it should be downloaded for a PC or for an android 
+  ↓
+`downloadPlaylistTracks()` is called and it checks the track is already downloaded(if the track was already downloaded from another downloaded playlist)
   ↓
 Missing tracks are downloaded and saved locally
   ↓
@@ -50,9 +38,9 @@ Playlist metadata and track relationships are stored for offline browsing
 
 User starts a full library download
   ↓
-`downloadLibrary()` loads the backend library list
+`handleDownloadFullLibrary()` checks if the app is in lan mode and if it's not already downloading before calling the `downloadFullLibraryForOffline()` service
   ↓
-The app verifies what is already available offline
+`downloadFullLibraryForOffline()` checks sets up all the tracks for the full download and verified each one if it's already downloaded
   ↓
 Missing tracks are downloaded one by one
   ↓
@@ -62,11 +50,11 @@ The final result includes counts for downloaded, skipped, failed, and verified t
 
 ## Execution Flow: Offline Playback
 
-User opens a downloaded track
+User opens a downloaded track or clicks "Play Offline" in the downloaded page
   ↓
-The player resolves the track as offline media instead of backend streaming
+The click is handled in `handlePlayOffline()` and builds the queue in `buildOfflinePlaybackQueue()` 
   ↓
-Native file storage returns a playable local URI
+Each track in the loop is 
   ↓
 The player uses that URI for playback
   ↓

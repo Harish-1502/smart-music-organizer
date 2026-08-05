@@ -59,6 +59,7 @@ export class OfflineDatabaseUnavailableError extends Error {
   }
 }
 
+// Normalizes and sanitizes the offline playlist id, returning null for invalid or empty values.
 function normalizeOfflineId(value) {
   if (value === null || value === undefined) {
     return null;
@@ -1780,6 +1781,7 @@ export async function getOfflineTrackAudioSource(trackId) {
     : null;
 }
 
+
 export async function getOfflinePlaylistForPlayback(playlistId) {
   const normalizedPlaylistId = normalizeOfflineId(playlistId);
 
@@ -1805,6 +1807,7 @@ export async function getOfflinePlaylistForPlayback(playlistId) {
   };
 }
 
+// Builds the playback queue for a given offline playlist, 
 export async function buildOfflinePlaybackQueue(playlistId) {
   const offlinePlaylist = await getOfflinePlaylistForPlayback(playlistId);
 

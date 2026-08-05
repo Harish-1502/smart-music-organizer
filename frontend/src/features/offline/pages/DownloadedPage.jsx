@@ -34,6 +34,8 @@ export default function DownloadedPage({
 }) {
   const navigate = useNavigate();
   const { playQueue } = usePlayer();
+
+  // 
   const {
     message,
     messageTone,
@@ -43,6 +45,7 @@ export default function DownloadedPage({
     showWarningMessage,
     showErrorMessage,
   } = useDownloadedPageFeedback();
+
   const {
     summary,
     playlists,
@@ -66,6 +69,7 @@ export default function DownloadedPage({
     showWarningMessage,
     showErrorMessage,
   });
+
   const {
     lanModeEnabled,
     libraryStatus,
@@ -86,6 +90,7 @@ export default function DownloadedPage({
     clearMessage,
     showErrorMessage,
   });
+
   const playlistsSectionState = {
     isStorageLoading,
     hasSummary: Boolean(summary),
@@ -93,6 +98,7 @@ export default function DownloadedPage({
     hasPlaylists,
     missingAudioWarning,
   };
+
   const playlistCards = playlists.map((playlist) => {
     const playlistName = playlist.name || "Untitled playlist";
 
