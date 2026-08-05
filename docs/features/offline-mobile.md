@@ -52,9 +52,9 @@ The final result includes counts for downloaded, skipped, failed, and verified t
 
 User opens a downloaded track or clicks "Play Offline" in the downloaded page
   ↓
-The click is handled in `handlePlayOffline()` and builds the queue in `buildOfflinePlaybackQueue()` 
+The click is handled in `handlePlayOffline(playlistId)` and builds the queue in `buildOfflinePlaybackQueue()` 
   ↓
-Each track in the loop is 
+Each track in the queue is determined 
   ↓
 The player uses that URI for playback
   ↓
