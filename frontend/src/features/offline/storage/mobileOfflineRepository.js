@@ -527,6 +527,7 @@ export function shouldUseMobileOfflineSqlite() {
   return isNativeAndroidMobileOfflineSupported();
 }
 
+// Checks to see if the offline database is ready to be used
 export async function ensureMobileOfflineDbReady() {
   if (!shouldUseMobileOfflineSqlite()) {
     return false;
@@ -1491,11 +1492,14 @@ export async function saveNativeDownloadedPlaylist(downloadPayload) {
   return transactionResult.playlist;
 }
 
+// Retrive all the playlists that were downloaded and saved in the offline device 
 export async function getOfflinePlaylists() {
+  // If the device is not using mobile sqlite, then use the downloaded playlists from the browser(indexedDB)
   if (!shouldUseMobileOfflineSqlite()) {
     return (await getDownloadedPlaylists()).map(maskPlaylist).filter(Boolean);
   }
 
+  // Waits for the mobile database before querying
   await ensureMobileOfflineDbReady();
 
   const rows = await queryRows(
@@ -1517,6 +1521,7 @@ export async function getOfflinePlaylists() {
     { rethrow: true },
   );
 
+  // Sanitizes the rows and masks before returning
   return rows.map(sanitizeOfflinePlaylistRow).map(maskPlaylist).filter(Boolean);
 }
 
@@ -1781,19 +1786,22 @@ export async function getOfflineTrackAudioSource(trackId) {
     : null;
 }
 
-
+// Retrieves a downloaded playlist and its tracks
 export async function getOfflinePlaylistForPlayback(playlistId) {
+  // Sanitizes the playlist ID
   const normalizedPlaylistId = normalizeOfflineId(playlistId);
 
   if (!normalizedPlaylistId) {
     return null;
   }
 
+  // Get all the playlists downloaded and tracks from a given playlist ID
   const [playlists, tracks] = await Promise.all([
     getOfflinePlaylists(),
     getOfflineTracksForPlaylist(normalizedPlaylistId),
   ]);
 
+  // Find the playlist that match the given ID
   const playlist =
     playlists.find((entry) => entry.id === normalizedPlaylistId) ?? null;
 
@@ -1809,6 +1817,7 @@ export async function getOfflinePlaylistForPlayback(playlistId) {
 
 // Builds the playback queue for a given offline playlist, 
 export async function buildOfflinePlaybackQueue(playlistId) {
+  // Get the offline playlist and its tracks for playback
   const offlinePlaylist = await getOfflinePlaylistForPlayback(playlistId);
 
   if (!offlinePlaylist) {
@@ -1818,6 +1827,9 @@ export async function buildOfflinePlaybackQueue(playlistId) {
   const missingTrackIds = [];
   const playableTracks = [];
 
+  // Checks which storage type the app is using, then attempts to find
+  // the playable track. If it's not found, the track ID is added to the 
+  // missing trackIDs list. If it's found then it's added to the playableTracks list.
   for (const track of offlinePlaylist.tracks) {
     const resolvedTrack = shouldUseMobileOfflineSqlite()
       ? await buildNativeOfflinePlaybackTrack(track)

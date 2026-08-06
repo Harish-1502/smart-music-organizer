@@ -60,6 +60,9 @@ function normalizeTrackIdSegment(trackId) {
   return normalizedTrackId;
 }
 
+// Ensures the provided relative path is safe and does not allow 
+// directory traversal or access to raw filesystem paths. 
+// This is important to keep the media files within the app-owned storage
 function ensureSafeRelativePath(relativePath) {
   const normalizedPath =
     typeof relativePath === "string" ? relativePath.trim().replaceAll("\\", "/") : "";
@@ -434,6 +437,8 @@ export async function getNativeMediaFileSize(relativePath) {
   return stat?.size ?? null;
 }
 
+// Retrieves the the playable URI for a native audio file stored 
+// in the app's pro 
 export async function getPlayableNativeAudioUri(relativePath) {
   return getPlayableNativeMediaUri(relativePath);
 }

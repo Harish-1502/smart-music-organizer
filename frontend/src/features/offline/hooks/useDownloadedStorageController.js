@@ -244,6 +244,8 @@ export function useDownloadedStorageController({
         playbackQueue.tracks[0]?.track_id ?? playbackQueue.tracks[0]?.id ?? null,
     });
 
+    // Plays the offline tracks in the playback queue 
+    // and navigates to the player page.
     playQueue(playbackQueue.tracks, 0);
     navigate("/player");
 
