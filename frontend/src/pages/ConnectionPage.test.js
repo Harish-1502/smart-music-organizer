@@ -41,6 +41,9 @@ describe("ConnectionPage", () => {
       "Do not use localhost for your PC backend. Use your PC LAN IP.",
     );
     expect(markup).toContain("LAN Mode / Offline Mode");
+    expect(markup).toContain("Demo Mode");
+    expect(markup).toContain("Turn Demo On");
+    expect(markup).toContain("Turn Demo Off");
     expect(markup).toContain("Backend URL");
     expect(markup).toContain("Test Connection");
   });

@@ -146,6 +146,7 @@ def build_network_info(
             lan_urls.append(f"http://{address}:{settings.backend_port}")
 
     return {
+        "demo_mode": settings.demo_mode,
         "lan_mode": settings.app_lan_mode,
         "backend_host": settings.backend_host,
         "backend_port": settings.backend_port,

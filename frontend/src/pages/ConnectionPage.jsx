@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, QrCode, Server, ShieldCheck, Wifi } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../api/apiBase";
+import { applyNetworkInfoConfig } from "../api/appConfig";
 import { getAppMode, isOfflineMode, setAppMode } from "../appMode/appMode";
 import {
   clearBackendBaseUrl,
@@ -13,6 +14,11 @@ import {
   setBackendBaseUrl,
 } from "../api/backendBaseUrl";
 import { getApiErrorMessage } from "../api/apiErrors";
+import {
+  DEMO_MODE_UPDATED_EVENT,
+  isDemoMode,
+  setDemoMode,
+} from "../utils/demoMode";
 import "../styles/ConnectionPage.css";
 
 function formatToggle(value) {
@@ -50,6 +56,7 @@ export default function ConnectionPage() {
   const [copiedUrl, setCopiedUrl] = useState("");
   const [testingConnection, setTestingConnection] = useState(false);
   const [savingBackendUrl, setSavingBackendUrl] = useState(false);
+  const [demoModeEnabled, setDemoModeEnabled] = useState(() => isDemoMode());
   const copiedTimerRef = useRef(null);
   const isAndroidRuntime = isNativeAndroidRuntime();
   const defaultBackendBaseUrl = getDefaultBackendBaseUrl();
@@ -77,6 +84,7 @@ export default function ConnectionPage() {
 
         if (isMounted) {
           setNetworkInfo(response.data);
+          applyNetworkInfoConfig(response.data);
         }
 
         return response.data;
@@ -112,11 +120,22 @@ export default function ConnectionPage() {
 
     loadNetworkInfo(currentBackendBaseUrl || undefined);
 
+    function handleDemoModeUpdated() {
+      if (!isMounted) {
+        return;
+      }
+
+      setDemoModeEnabled(isDemoMode());
+    }
+
+    window.addEventListener(DEMO_MODE_UPDATED_EVENT, handleDemoModeUpdated);
+
     return () => {
       isMounted = false;
       if (copiedTimerRef.current) {
         window.clearTimeout(copiedTimerRef.current);
       }
+      window.removeEventListener(DEMO_MODE_UPDATED_EVENT, handleDemoModeUpdated);
     };
   }, []);
 
@@ -136,6 +155,7 @@ export default function ConnectionPage() {
         baseURL ? { baseURL } : undefined,
       );
       setNetworkInfo(response.data);
+      applyNetworkInfoConfig(response.data);
       return {
         status: "success",
         data: response.data,
@@ -300,6 +320,26 @@ export default function ConnectionPage() {
     }
   }
 
+  function handleDemoModeChange(nextValue) {
+    try {
+      setDemoMode(nextValue);
+      setDemoModeEnabled(isDemoMode());
+      setMessage(
+        nextValue
+          ? "Demo mode enabled. The UI will mask track and playlist details."
+          : "Demo mode disabled. Real library details are visible again.",
+      );
+      setMessageTone("success");
+    } catch (error) {
+      setMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "Could not change demo mode.",
+      );
+      setMessageTone("error");
+    }
+  }
+
   return (
     <main className="connection-page">
       <div className="connection-page__inner">
@@ -380,6 +420,41 @@ export default function ConnectionPage() {
 
           <p className="connection-page__setting-note">
             Current app mode: <strong>{offlineModeEnabled ? "Offline Mode" : "LAN Mode"}</strong>
+          </p>
+        </section>
+
+        <section className="connection-page__panel">
+          <div className="connection-page__panel-header">
+            <div>
+              <p className="connection-page__panel-eyebrow">Privacy</p>
+              <h2>Demo Mode</h2>
+            </div>
+            <p className="connection-page__panel-note">
+              Demo mode masks track, playlist, and library details in the UI.
+            </p>
+          </div>
+
+          <div className="connection-page__settings-actions">
+            <button
+              type="button"
+              className={`connection-page__button${demoModeEnabled ? " connection-page__button--primary" : " connection-page__button--secondary"}`}
+              onClick={() => handleDemoModeChange(true)}
+              disabled={demoModeEnabled}
+            >
+              Turn Demo On
+            </button>
+            <button
+              type="button"
+              className={`connection-page__button${!demoModeEnabled ? " connection-page__button--primary" : " connection-page__button--secondary"}`}
+              onClick={() => handleDemoModeChange(false)}
+              disabled={!demoModeEnabled}
+            >
+              Turn Demo Off
+            </button>
+          </div>
+
+          <p className="connection-page__setting-note">
+            Current demo mode: <strong>{demoModeEnabled ? "Enabled" : "Disabled"}</strong>
           </p>
         </section>
 

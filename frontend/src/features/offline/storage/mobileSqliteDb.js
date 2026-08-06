@@ -140,7 +140,8 @@ const SCHEMA_STATEMENTS = `
   CREATE INDEX IF NOT EXISTS idx_offline_downloads_entity
     ON offline_downloads (entity_type, entity_id);
 `;
-
+// Returns true if the current platform is a native Android device
+// that uses the Capacitor SQlite for offline storage
 export function isNativeAndroidMobileOfflineSupported() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 }

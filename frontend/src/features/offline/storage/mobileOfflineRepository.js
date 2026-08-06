@@ -29,6 +29,12 @@ import {
   formatSafeError,
   getSafeErrorMessage,
 } from "../../../utils/formatSafeError";
+import {
+  hiddenPathValue,
+  isDemoMode,
+  maskOfflineTrack,
+  maskPlaylist,
+} from "../../../utils/demoMode";
 
 // Native mobile metadata must never store API tokens, auth headers, or PC file paths.
 // Audio files and artwork files will live in native storage later; SQLite only stores metadata and local refs.
@@ -53,6 +59,7 @@ export class OfflineDatabaseUnavailableError extends Error {
   }
 }
 
+// Normalizes and sanitizes the offline playlist id, returning null for invalid or empty values.
 function normalizeOfflineId(value) {
   if (value === null || value === undefined) {
     return null;
@@ -520,6 +527,7 @@ export function shouldUseMobileOfflineSqlite() {
   return isNativeAndroidMobileOfflineSupported();
 }
 
+// Checks to see if the offline database is ready to be used
 export async function ensureMobileOfflineDbReady() {
   if (!shouldUseMobileOfflineSqlite()) {
     return false;
@@ -685,7 +693,7 @@ export async function getOfflineTrack(trackId) {
     [normalizedTrackId],
   );
 
-  return sanitizeOfflineTrackRow(rows?.[0] ?? null);
+  return maskOfflineTrack(sanitizeOfflineTrackRow(rows?.[0] ?? null));
 }
 
 export async function hasVerifiedOfflineTrack(trackId) {
@@ -1484,11 +1492,14 @@ export async function saveNativeDownloadedPlaylist(downloadPayload) {
   return transactionResult.playlist;
 }
 
+// Retrive all the playlists that were downloaded and saved in the offline device 
 export async function getOfflinePlaylists() {
+  // If the device is not using mobile sqlite, then use the downloaded playlists from the browser(indexedDB)
   if (!shouldUseMobileOfflineSqlite()) {
-    return getDownloadedPlaylists();
+    return (await getDownloadedPlaylists()).map(maskPlaylist).filter(Boolean);
   }
 
+  // Waits for the mobile database before querying
   await ensureMobileOfflineDbReady();
 
   const rows = await queryRows(
@@ -1510,7 +1521,8 @@ export async function getOfflinePlaylists() {
     { rethrow: true },
   );
 
-  return rows.map(sanitizeOfflinePlaylistRow).filter(Boolean);
+  // Sanitizes the rows and masks before returning
+  return rows.map(sanitizeOfflinePlaylistRow).map(maskPlaylist).filter(Boolean);
 }
 
 export async function getOfflineTracksForPlaylist(playlistId) {
@@ -1554,6 +1566,7 @@ export async function getOfflineTracksForPlaylist(playlistId) {
           downloadStatus: "downloaded",
         };
       })
+      .map(maskOfflineTrack)
       .filter(Boolean);
   }
 
@@ -1584,7 +1597,7 @@ export async function getOfflineTracksForPlaylist(playlistId) {
     { rethrow: true },
   );
 
-  return rows.map(sanitizeOfflineTrackRow).filter(Boolean);
+  return rows.map(sanitizeOfflineTrackRow).map(maskOfflineTrack).filter(Boolean);
 }
 
 function buildSafeOfflineLibraryTrack(track) {
@@ -1646,6 +1659,7 @@ export async function getOfflineLibraryTracks() {
           downloadStatus: "downloaded",
         }),
       )
+      .map(maskOfflineTrack)
       .filter(Boolean);
   }
 
@@ -1670,7 +1684,7 @@ export async function getOfflineLibraryTracks() {
     { rethrow: true },
   );
 
-  return rows.map(buildSafeOfflineLibraryTrack).filter(Boolean);
+  return rows.map(buildSafeOfflineLibraryTrack).map(maskOfflineTrack).filter(Boolean);
 }
 
 function buildSafePlaybackTrack(track, sourceFields = {}) {
@@ -1772,18 +1786,22 @@ export async function getOfflineTrackAudioSource(trackId) {
     : null;
 }
 
+// Retrieves a downloaded playlist and its tracks
 export async function getOfflinePlaylistForPlayback(playlistId) {
+  // Sanitizes the playlist ID
   const normalizedPlaylistId = normalizeOfflineId(playlistId);
 
   if (!normalizedPlaylistId) {
     return null;
   }
 
+  // Get all the playlists downloaded and tracks from a given playlist ID
   const [playlists, tracks] = await Promise.all([
     getOfflinePlaylists(),
     getOfflineTracksForPlaylist(normalizedPlaylistId),
   ]);
 
+  // Find the playlist that match the given ID
   const playlist =
     playlists.find((entry) => entry.id === normalizedPlaylistId) ?? null;
 
@@ -1797,7 +1815,9 @@ export async function getOfflinePlaylistForPlayback(playlistId) {
   };
 }
 
+// Builds the playback queue for a given offline playlist, 
 export async function buildOfflinePlaybackQueue(playlistId) {
+  // Get the offline playlist and its tracks for playback
   const offlinePlaylist = await getOfflinePlaylistForPlayback(playlistId);
 
   if (!offlinePlaylist) {
@@ -1807,6 +1827,9 @@ export async function buildOfflinePlaybackQueue(playlistId) {
   const missingTrackIds = [];
   const playableTracks = [];
 
+  // Checks which storage type the app is using, then attempts to find
+  // the playable track. If it's not found, the track ID is added to the 
+  // missing trackIDs list. If it's found then it's added to the playableTracks list.
   for (const track of offlinePlaylist.tracks) {
     const resolvedTrack = shouldUseMobileOfflineSqlite()
       ? await buildNativeOfflinePlaybackTrack(track)
@@ -1855,7 +1878,7 @@ async function inspectTrackMediaFiles(tracks, key) {
 
     details.push({
       trackId: normalizeOfflineId(track?.id),
-      relativePath,
+      relativePath: isDemoMode() ? hiddenPathValue() : relativePath,
       exists,
       sizeBytes: normalizePositiveInteger(sizeBytes, 0),
     });

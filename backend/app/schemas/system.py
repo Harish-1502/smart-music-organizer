@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class SystemNetworkInfoResponse(BaseModel):
+    demo_mode: bool
     lan_mode: bool
     backend_host: str
     backend_port: int
