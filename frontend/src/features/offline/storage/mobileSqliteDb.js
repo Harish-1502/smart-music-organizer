@@ -315,6 +315,9 @@ async function getMobileOfflineConnection() {
   return connection;
 }
 
+// Boots the native SQlite database connection and initializes the schema if it is not already initialized. 
+// It also verifies the connection by running a simple query. 
+// If any step fails, it resets the connection state and returns false. 
 export async function initializeMobileOfflineDb() {
   if (!sqliteInitPromise) {
     sqliteInitPromise = (async () => {
@@ -374,6 +377,10 @@ export async function initializeMobileOfflineDb() {
   }
 }
 
+// First it checks if the device support native Android SQLite, 
+// then it checks if the cooldown period has passed to prevent repeated failed attempts 
+// and then attempts to initialize the database connection. If it fails, 
+// then it resets the connection state 
 export async function ensureMobileOfflineDbReady() {
   if (!isNativeAndroidMobileOfflineSupported()) {
     return false;

@@ -30,7 +30,7 @@ TAG_RULES = {
         "keywords": [
             "sad", "sadness", "cry", "crying", "tears", "heartbreak",
             "heartbroken", "lonely", "alone", "melancholy", "melancholic",
-            "depressing", "blue", "emotional",
+            "depressing", "blue", "emaotional",
         ],
         "confidence": 0.78,
     },
@@ -83,7 +83,7 @@ TAG_RULES = {
         "category": "activity",
         "keywords": [
             "focus", "focused", "concentration", "concentrate", "deep work",
-            "deepwork", "coding", "programming", "work", "productivity",
+            "deepwork", "gaming", "coding", "programming", "work", "productivity",
             "flow state", "flow",
         ],
         "confidence": 0.76,

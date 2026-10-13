@@ -6,19 +6,25 @@ from app.models.playlist import Playlist
 from app.services.prompt_parser import parse_prompt
 
 
-def create_tagged_track(db_session, tmp_path, tag_names):
-    audio_path = tmp_path / "chill-study.mp3"
+def create_tagged_track(
+    db_session,
+    tmp_path,
+    tag_names,
+    file_name="chill-study.mp3",
+    title="Chill Study",
+):
+    audio_path = tmp_path / file_name
     audio_path.write_bytes(b"fake audio")
 
     track = Track(
         file_path=str(audio_path),
-        file_name="chill-study.mp3",
+        file_name=file_name,
         extension=".mp3",
         folder_path=str(tmp_path),
-        title="Chill Study",
+        title=title,
         artist="Test Artist",
         album="Test Album",
-        display_title="Chill Study",
+        display_title=title,
         display_artist="Test Artist",
         display_album="Test Album",
         duration=180,
@@ -29,9 +35,13 @@ def create_tagged_track(db_session, tmp_path, tag_names):
     db_session.flush()
 
     for tag_name in tag_names:
-        tag = Tag(name=tag_name, category="test")
-        db_session.add(tag)
-        db_session.flush()
+        tag = db_session.query(Tag).filter(Tag.name == tag_name).first()
+
+        if tag is None:
+            tag = Tag(name=tag_name, category="test")
+            db_session.add(tag)
+            db_session.flush()
+
         db_session.add(
             TrackTag(
                 track_id=track.id,
@@ -95,6 +105,71 @@ def test_generate_ai_playlist_creates_playlist_when_tagged_tracks_match(
     assert body["playlist_name"] == "Chill Study Under 45 Minutes Mix"
     assert body["parsed_rules"]["include_tags"]
     assert [item["id"] for item in body["tracks"]] == [track.id]
+
+
+def test_generate_ai_playlist_resolves_prompt_to_canonical_workout_and_high_energy(
+    client,
+    db_session,
+    tmp_path,
+):
+    workout_high_energy_track = create_tagged_track(
+        db_session,
+        tmp_path,
+        ["workout", "high_energy"],
+        file_name="track-a.mp3",
+        title="Track A",
+    )
+    high_energy_track = create_tagged_track(
+        db_session,
+        tmp_path,
+        ["high_energy"],
+        file_name="track-b.mp3",
+        title="Track B",
+    )
+    create_tagged_track(
+        db_session,
+        tmp_path,
+        ["chill"],
+        file_name="track-c.mp3",
+        title="Track C",
+    )
+
+    response = client.post(
+        "/ai_playlists/generate",
+        json={"prompt": "Make a hype gym playlist", "limit": 10},
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["parsed_rules"]["include_tags"] == ["workout", "high_energy"]
+    assert [item["id"] for item in body["tracks"]] == [
+        workout_high_energy_track.id,
+        high_energy_track.id,
+    ]
+
+
+def test_generate_ai_playlist_returns_404_for_raw_hip_hop_prompt(
+    client,
+    db_session,
+    tmp_path,
+):
+    create_tagged_track(
+        db_session,
+        tmp_path,
+        ["rap"],
+        file_name="rap-track.mp3",
+        title="Rap Track",
+    )
+
+    response = client.post(
+        "/ai_playlists/generate",
+        json={"prompt": "Play hip-hop", "limit": 10},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No matching tracks found for this prompt."
 
 
 def test_generate_ai_playlist_returns_403_when_feature_flag_disabled(

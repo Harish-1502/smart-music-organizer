@@ -35,6 +35,25 @@ import {
   maskOfflineTrack,
   maskPlaylist,
 } from "../../../utils/demoMode";
+import {
+  normalizeOfflineId,
+  normalizeText,
+  normalizePositiveInteger,
+  normalizeDownloadStatus,
+  normalizeStorageType,
+  normalizeTimestamp,
+  normalizeNullableText,
+  normalizeDurationValue
+} from "./repository/offlineMetadataUtils";
+import {
+  isSafeMobileLocalUri,
+  normalizeOfflineTrackMetadata,
+  normalizeOfflineTrackForSave,
+  sanitizeOfflinePlaylistMetadata,
+  sanitizeOfflineTrackRow,
+  sanitizeOfflinePlaylistRow,
+  sanitizeOfflineMediaFileRow
+} from "./repository/offlineMetadata";
 
 // Native mobile metadata must never store API tokens, auth headers, or PC file paths.
 // Audio files and artwork files will live in native storage later; SQLite only stores metadata and local refs.
@@ -57,108 +76,6 @@ export class OfflineDatabaseUnavailableError extends Error {
     super(message);
     this.name = "OfflineDatabaseUnavailableError";
   }
-}
-
-// Normalizes and sanitizes the offline playlist id, returning null for invalid or empty values.
-function normalizeOfflineId(value) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (typeof value === "string") {
-    const trimmedValue = value.trim();
-    return trimmedValue ? trimmedValue : null;
-  }
-
-  if (
-    typeof value === "number" ||
-    typeof value === "bigint" ||
-    typeof value === "boolean"
-  ) {
-    return String(value);
-  }
-
-  return null;
-}
-
-function normalizeText(value, fallback = "") {
-  return typeof value === "string" ? value : fallback;
-}
-
-function normalizePositiveInteger(value, fallback = 0) {
-  const normalizedValue = Number(value);
-
-  return Number.isFinite(normalizedValue) && normalizedValue >= 0
-    ? Math.trunc(normalizedValue)
-    : fallback;
-}
-
-function normalizeDownloadStatus(value, fallback = "pending") {
-  const status = normalizeText(value, fallback);
-
-  return status || fallback;
-}
-
-function normalizeStorageType(value, fallback = "native_file") {
-  const storageType = normalizeText(value, fallback);
-
-  return storageType || fallback;
-}
-
-function normalizeTimestamp(value) {
-  const timestamp = normalizeText(value);
-
-  return timestamp || new Date().toISOString();
-}
-
-function normalizeNullableText(value) {
-  const normalizedValue = normalizeText(value).trim();
-  return normalizedValue || null;
-}
-
-function normalizeDurationValue(value) {
-  const normalizedValue = Number(value);
-
-  return Number.isFinite(normalizedValue) ? Math.trunc(normalizedValue) : null;
-}
-
-function isSafeMobileLocalUri(value) {
-  const normalizedValue = normalizeText(value).trim();
-
-  if (!normalizedValue) {
-    return false;
-  }
-
-  // Guard against accidentally persisting raw Windows PC library paths.
-  if (
-    /^[a-zA-Z]:[\\/]/.test(normalizedValue) ||
-    /^\\\\/.test(normalizedValue)
-  ) {
-    return false;
-  }
-
-  if (
-    normalizedValue.startsWith("/") ||
-    normalizedValue.startsWith("file://") ||
-    normalizedValue.startsWith("content://") ||
-    normalizedValue.startsWith("http://") ||
-    normalizedValue.startsWith("https://") ||
-    normalizedValue.startsWith("/data/") ||
-    normalizedValue.startsWith("/storage/") ||
-    normalizedValue.startsWith("/sdcard/")
-  ) {
-    return false;
-  }
-
-  // Only app-local relative refs should be stored here, never traversal paths.
-  if (
-    /^\.{1,2}[\\/]/.test(normalizedValue) ||
-    /(^|[\\/])\.\.([\\/]|$)/.test(normalizedValue)
-  ) {
-    return false;
-  }
-
-  return true;
 }
 
 function sanitizeSafeErrorText(value) {
@@ -309,118 +226,118 @@ function normalizeOfflineTrackForSave(track, now = new Date().toISOString()) {
   };
 }
 
-function sanitizeOfflinePlaylistMetadata(
-  playlist,
-  now = new Date().toISOString(),
-) {
-  return {
-    id: normalizeOfflineId(playlist?.id),
-    name: normalizeText(playlist?.name, "Untitled playlist"),
-    totalTracks: normalizePositiveInteger(playlist?.totalTracks),
-    totalBytes: normalizePositiveInteger(playlist?.totalBytes),
-    downloadStatus: normalizeDownloadStatus(
-      playlist?.downloadStatus,
-      "pending",
-    ),
-    storageType: normalizeStorageType(playlist?.storageType, "native_file"),
-    downloadedAt: playlist?.downloadedAt
-      ? normalizeTimestamp(playlist.downloadedAt)
-      : null,
-    updatedAt: now,
-  };
-}
+// function sanitizeOfflinePlaylistMetadata(
+//   playlist,
+//   now = new Date().toISOString(),
+// ) {
+//   return {
+//     id: normalizeOfflineId(playlist?.id),
+//     name: normalizeText(playlist?.name, "Untitled playlist"),
+//     totalTracks: normalizePositiveInteger(playlist?.totalTracks),
+//     totalBytes: normalizePositiveInteger(playlist?.totalBytes),
+//     downloadStatus: normalizeDownloadStatus(
+//       playlist?.downloadStatus,
+//       "pending",
+//     ),
+//     storageType: normalizeStorageType(playlist?.storageType, "native_file"),
+//     downloadedAt: playlist?.downloadedAt
+//       ? normalizeTimestamp(playlist.downloadedAt)
+//       : null,
+//     updatedAt: now,
+//   };
+// }
 
-function sanitizeOfflineTrackRow(row) {
-  const trackId = normalizeOfflineId(row?.id);
+// function sanitizeOfflineTrackRow(row) {
+//   const trackId = normalizeOfflineId(row?.id);
 
-  if (!trackId) {
-    return null;
-  }
+//   if (!trackId) {
+//     return null;
+//   }
 
-  return {
-    id: trackId,
-    title: normalizeText(row?.title, "Unknown Title"),
-    artist: normalizeText(row?.artist),
-    album: normalizeText(row?.album),
-    duration: Number.isFinite(Number(row?.duration))
-      ? Math.trunc(Number(row.duration))
-      : null,
-    downloadStatus: normalizeDownloadStatus(
-      row?.downloadStatus ?? row?.download_status,
-    ),
-    storageType: normalizeStorageType(
-      row?.storageType ?? row?.storage_type,
-      "native_file",
-    ),
-    downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
-    updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
-    trackOrder: Number.isFinite(Number(row?.trackOrder ?? row?.track_order))
-      ? Math.trunc(Number(row?.trackOrder ?? row?.track_order))
-      : null,
-    audioLocalUri: isSafeMobileLocalUri(
-      row?.audioLocalUri ?? row?.audio_local_uri,
-    )
-      ? normalizeNullableText(row?.audioLocalUri ?? row?.audio_local_uri)
-      : null,
-    artworkLocalUri: isSafeMobileLocalUri(
-      row?.artworkLocalUri ?? row?.artwork_local_uri,
-    )
-      ? normalizeNullableText(row?.artworkLocalUri ?? row?.artwork_local_uri)
-      : null,
-  };
-}
+//   return {
+//     id: trackId,
+//     title: normalizeText(row?.title, "Unknown Title"),
+//     artist: normalizeText(row?.artist),
+//     album: normalizeText(row?.album),
+//     duration: Number.isFinite(Number(row?.duration))
+//       ? Math.trunc(Number(row.duration))
+//       : null,
+//     downloadStatus: normalizeDownloadStatus(
+//       row?.downloadStatus ?? row?.download_status,
+//     ),
+//     storageType: normalizeStorageType(
+//       row?.storageType ?? row?.storage_type,
+//       "native_file",
+//     ),
+//     downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
+//     updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
+//     trackOrder: Number.isFinite(Number(row?.trackOrder ?? row?.track_order))
+//       ? Math.trunc(Number(row?.trackOrder ?? row?.track_order))
+//       : null,
+//     audioLocalUri: isSafeMobileLocalUri(
+//       row?.audioLocalUri ?? row?.audio_local_uri,
+//     )
+//       ? normalizeNullableText(row?.audioLocalUri ?? row?.audio_local_uri)
+//       : null,
+//     artworkLocalUri: isSafeMobileLocalUri(
+//       row?.artworkLocalUri ?? row?.artwork_local_uri,
+//     )
+//       ? normalizeNullableText(row?.artworkLocalUri ?? row?.artwork_local_uri)
+//       : null,
+//   };
+// }
 
-function sanitizeOfflinePlaylistRow(row) {
-  const playlistId = normalizeOfflineId(row?.id);
+// function sanitizeOfflinePlaylistRow(row) {
+//   const playlistId = normalizeOfflineId(row?.id);
 
-  if (!playlistId) {
-    return null;
-  }
+//   if (!playlistId) {
+//     return null;
+//   }
 
-  return {
-    id: playlistId,
-    name: normalizeText(row?.name, "Untitled playlist"),
-    totalTracks: normalizePositiveInteger(
-      row?.totalTracks ?? row?.total_tracks,
-    ),
-    totalBytes: normalizePositiveInteger(row?.totalBytes ?? row?.total_bytes),
-    downloadStatus: normalizeDownloadStatus(
-      row?.downloadStatus ?? row?.download_status,
-      "pending",
-    ),
-    storageType: normalizeStorageType(
-      row?.storageType ?? row?.storage_type,
-      "native_file",
-    ),
-    downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
-    updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
-  };
-}
+//   return {
+//     id: playlistId,
+//     name: normalizeText(row?.name, "Untitled playlist"),
+//     totalTracks: normalizePositiveInteger(
+//       row?.totalTracks ?? row?.total_tracks,
+//     ),
+//     totalBytes: normalizePositiveInteger(row?.totalBytes ?? row?.total_bytes),
+//     downloadStatus: normalizeDownloadStatus(
+//       row?.downloadStatus ?? row?.download_status,
+//       "pending",
+//     ),
+//     storageType: normalizeStorageType(
+//       row?.storageType ?? row?.storage_type,
+//       "native_file",
+//     ),
+//     downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
+//     updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
+//   };
+// }
 
-function sanitizeOfflineMediaFileRow(row) {
-  const trackId = normalizeOfflineId(row?.trackId ?? row?.track_id);
-  const mediaType = normalizeNullableText(row?.mediaType ?? row?.media_type);
-  const localUri = row?.localUri ?? row?.local_uri;
+// function sanitizeOfflineMediaFileRow(row) {
+//   const trackId = normalizeOfflineId(row?.trackId ?? row?.track_id);
+//   const mediaType = normalizeNullableText(row?.mediaType ?? row?.media_type);
+//   const localUri = row?.localUri ?? row?.local_uri;
 
-  if (!trackId || !mediaType || !isSafeMobileLocalUri(localUri)) {
-    return null;
-  }
+//   if (!trackId || !mediaType || !isSafeMobileLocalUri(localUri)) {
+//     return null;
+//   }
 
-  return {
-    id:
-      Number.isFinite(Number(row?.id)) && Number(row?.id) > 0
-        ? Math.trunc(Number(row.id))
-        : null,
-    trackId,
-    mediaType,
-    localUri: normalizeNullableText(localUri),
-    storageType: normalizeStorageType(
-      row?.storageType ?? row?.storage_type,
-      "native_file",
-    ),
-    downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
-  };
-}
+//   return {
+//     id:
+//       Number.isFinite(Number(row?.id)) && Number(row?.id) > 0
+//         ? Math.trunc(Number(row.id))
+//         : null,
+//     trackId,
+//     mediaType,
+//     localUri: normalizeNullableText(localUri),
+//     storageType: normalizeStorageType(
+//       row?.storageType ?? row?.storage_type,
+//       "native_file",
+//     ),
+//     downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
+//   };
+// }
 
 async function withMobileOfflineTransaction(work, options = {}) {
   const database = options?.rethrow
@@ -1965,11 +1882,15 @@ export async function deleteOfflinePlaylist(playlistId) {
     return false;
   }
 
+  // This the browser path of deleting a downloaded playlist
   if (!shouldUseMobileOfflineSqlite()) {
     return deleteDownloadedPlaylist(normalizedPlaylistId);
   }
 
+  // This is the mobile path of deleting a downloaded playlist
   const result = await withMobileOfflineTransaction(async (database) => {
+
+    // Query the database to get all the track IDs associated with the playlist being deleted
     const trackRows = await database.query(
       "SELECT track_id AS trackId FROM offline_playlist_tracks WHERE playlist_id = ?",
       [normalizedPlaylistId],
@@ -2007,6 +1928,7 @@ export async function deleteOfflinePlaylist(playlistId) {
         remainingPlaylistRows?.values?.[0]?.count,
       );
 
+      // If the track is still referenced by other playlists, the loop skips it
       if (remainingCount > 0) {
         continue;
       }

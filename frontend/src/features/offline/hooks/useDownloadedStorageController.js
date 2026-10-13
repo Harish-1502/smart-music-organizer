@@ -76,7 +76,10 @@ export function useDownloadedStorageController({
 
         setSummary(nextSummary);
         setPlaylists(sortPlaylistsByDownloadedDate(nextPlaylists));
-      } catch (error) {
+      } 
+      // On error, reset the summary and playlists to empty values 
+      // and and show an error message
+      catch (error) {
         if (!isMounted) {
           return;
         }
@@ -162,6 +165,8 @@ export function useDownloadedStorageController({
   // Handles the deletion of a downloaded playlist, prompting the user for
   // confirmation and updating the UI accordingly.
   async function handleDeletePlaylist(playlistId) {
+
+    // Confirmation window
     const playlist = playlists.find((entry) => entry.id === playlistId);
     const confirmed = window.confirm(
       buildDeleteDownloadConfirmationText(playlist?.name),

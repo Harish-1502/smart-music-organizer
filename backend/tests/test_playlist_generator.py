@@ -6,7 +6,10 @@ from app.core.database import Base
 from app.models.track import Track
 from app.models.tag import Tag
 from app.models.track_tag import TrackTag
-from app.services.playlist_generator import generate_tracks_from_rules
+from app.services.playlist_generator import (
+    generate_scored_tracks_from_rules,
+    generate_tracks_from_rules,
+)
 
 class FakeTag:
     def __init__(self, name):
@@ -289,6 +292,72 @@ def test_generate_tracks_from_rules_excludes_tracks_with_excluded_tag():
 
         assert clean_chill_track.id in result_ids
         assert explicit_chill_track.id not in result_ids
+
+    finally:
+        db.close()
+
+
+def test_generate_scored_tracks_from_rules_requires_canonical_workout_tag():
+    TestingSessionLocal = make_test_db()
+    db = TestingSessionLocal()
+
+    try:
+        workout = create_tag(db, "workout", "activity")
+
+        track = create_track(db, "workout_anthem.mp3", "Workout Anthem")
+        attach_tag(db, track, workout, confidence=1.0)
+
+        db.commit()
+
+        canonical_results = generate_scored_tracks_from_rules(
+            db=db,
+            include_tags=["workout"],
+            exclude_tags=[],
+            limit=20,
+        )
+
+        raw_results = generate_scored_tracks_from_rules(
+            db=db,
+            include_tags=["gym"],
+            exclude_tags=[],
+            limit=20,
+        )
+
+        assert [item[0].id for item in canonical_results] == [track.id]
+        assert raw_results == []
+
+    finally:
+        db.close()
+
+
+def test_generate_scored_tracks_from_rules_requires_canonical_rap_tag():
+    TestingSessionLocal = make_test_db()
+    db = TestingSessionLocal()
+
+    try:
+        rap = create_tag(db, "rap", "genre")
+
+        track = create_track(db, "rap_track.mp3", "Rap Track")
+        attach_tag(db, track, rap, confidence=1.0)
+
+        db.commit()
+
+        canonical_results = generate_scored_tracks_from_rules(
+            db=db,
+            include_tags=["rap"],
+            exclude_tags=[],
+            limit=20,
+        )
+
+        raw_results = generate_scored_tracks_from_rules(
+            db=db,
+            include_tags=["hip hop"],
+            exclude_tags=[],
+            limit=20,
+        )
+
+        assert [item[0].id for item in canonical_results] == [track.id]
+        assert raw_results == []
 
     finally:
         db.close()

@@ -145,6 +145,55 @@ def test_parse_vague_prompt_adds_warning():
     ]
 
 
+@pytest.mark.parametrize(
+    "prompt, expected_use_case, expected_energy",
+    [
+        ("Make a gym playlist", "workout", "medium"),
+        ("Music for coding", "focus", "medium"),
+        ("A hype playlist", None, "high"),
+    ],
+)
+def test_parse_prompt_recognizes_core_canonical_intents(
+    prompt,
+    expected_use_case,
+    expected_energy,
+):
+    result = parse_prompt(prompt)
+
+    assert result["energy"] == expected_energy
+
+    if expected_use_case is None:
+        assert result["use_cases"] == []
+    else:
+        assert expected_use_case in result["use_cases"]
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Give me instrumental music",
+        "Play fast music",
+        "Give me slow music",
+        "Give me a lo-fi playlist",
+        "Play hip-hop",
+        "Play r&b",
+    ],
+)
+def test_parse_prompt_currently_misses_some_canonical_playlist_terms(prompt):
+    result = parse_prompt(prompt)
+
+    assert result["use_cases"] == []
+    assert result["moods"] == []
+    assert result["genres"] == []
+
+
+def test_parse_prompt_should_treat_relaxing_as_shared_chill_and_calm_signal():
+    result = parse_prompt("Give me a relaxing playlist")
+
+    assert "chill" in result["moods"]
+    assert "calm" in result["moods"]
+
+
 def test_empty_prompt_parse_raises_value_error():
     with pytest.raises(ValueError):
         parse_prompt("")

@@ -54,33 +54,105 @@ User opens a downloaded track or clicks "Play Offline" in the downloaded page
   ↓
 The click is handled in `handlePlayOffline(playlistId)` and builds the queue in `buildOfflinePlaybackQueue()` 
   ↓
-Each track in the queue is determined 
+Each track's URI in the queue is selected based on the type of storage the app is using. 
   ↓
-The player uses that URI for playback
+The player uses that URI for playback queue
   ↓
-If the app is running on Android and the queue is fully downloaded, native playback can take over
+If the app is running on Android and the queue is fully downloaded, native playback can take over. It's not the browser native playback would take over
 
 ## Execution Flow: Delete Downloaded Media
 
-User deletes a downloaded track or playlist
-  ↓
-The offline repository removes the metadata record
-  ↓
-Native media files are deleted when they exist
-  ↓
-The downloaded view updates to reflect the removed item
+Browser Path: 
+
+User clicks “Delete Download” and confirms
+↓
+handleDeletePlaylist(playlistId) calls deleteOfflinePlaylist(playlistId)
+↓
+deleteOfflinePlaylist() normalizes the ID. When shouldUseMobileOfflineSqlite() returns false, it calls deleteDownloadedPlaylist(normalizedPlaylistId)
+↓
+deleteDownloadedPlaylist() gets the database using getOfflineDatabase() and opens a read/write transaction for playlists, tracks, audio blobs, and artwork blobs
+↓
+playlistStore.get(normalizedPlaylistId) loads the playlist, and its track IDs are collected
+↓
+playlistStore.delete(normalizedPlaylistId) deletes the playlist
+↓
+For each track, trackStore.get(trackId) loads its metadata. The deleted playlist’s ID is removed from track.playlistIds
+↓
+If other playlist IDs remain, trackStore.put() saves the updated memberships. Otherwise, trackStore.delete(track.id) removes the track’s metadata
+↓
+cleanupUnreferencedBlobs() collects blob IDs used by remaining tracks, then deletes unreferenced audio and artwork blobs
+↓
+await tx.done waits for the transaction to finish, then deleteDownloadedPlaylist() returns true
+↓
+handleDeletePlaylist() calls reloadOfflineData(), displays the success message using showSuccessMessage?.(), and calls onStorageChanged?.()
+
+Mobile path: 
+
+User clicks “Delete Download” for a downloaded playlist
+↓
+handleDeletePlaylist(playlistId) asks for confirmation using window.confirm(buildDeleteDownloadConfirmationText(...))
+↓
+If confirmed, it calls deleteOfflinePlaylist(playlistId)
+↓
+deleteOfflinePlaylist() normalizes the ID using normalizeOfflineId(). When shouldUseMobileOfflineSqlite() returns true, it follows the mobile path
+↓
+withMobileOfflineTransaction() starts the SQLite transaction
+↓
+database.query() reads the playlist’s track IDs from offline_playlist_tracks and saves them in trackIds before deleting the relationships
+↓
+database.run() deletes the playlist’s download record from offline_downloads, its relationships from offline_playlist_tracks, and its metadata from offline_playlists
+↓
+For each saved track ID, database.query() counts its remaining relationships in offline_playlist_tracks
+↓
+If remainingCount > 0, continue preserves the track because another downloaded playlist still uses it
+↓
+Otherwise, database.run() deletes the track’s records from offline_media_files, offline_downloads, and offline_tracks. deletedTrackIds.push(trackId) records its ID for file cleanup
+↓
+The transaction finishes successfully and returns { deletedTrackIds }
+↓
+bestEffortDeleteNativeTrackFiles(deletedTrackIds) calls deleteAudioFile(trackId) and deleteArtworkFile(trackId) for each removed track. Individual file-deletion errors are caught
+↓
+deleteOfflinePlaylist() returns true
+↓
+handleDeletePlaylist() calls reloadOfflineData() to refresh the downloaded view
+↓
+showSuccessMessage?.("Downloaded playlist removed.") displays confirmation, then onStorageChanged?.() calls the optional storage-change callback
 
 ## Execution Flow: App Restart And Recovery
 
-App opens after a restart
+User opens the Downloaded page after restarting the app
   ↓
-Offline storage is initialized
+The mount effect in useDownloadedStorageController() calls loadOfflineData()
   ↓
-The app reads saved metadata and local file references
+loadOfflineData() sets loading to true and clears previous feedback
   ↓
-Downloaded tracks and playlists reappear without needing a live backend connection
+It calls getOfflineStorageSummary(), then getOfflinePlaylists()
   ↓
-If the offline database cannot be opened, the app shows an unavailable state and recovery guidance
+On Android, the repository calls ensureMobileOfflineDbReady() to initialize and verify the SQLite database before reading saved data
+
+Success branch:
+  ↓
+The storage reads return the saved summary and downloaded playlists
+  ↓
+If the page is still mounted, setSummary(nextSummary) updates the summary
+  ↓
+setPlaylists(sortPlaylistsByDownloadedDate(nextPlaylists)) updates the playlist list
+  ↓
+The finally block calls setIsStorageLoading(false)
+  ↓
+The Downloaded page displays the recovered local data
+
+Failure branch:
+  ↓
+If Android database readiness fails, the repository throws OfflineDatabaseUnavailableError
+  ↓
+The catch block sets the summary to available: false with zero counts and calls setPlaylists([])
+  ↓
+showErrorMessage() displays recovery guidance
+  ↓
+The finally block calls setIsStorageLoading(false)
+  ↓
+The page shows storage unavailable; saved downloads are not deleted
 
 ## Frontend Implementation
 

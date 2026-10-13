@@ -1,8 +1,13 @@
+import pytest
+
+from app.services.prompt_parser import parse_prompt
 from app.services.tag_inference import (
     infer_track_tags,
     normalize_text,
     keyword_matches,
+    parsed_rules_to_tags,
 )
+from app.utils.tag_rules import TAG_RULES
 
 
 class FakeTrack:
@@ -160,3 +165,43 @@ def test_keeps_highest_confidence_when_duplicate_tag_is_inferred():
         tag_counts[tag_name] = tag_counts.get(tag_name, 0) + 1
 
     assert all(count == 1 for count in tag_counts.values())
+
+
+def test_prompt_parser_output_should_only_use_known_tag_rules_keys():
+    parsed_rules = parse_prompt("without aggressive songs")
+
+    all_prompt_tags = set(parsed_rules["use_cases"])
+    all_prompt_tags.update(parsed_rules["moods"])
+    all_prompt_tags.update(parsed_rules["genres"])
+    all_prompt_tags.update(parsed_rules["exclude_moods"])
+    all_prompt_tags.update(parsed_rules["exclude_keywords"])
+
+    invalid_tags = all_prompt_tags - set(TAG_RULES.keys())
+
+    assert invalid_tags == set()
+
+
+@pytest.mark.parametrize(
+    "parsed_rules, expected_include_tags, expected_exclude_tags",
+    [
+        ({"use_cases": ["gym"]}, ["workout"], []),
+        ({"use_cases": ["coding"]}, ["focus"], []),
+        ({"moods": ["hype"]}, ["high_energy"], []),
+        ({"moods": ["relaxing"]}, ["chill", "calm"], []),
+        ({"genres": ["hip hop"]}, ["rap"], []),
+        ({"genres": ["r&b"]}, ["rnb"], []),
+        ({"genres": ["instrumental"]}, ["instrumental"], []),
+        ({"moods": ["fast"]}, ["fast"], []),
+        ({"moods": ["slow"]}, ["slow"], []),
+        ({"exclude_moods": ["aggressive"]}, [], ["angry"]),
+    ],
+)
+def test_parsed_rules_to_tags_canonicalize_playlist_prompt_values(
+    parsed_rules,
+    expected_include_tags,
+    expected_exclude_tags,
+):
+    include_tags, exclude_tags = parsed_rules_to_tags(parsed_rules)
+
+    assert include_tags == expected_include_tags
+    assert exclude_tags == expected_exclude_tags
