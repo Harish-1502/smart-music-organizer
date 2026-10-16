@@ -204,8 +204,45 @@ Important files:
   - Coordinates file creation, cleanup, and error handling.
 
 - `frontend/src/features/offline/storage/mobileOfflineRepository.js`
-  - Main repository for offline metadata and native mobile storage access.
-  - Stores and reads downloaded tracks, playlists, and media references.
+  - Public entry point that re-exports offline storage and service operations.
+  - Preserves existing caller imports; implementations live in the modules below.
+
+- `frontend/src/features/offline/storage/repository/offlineMetadataUtils.js`
+  - Primitive normalization for IDs, text, numbers, timestamps, and statuses.
+
+- `frontend/src/features/offline/storage/repository/offlineMetadata.js`
+  - Normalizes metadata, sanitizes database rows, and validates stored local references.
+
+- `frontend/src/features/offline/storage/repository/offlineErrors.js`
+  - Defines shared error classes and sanitizes and logs metadata failures.
+
+- `frontend/src/features/offline/storage/repository/offlineDbHelpers.js`
+  - Selects native storage and provides database readiness, query, transaction, and SQL value helpers.
+
+- `frontend/src/features/offline/storage/repository/offlineTrackRepository.js`
+  - Reads individual tracks and saves native track metadata and media references.
+
+- `frontend/src/features/offline/storage/repository/offlinePlaylistRepository.js`
+  - Reads playlists and ordered tracks, and saves playlist metadata and membership.
+
+- `frontend/src/features/offline/storage/repository/offlinePlaylistPersistence.js`
+  - Atomically records a completed native playlist download and cleans up removed track files after commit.
+
+- `frontend/src/features/offline/storage/repository/offlineCleanup.js`
+  - Deletes playlists, preserves tracks shared with other playlists, and clears offline data.
+  - Deletes native files only after the metadata transaction commits.
+
+- `frontend/src/features/offline/storage/repository/offlineStorageHealth.js`
+  - Verifies saved audio files and calculates storage counts, sizes, and missing-file totals.
+
+- `frontend/src/features/offline/services/offlineLibraryView.js`
+  - Prepares downloaded tracks for library browsing and applies demo masking.
+
+- `frontend/src/features/offline/services/offlinePlayback.js`
+  - Resolves native and browser playback sources and builds ordered offline queues.
+
+- `frontend/src/features/offline/services/offlineDiagnostics.js`
+  - Produces detailed playlist reports comparing saved references with physical media files.
 
 - `frontend/src/features/offline/storage/mobileSqliteDb.js`
   - Owns the mobile SQLite database setup and readiness checks.
@@ -236,7 +273,8 @@ Important files:
   - Uses backend library data as the source of truth for what can be downloaded.
 
 - `frontend/src/features/offline/storage/mobileOfflineRepository.js`
-  - Reads backend-derived metadata and persists a device-local copy of it.
+  - Exposes operations that persist a device-local copy of backend-derived metadata.
+  - Track and playlist persistence is implemented in `storage/repository/`.
 
 - `frontend/src/features/library/sources/backendLibrarySource.js`
   - Provides the library track list used for full-library download planning.
@@ -300,6 +338,8 @@ What to check when this feature breaks:
 
 How to change this feature safely:
 
+- preserve public exports in `mobileOfflineRepository.js` when changing extracted implementations
+- extracted modules should import dependencies directly rather than importing through `mobileOfflineRepository.js`
 - update the repository layer before changing UI assumptions
 - keep metadata shape changes in sync across download, playback, and offline library code
 - add or update tests for any new storage field or download step
