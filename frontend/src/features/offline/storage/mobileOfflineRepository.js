@@ -25,10 +25,10 @@ import {
   getPlayableNativeArtworkUri,
   nativeMediaFileExists,
 } from "./nativeMediaFileStorage";
-import {
-  formatSafeError,
-  getSafeErrorMessage,
-} from "../../../utils/formatSafeError";
+// import {
+//   formatSafeError,
+//   getSafeErrorMessage,
+// } from "../../../utils/formatSafeError";
 import {
   hiddenPathValue,
   isDemoMode,
@@ -52,118 +52,16 @@ import {
   sanitizeOfflinePlaylistMetadata,
   sanitizeOfflineTrackRow,
   sanitizeOfflinePlaylistRow,
-  sanitizeOfflineMediaFileRow
 } from "./repository/offlineMetadata";
+import {
+  OfflineDatabaseUnavailableError,
+  createOfflineMetadataSaveError,
+  sanitizeOfflineMetadataError,
+  logOfflineMetadataError,
+} from "./repository/offlineErrors";
 
 // Native mobile metadata must never store API tokens, auth headers, or PC file paths.
 // Audio files and artwork files will live in native storage later; SQLite only stores metadata and local refs.
-
-export class OfflineMetadataSaveError extends Error {
-  constructor(message, details = {}) {
-    super(message);
-    this.name = "OfflineMetadataSaveError";
-    this.code = details.code ?? null;
-    this.trackId = details.trackId ?? null;
-    this.trackTitle = details.trackTitle ?? "";
-    this.cause = details.cause;
-  }
-}
-
-export class OfflineDatabaseUnavailableError extends Error {
-  constructor(
-    message = "Offline database is unavailable. The phone database could not be opened.",
-  ) {
-    super(message);
-    this.name = "OfflineDatabaseUnavailableError";
-  }
-}
-
-function sanitizeSafeErrorText(value) {
-  const normalizedValue =
-    typeof value === "string" ? value.trim().replaceAll("\\", "/") : "";
-
-  if (
-    !normalizedValue ||
-    /^[a-zA-Z]:\//.test(normalizedValue) ||
-    normalizedValue.startsWith("//") ||
-    normalizedValue.startsWith("file://") ||
-    normalizedValue.startsWith("content://") ||
-    normalizedValue.startsWith("http://") ||
-    normalizedValue.startsWith("https://") ||
-    normalizedValue.startsWith("/data/") ||
-    normalizedValue.startsWith("/storage/") ||
-    normalizedValue.startsWith("/sdcard/") ||
-    normalizedValue.startsWith("../") ||
-    normalizedValue.includes("/../")
-  ) {
-    return "";
-  }
-
-  return normalizedValue;
-}
-
-function buildOfflineTrackLabel(track) {
-  const trackId = normalizeOfflineId(track?.id ?? track?.trackId);
-  const trackTitle = normalizeText(track?.title, "Unknown Title");
-
-  if (trackId) {
-    return `Track ${trackId}`;
-  }
-
-  return `Track ${trackTitle}`;
-}
-
-function createOfflineMetadataSaveError(track, message, details = {}) {
-  return new OfflineMetadataSaveError(
-    `${buildOfflineTrackLabel(track)} could not be saved: ${message}`,
-    {
-      trackId: normalizeOfflineId(track?.id ?? track?.trackId),
-      trackTitle: normalizeText(track?.title, "Unknown Title"),
-      ...details,
-    },
-  );
-}
-
-function sanitizeOfflineMetadataError(error, track, fallbackMessage) {
-  if (error instanceof OfflineMetadataSaveError) {
-    return error;
-  }
-
-  const safeCode =
-    typeof error?.code === "string" || typeof error?.code === "number"
-      ? String(error.code)
-      : "";
-  const safeMessage = sanitizeSafeErrorText(error?.message);
-  const detailSuffix = [safeCode ? `code ${safeCode}` : "", safeMessage]
-    .filter(Boolean)
-    .join(" - ");
-
-  return createOfflineMetadataSaveError(
-    track,
-    detailSuffix || getSafeErrorMessage(error, fallbackMessage),
-    {
-      code: safeCode || null,
-      cause: error,
-    },
-  );
-}
-
-function logOfflineMetadataError(operation, track, error) {
-  console.error(
-    `[offline-metadata-save:error] ${JSON.stringify(
-      {
-        operation,
-        trackId: normalizeOfflineId(
-          track?.id ?? track?.trackId ?? error?.trackId,
-        ),
-        trackTitle: normalizeText(track?.title ?? error?.trackTitle, ""),
-        error: formatSafeError(error),
-      },
-      null,
-      2,
-    )}`,
-  );
-}
 
 function normalizeSqliteValue(value) {
   if (value === undefined) {
@@ -225,119 +123,6 @@ function normalizeOfflineTrackForSave(track, now = new Date().toISOString()) {
     artworkLocalUri,
   };
 }
-
-// function sanitizeOfflinePlaylistMetadata(
-//   playlist,
-//   now = new Date().toISOString(),
-// ) {
-//   return {
-//     id: normalizeOfflineId(playlist?.id),
-//     name: normalizeText(playlist?.name, "Untitled playlist"),
-//     totalTracks: normalizePositiveInteger(playlist?.totalTracks),
-//     totalBytes: normalizePositiveInteger(playlist?.totalBytes),
-//     downloadStatus: normalizeDownloadStatus(
-//       playlist?.downloadStatus,
-//       "pending",
-//     ),
-//     storageType: normalizeStorageType(playlist?.storageType, "native_file"),
-//     downloadedAt: playlist?.downloadedAt
-//       ? normalizeTimestamp(playlist.downloadedAt)
-//       : null,
-//     updatedAt: now,
-//   };
-// }
-
-// function sanitizeOfflineTrackRow(row) {
-//   const trackId = normalizeOfflineId(row?.id);
-
-//   if (!trackId) {
-//     return null;
-//   }
-
-//   return {
-//     id: trackId,
-//     title: normalizeText(row?.title, "Unknown Title"),
-//     artist: normalizeText(row?.artist),
-//     album: normalizeText(row?.album),
-//     duration: Number.isFinite(Number(row?.duration))
-//       ? Math.trunc(Number(row.duration))
-//       : null,
-//     downloadStatus: normalizeDownloadStatus(
-//       row?.downloadStatus ?? row?.download_status,
-//     ),
-//     storageType: normalizeStorageType(
-//       row?.storageType ?? row?.storage_type,
-//       "native_file",
-//     ),
-//     downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
-//     updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
-//     trackOrder: Number.isFinite(Number(row?.trackOrder ?? row?.track_order))
-//       ? Math.trunc(Number(row?.trackOrder ?? row?.track_order))
-//       : null,
-//     audioLocalUri: isSafeMobileLocalUri(
-//       row?.audioLocalUri ?? row?.audio_local_uri,
-//     )
-//       ? normalizeNullableText(row?.audioLocalUri ?? row?.audio_local_uri)
-//       : null,
-//     artworkLocalUri: isSafeMobileLocalUri(
-//       row?.artworkLocalUri ?? row?.artwork_local_uri,
-//     )
-//       ? normalizeNullableText(row?.artworkLocalUri ?? row?.artwork_local_uri)
-//       : null,
-//   };
-// }
-
-// function sanitizeOfflinePlaylistRow(row) {
-//   const playlistId = normalizeOfflineId(row?.id);
-
-//   if (!playlistId) {
-//     return null;
-//   }
-
-//   return {
-//     id: playlistId,
-//     name: normalizeText(row?.name, "Untitled playlist"),
-//     totalTracks: normalizePositiveInteger(
-//       row?.totalTracks ?? row?.total_tracks,
-//     ),
-//     totalBytes: normalizePositiveInteger(row?.totalBytes ?? row?.total_bytes),
-//     downloadStatus: normalizeDownloadStatus(
-//       row?.downloadStatus ?? row?.download_status,
-//       "pending",
-//     ),
-//     storageType: normalizeStorageType(
-//       row?.storageType ?? row?.storage_type,
-//       "native_file",
-//     ),
-//     downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
-//     updatedAt: row?.updatedAt ?? row?.updated_at ?? null,
-//   };
-// }
-
-// function sanitizeOfflineMediaFileRow(row) {
-//   const trackId = normalizeOfflineId(row?.trackId ?? row?.track_id);
-//   const mediaType = normalizeNullableText(row?.mediaType ?? row?.media_type);
-//   const localUri = row?.localUri ?? row?.local_uri;
-
-//   if (!trackId || !mediaType || !isSafeMobileLocalUri(localUri)) {
-//     return null;
-//   }
-
-//   return {
-//     id:
-//       Number.isFinite(Number(row?.id)) && Number(row?.id) > 0
-//         ? Math.trunc(Number(row.id))
-//         : null,
-//     trackId,
-//     mediaType,
-//     localUri: normalizeNullableText(localUri),
-//     storageType: normalizeStorageType(
-//       row?.storageType ?? row?.storage_type,
-//       "native_file",
-//     ),
-//     downloadedAt: row?.downloadedAt ?? row?.downloaded_at ?? null,
-//   };
-// }
 
 async function withMobileOfflineTransaction(work, options = {}) {
   const database = options?.rethrow
