@@ -1,5 +1,4 @@
 import re
-from backend.app.utils.tag_rules import TAG_RULES
 from dataclasses import dataclass, field
 
 DEFAULT_DURATION_MINUTES = 45
@@ -7,6 +6,121 @@ MIN_DURATION_MINUTES = 5
 MAX_DURATION_MINUTES = 240
 
 VALID_ENERGIES = {"low", "medium", "high"}
+
+WORD_RULES = {
+    # Mood / vibe words
+    "chill": {
+        "moods": {"chill", "calm"},
+        "energy": "low",
+    },
+    "calm": {
+        "moods": {"calm"},
+        "energy": "low",
+    },
+    "relaxing": {
+        "moods": {"relaxing", "calm"},
+        "energy": "low",
+    },
+    "relax": {
+        "moods": {"relaxing", "calm"},
+        "energy": "low",
+    },
+    "sad": {
+        "moods": {"sad"},
+        "energy": "low",
+    },
+    "happy": {
+        "moods": {"happy"},
+        "energy": "medium",
+    },
+    "hype": {
+        "moods": {"hype"},
+        "energy": "high",
+    },
+    "energetic": {
+        "moods": {"hype"},
+        "energy": "high",
+    },
+
+    # Use cases
+    "study": {
+        "use_cases": {"study"},
+        "moods": {"focus", "calm"},
+        "energy": "low",
+    },
+    "focus": {
+        "use_cases": {"focus"},
+        "moods": {"focus", "calm"},
+        "energy": "low",
+    },
+    "work": {
+        "use_cases": {"work"},
+        "moods": {"focus"},
+        "energy": "medium",
+    },
+    "workout": {
+        "use_cases": {"workout"},
+        "moods": {"hype"},
+        "energy": "high",
+    },
+    "gym": {
+        "use_cases": {"gym"},
+        "moods": {"hype"},
+        "energy": "high",
+    },
+    "gaming": {
+        "use_cases": {"gaming"},
+        "moods": {"focus", "hype"},
+        "energy": "high",
+    },
+    "driving": {
+        "use_cases": {"driving"},
+        "moods": {"chill"},
+        "energy": "medium",
+    },
+    "night": {
+        "moods": {"chill"},
+        "energy": "low",
+    },
+
+    # Genres
+    "rock": {
+        "genres": {"rock"},
+        "energy": "high",
+    },
+    "rap": {
+        "genres": {"rap"},
+        "energy": "high",
+    },
+    "pop": {
+        "genres": {"pop"},
+        "energy": "medium",
+    },
+    "electronic": {
+        "genres": {"electronic"},
+        "energy": "high",
+    },
+    "lofi": {
+        "genres": {"lofi"},
+        "moods": {"chill", "focus"},
+        "energy": "low",
+    },
+    "jazz": {
+        "genres": {"jazz"},
+        "moods": {"calm"},
+        "energy": "low",
+    },
+    "metal": {
+        "genres": {"metal"},
+        "moods": {"aggressive", "hype"},
+        "energy": "high",
+    },
+    "rnb": {
+        "genres": {"r&b"},
+        "moods": {"chill"},
+        "energy": "medium",
+    },
+}
 
 PHRASE_RULES = {
     # Use-case phrases
@@ -31,14 +145,30 @@ PHRASE_RULES = {
         "energy": "low",
     },
     "background music": {
-        "use_cases": {"study"},
+        "use_cases": {"background"},
         "moods": {"calm"},
         "energy": "low",
     },
 
+    # Genre phrases
+    "hip hop": {
+        "genres": {"hip hop"},
+        "energy": "high",
+    },
+    "r b": {
+        "genres": {"r&b"},
+        "moods": {"chill"},
+        "energy": "medium",
+    },
+    "r and b": {
+        "genres": {"r&b"},
+        "moods": {"chill"},
+        "energy": "medium",
+    },
+
     # Common playlist phrases
     "pump up": {
-        "moods": {"workout", "party"},
+        "moods": {"hype"},
         "energy": "high",
     },
     "feel good": {
@@ -170,9 +300,9 @@ class PromptRuleAccumulator:
             "warnings": self.warnings,
         }
 
-def apply_tag_rules(tokens: set[str], acc: PromptRuleAccumulator) -> None:
+def apply_word_rules(tokens: set[str], acc: PromptRuleAccumulator) -> None:
     for token in tokens:
-        rule = TAG_RULES.get(token)
+        rule = WORD_RULES.get(token)
 
         if rule:
             acc.apply_rule(rule)
@@ -269,7 +399,7 @@ def parse_prompt(prompt: str):
 
     criteria_acc = PromptRuleAccumulator()
 
-    apply_tag_rules(tokens, criteria_acc)
+    apply_word_rules(tokens, criteria_acc)
 
     apply_phrase_rules(normalized_prompt, criteria_acc)
 
