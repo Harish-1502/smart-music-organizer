@@ -673,6 +673,7 @@ export async function deleteDownloadedPlaylist(playlistId) {
   }
 
   try {
+    // This transaction opens a read/write transaction on all relevant stores
     const tx = database.transaction(
       [
         OFFLINE_PLAYLISTS_STORE,
@@ -682,23 +683,33 @@ export async function deleteDownloadedPlaylist(playlistId) {
       ],
       "readwrite",
     );
+
+    // Store references for easier access
     const playlistStore = tx.objectStore(OFFLINE_PLAYLISTS_STORE);
     const trackStore = tx.objectStore(OFFLINE_TRACKS_STORE);
     const audioBlobStore = tx.objectStore(OFFLINE_AUDIO_BLOBS_STORE);
     const artworkBlobStore = tx.objectStore(OFFLINE_ARTWORK_BLOBS_STORE);
 
+    // Load the playlist to be deleted
     const playlist = await playlistStore.get(normalizedPlaylistId);
 
+    // Checks if the playlist exists, if not abort the transaction
+    // and return false
     if (!playlist) {
       tx.abort();
       await tx.done.catch(() => {});
       return false;
     }
 
+    // Get the set of track ids associated with the playlist to be deleted
     const playlistTrackIds = new Set(normalizeOfflineIdList(playlist.trackIds));
 
+    // Delete the playlist
     await playlistStore.delete(normalizedPlaylistId);
 
+    // For each track in the deleted playlist, check if it is referenced by any other playlists. 
+    // If not, then delete the tracks and its blobs. If it is referenced by other playlists, 
+    // then delete the reference to the deleted playlist from the tracks playlistIds list.
     for (const trackId of playlistTrackIds) {
       const track = await trackStore.get(trackId);
 
